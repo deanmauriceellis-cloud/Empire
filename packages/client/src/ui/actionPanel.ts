@@ -31,9 +31,10 @@ export function createActionPanel(): ActionPanel {
       `<span>${label}</span><span class="hotkey">${hotkey}</span></button>`;
   }
 
-  element.addEventListener("click", (e) => {
+  element.addEventListener("pointerdown", (e) => {
     const target = (e.target as HTMLElement).closest("[data-action]") as HTMLElement | null;
     if (target && !target.classList.contains("disabled")) {
+      e.preventDefault(); // prevent button from stealing keyboard focus
       pendingClick = target.dataset.action!;
     }
   });
@@ -65,10 +66,27 @@ export function createActionPanel(): ActionPanel {
             `No moves remaining</div>`);
         }
 
+        // Show current behavior if set
+        if (u.func !== UnitBehavior.None) {
+          const behaviorNames: Record<number, string> = {
+            [UnitBehavior.Sentry]: "Sentry",
+            [UnitBehavior.Explore]: "Exploring",
+            [UnitBehavior.GoTo]: "Navigating",
+            [UnitBehavior.Aggressive]: "Aggressive",
+            [UnitBehavior.Cautious]: "Cautious",
+            [UnitBehavior.WaitForTransport]: "Waiting",
+          };
+          const name = behaviorNames[u.func] ?? "Orders";
+          parts.push(`<div style="color:#fa4;font-size:11px;margin-bottom:4px">` +
+            `Mode: ${name}</div>`);
+        }
+
         parts.push(`<div class="section-label">Orders</div>`);
         parts.push(btn("Skip Unit", "Space", "skip"));
         parts.push(btn("Sentry", "G", "sentry", !canMove));
         parts.push(btn("Explore", "F", "explore", !canMove));
+        parts.push(btn("Aggressive", "A", "aggressive", !canMove));
+        parts.push(btn("Cautious", "D", "cautious", !canMove));
 
         if (u.type === UnitType.Army) {
           parts.push(btn("Wait for Transport", "T", "wait-transport", !canMove));
@@ -77,6 +95,9 @@ export function createActionPanel(): ActionPanel {
         if (u.shipId !== null) {
           parts.push(btn("Disembark", "U", "disembark"));
         }
+
+        parts.push(`<div style="color:#555;font-size:10px;margin-top:2px">` +
+          `Right-click tile to navigate</div>`);
       }
 
       if (selectedCityId !== null) {

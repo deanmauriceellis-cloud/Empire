@@ -52,6 +52,7 @@ export interface UnitState {
   shipId: number | null;       // id of containing ship (if embarked)
   cargoIds: number[];          // ids of cargo units (if this is a transport/carrier)
   range: number;               // remaining range (for fighters/satellites)
+  targetLoc: Loc | null;       // navigation waypoint (for GoTo behavior)
 }
 
 // ─── Game Config ─────────────────────────────────────────────────────────────
@@ -91,6 +92,7 @@ export type PlayerAction =
   | { type: "attack"; unitId: number; targetLoc: Loc }
   | { type: "setProduction"; cityId: number; unitType: UnitType }
   | { type: "setBehavior"; unitId: number; behavior: UnitBehavior }
+  | { type: "setTarget"; unitId: number; targetLoc: Loc }
   | { type: "embark"; unitId: number; shipId: number }
   | { type: "disembark"; unitId: number }
   | { type: "endTurn" }

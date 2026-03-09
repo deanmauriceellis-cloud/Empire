@@ -37,6 +37,9 @@ export interface ActionCollector {
   /** Set unit behavior. */
   setBehavior(unitId: number, behavior: UnitBehavior): void;
 
+  /** Set unit navigation target (GoTo). */
+  setTarget(unitId: number, targetLoc: Loc): void;
+
   /** End the turn: submit to game, run AI, tick production. Returns turn result. */
   endTurn(): TurnResult;
 
@@ -124,6 +127,12 @@ export function createActionCollector(game: SinglePlayerGame): ActionCollector {
 
     setBehavior(unitId: number, behavior: UnitBehavior): void {
       const action: PlayerAction = { type: "setBehavior", unitId, behavior };
+      actions.push(action);
+      applyAction(action);
+    },
+
+    setTarget(unitId: number, targetLoc: Loc): void {
+      const action: PlayerAction = { type: "setTarget", unitId, targetLoc };
       actions.push(action);
       applyAction(action);
     },

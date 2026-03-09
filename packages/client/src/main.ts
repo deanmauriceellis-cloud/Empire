@@ -678,7 +678,7 @@ async function init() {
 
     switch (key) {
       case " ":
-        if (selection.selectedUnitId) {
+        if (selection.selectedUnitId !== null) {
           ui.turnFlow.skipUnit();
           advanceToNextUnit();
         }
@@ -693,7 +693,7 @@ async function init() {
         break;
 
       case "g":
-        if (selection.selectedUnitId) {
+        if (selection.selectedUnitId !== null) {
           if (mode === "singleplayer") {
             collector.setBehavior(selection.selectedUnitId, UnitBehavior.Sentry);
           } else {
@@ -705,11 +705,35 @@ async function init() {
         break;
 
       case "f":
-        if (selection.selectedUnitId) {
+        if (selection.selectedUnitId !== null) {
           if (mode === "singleplayer") {
             collector.setBehavior(selection.selectedUnitId, UnitBehavior.Explore);
           } else {
             mp.setBehavior(selection.selectedUnitId, UnitBehavior.Explore);
+          }
+          ui.turnFlow.markDone(selection.selectedUnitId);
+          advanceToNextUnit();
+        }
+        break;
+
+      case "a":
+        if (selection.selectedUnitId !== null) {
+          if (mode === "singleplayer") {
+            collector.setBehavior(selection.selectedUnitId, UnitBehavior.Aggressive);
+          } else {
+            mp.setBehavior(selection.selectedUnitId, UnitBehavior.Aggressive);
+          }
+          ui.turnFlow.markDone(selection.selectedUnitId);
+          advanceToNextUnit();
+        }
+        break;
+
+      case "d":
+        if (selection.selectedUnitId !== null) {
+          if (mode === "singleplayer") {
+            collector.setBehavior(selection.selectedUnitId, UnitBehavior.Cautious);
+          } else {
+            mp.setBehavior(selection.selectedUnitId, UnitBehavior.Cautious);
           }
           ui.turnFlow.markDone(selection.selectedUnitId);
           advanceToNextUnit();
@@ -729,7 +753,7 @@ async function init() {
         break;
 
       case "t":
-        if (selection.selectedUnitId) {
+        if (selection.selectedUnitId !== null) {
           const units = mode === "singleplayer" ? game.state.units : (mp.visibleState?.units ?? []);
           const unit = units.find((u) => u.id === selection.selectedUnitId);
           if (unit && unit.type === UnitType.Army) {
@@ -745,7 +769,7 @@ async function init() {
         break;
 
       case "u":
-        if (selection.selectedUnitId) {
+        if (selection.selectedUnitId !== null) {
           const units = mode === "singleplayer" ? game.state.units : (mp.visibleState?.units ?? []);
           const unit = units.find((u) => u.id === selection.selectedUnitId);
           if (unit && unit.shipId !== null) {
@@ -767,13 +791,13 @@ async function init() {
   function handlePanelAction(action: string): void {
     switch (action) {
       case "skip":
-        if (selection.selectedUnitId) {
+        if (selection.selectedUnitId !== null) {
           ui.turnFlow.skipUnit();
           advanceToNextUnit();
         }
         break;
       case "sentry":
-        if (selection.selectedUnitId) {
+        if (selection.selectedUnitId !== null) {
           if (mode === "singleplayer") {
             collector.setBehavior(selection.selectedUnitId, UnitBehavior.Sentry);
           } else {
@@ -784,7 +808,7 @@ async function init() {
         }
         break;
       case "explore":
-        if (selection.selectedUnitId) {
+        if (selection.selectedUnitId !== null) {
           if (mode === "singleplayer") {
             collector.setBehavior(selection.selectedUnitId, UnitBehavior.Explore);
           } else {
@@ -794,8 +818,30 @@ async function init() {
           advanceToNextUnit();
         }
         break;
+      case "aggressive":
+        if (selection.selectedUnitId !== null) {
+          if (mode === "singleplayer") {
+            collector.setBehavior(selection.selectedUnitId, UnitBehavior.Aggressive);
+          } else {
+            mp.setBehavior(selection.selectedUnitId, UnitBehavior.Aggressive);
+          }
+          ui.turnFlow.markDone(selection.selectedUnitId);
+          advanceToNextUnit();
+        }
+        break;
+      case "cautious":
+        if (selection.selectedUnitId !== null) {
+          if (mode === "singleplayer") {
+            collector.setBehavior(selection.selectedUnitId, UnitBehavior.Cautious);
+          } else {
+            mp.setBehavior(selection.selectedUnitId, UnitBehavior.Cautious);
+          }
+          ui.turnFlow.markDone(selection.selectedUnitId);
+          advanceToNextUnit();
+        }
+        break;
       case "wait-transport":
-        if (selection.selectedUnitId) {
+        if (selection.selectedUnitId !== null) {
           if (mode === "singleplayer") {
             collector.setBehavior(selection.selectedUnitId, UnitBehavior.WaitForTransport);
           } else {
@@ -806,7 +852,7 @@ async function init() {
         }
         break;
       case "disembark":
-        if (selection.selectedUnitId) {
+        if (selection.selectedUnitId !== null) {
           if (mode === "singleplayer") {
             collector.setBehavior(selection.selectedUnitId, UnitBehavior.Land);
           } else {
@@ -928,10 +974,29 @@ async function init() {
       }
 
       const rightClicks = input.consumeRightClicks();
-      if (rightClicks.length > 0) {
-        selection.selectedUnitId = null;
-        selection.selectedCityId = null;
-        currentHighlights = [];
+      for (const rc of rightClicks) {
+        if (selection.selectedUnitId !== null) {
+          // Right-click with unit selected → set navigation target
+          const tile = screenToTile(rc.x, rc.y, camera, vw, vh);
+          const mapWidth = mode === "singleplayer" ? game.state.config.mapWidth : (mp.visibleState?.config.mapWidth ?? 100);
+          const mapHeight = mode === "singleplayer" ? game.state.config.mapHeight : (mp.visibleState?.config.mapHeight ?? 60);
+          if (tile.col >= 0 && tile.col < mapWidth && tile.row >= 0 && tile.row < mapHeight) {
+            const targetLoc = tile.row * mapWidth + tile.col;
+            if (mode === "singleplayer") {
+              collector.setTarget(selection.selectedUnitId, targetLoc);
+            } else {
+              // For multiplayer, send setBehavior + target via protocol
+              mp.setBehavior(selection.selectedUnitId, UnitBehavior.GoTo);
+            }
+            audio.playUIClick();
+            ui.turnFlow.markDone(selection.selectedUnitId);
+            advanceToNextUnit();
+          }
+        } else {
+          // No unit selected — deselect
+          selection.selectedCityId = null;
+          currentHighlights = [];
+        }
       }
     } else {
       const keys = input.consumeKeyPresses();

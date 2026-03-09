@@ -25,7 +25,16 @@ import type {
   TurnResult,
   PlayerAction,
 } from "./types.js";
-import { isOnBoard, getAdjacentLocs, locCol } from "./utils.js";
+import { isOnBoard, getAdjacentLocs, locCol, locRow, dist } from "./utils.js";
+import {
+  createPathMap,
+  findObjective,
+  markPath,
+  findDirection,
+  landMoveInfo,
+  waterMoveInfo,
+  airMoveInfo,
+} from "./pathfinding.js";
 
 // ─── RNG ────────────────────────────────────────────────────────────────────────
 
@@ -119,6 +128,7 @@ export function createUnit(
     shipId: null,
     cargoIds: [],
     range: attrs.range,
+    targetLoc: null,
   };
 
   // Satellites get a random diagonal direction
@@ -783,6 +793,17 @@ export function processAction(
       const unit = findUnit(state, action.unitId);
       if (!unit || unit.owner !== owner) break;
       unit.func = action.behavior;
+      if (action.behavior !== UnitBehavior.GoTo) {
+        unit.targetLoc = null;
+      }
+      break;
+    }
+
+    case "setTarget": {
+      const unit = findUnit(state, action.unitId);
+      if (!unit || unit.owner !== owner) break;
+      unit.targetLoc = action.targetLoc;
+      unit.func = UnitBehavior.GoTo;
       break;
     }
 
@@ -829,6 +850,612 @@ export function processAction(
  * Processes Player1 actions, then Player2 actions,
  * then ticks production, moves satellites, repairs ships, checks endgame.
  */
+
+// ─── Unit Behavior Processing ─────────────────────────────────────────────────
+
+/**
+ * Get the explore MoveInfo for a given unit type.
+ * Armies also target enemy/unowned cities while exploring.
+ */
+function getExploreMoveInfo(unitType: UnitType) {
+  const defaultWeights = new Map([[" ", 1]]);
+  switch (unitType) {
+    case UnitType.Army:
+      // Armies explore + seek unowned cities (*) and enemy cities (X)
+      return landMoveInfo("*X ", new Map([["*", 2], ["X", 3], [" ", 5]]));
+    case UnitType.Fighter:
+      return airMoveInfo(" ", defaultWeights);
+    case UnitType.Patrol:
+    case UnitType.Destroyer:
+    case UnitType.Submarine:
+    case UnitType.Battleship:
+    case UnitType.Carrier:
+    case UnitType.Transport:
+      return waterMoveInfo(" ", defaultWeights);
+    default:
+      return null;
+  }
+}
+
+/**
+ * Smart move for behavior-driven units.
+ * Checks for enemies and capturable cities at target before moving.
+ * Returns events and whether the move was successful.
+ */
+function behaviorMove(
+  state: GameState,
+  unit: UnitState,
+  targetLoc: Loc,
+  owner: Owner,
+): { events: TurnEvent[]; moved: boolean; died: boolean } {
+  const events: TurnEvent[] = [];
+
+  // Check for enemy units at target
+  const enemy = state.units.find(
+    (u) => u.loc === targetLoc && u.owner !== owner && u.shipId === null,
+  );
+  if (enemy) {
+    events.push(...attackUnit(state, unit, enemy));
+    return { events, moved: true, died: findUnit(state, unit.id) === undefined };
+  }
+
+  // Check for cities at target
+  const cell = state.map[targetLoc];
+  if (cell.cityId !== null) {
+    const city = state.cities[cell.cityId];
+    // Enemy city — attack it
+    if (city.owner !== owner && city.owner !== Owner.Unowned) {
+      events.push(...attackCity(state, unit, cell.cityId));
+      return { events, moved: true, died: true }; // attacker always dies in city attack
+    }
+    // Unowned city — army captures it
+    if (city.owner === Owner.Unowned && unit.type === UnitType.Army) {
+      events.push(...attackCity(state, unit, cell.cityId));
+      return { events, moved: true, died: true };
+    }
+  }
+
+  // Normal move
+  if (goodLoc(state, unit, targetLoc)) {
+    moveUnit(state, unit, targetLoc);
+    scan(state, owner, unit.loc);
+    return { events, moved: true, died: false };
+  }
+
+  return { events, moved: false, died: false };
+}
+
+/**
+ * Check if any enemy unit or city is visible in the sentry detection range
+ * (adjacent tiles, matching the scan radius).
+ */
+function hasVisibleEnemyNearby(state: GameState, unit: UnitState, owner: Owner): boolean {
+  const viewMap = state.viewMaps[owner];
+  const adjacent = getAdjacentLocs(unit.loc);
+  for (const adj of adjacent) {
+    const contents = viewMap[adj].contents;
+    // Lowercase letters = enemy units, X = enemy city
+    if (contents === "X") return true;
+    if (contents >= "a" && contents <= "z") return true;
+  }
+  return false;
+}
+
+/**
+ * Count how many unseen tiles would be revealed by scanning from a location.
+ * scan() reveals the location itself plus all 8 adjacent tiles (up to 9 tiles).
+ */
+function countNewTilesRevealed(viewMap: ViewMapCell[], loc: Loc): number {
+  let count = 0;
+  if (viewMap[loc].contents === " ") count++;
+  for (let d = 0; d < 8; d++) {
+    const adj = loc + DIR_OFFSET[d];
+    if (adj >= 0 && adj < MAP_SIZE && isOnBoard(adj)) {
+      const colDiff = Math.abs(locCol(adj) - locCol(loc));
+      if (colDiff <= 1 && viewMap[adj].contents === " ") count++;
+    }
+  }
+  return count;
+}
+
+/**
+ * Auto-move a unit in explore mode.
+ * Air units: greedy — each step picks the adjacent tile that reveals the most unseen tiles.
+ * Ground/sea units: BFS pathfind toward nearest unexplored territory.
+ */
+function exploreUnit(state: GameState, unit: UnitState, owner: Owner): TurnEvent[] {
+  const events: TurnEvent[] = [];
+  const viewMap = state.viewMaps[owner];
+  const movesAvailable = objMoves(unit) - unit.moved;
+  const isAirUnit = unit.type === UnitType.Fighter;
+
+  for (let step = 0; step < movesAvailable; step++) {
+    if (findUnit(state, unit.id) === undefined) break;
+
+    // Fighter fuel check — return to base if range is getting low
+    if (unit.type === UnitType.Fighter) {
+      let nearestCityDist = INFINITY;
+      for (const city of state.cities) {
+        if (city.owner === owner) {
+          const d = dist(unit.loc, city.loc);
+          if (d < nearestCityDist) nearestCityDist = d;
+        }
+      }
+      const inCity = nearestCityDist === 0;
+      if (!inCity && unit.range <= nearestCityDist + 2) {
+        // Return to nearest city
+        const pathMap = createPathMap();
+        const cityMoveInfo = airMoveInfo("O", new Map([["O", 1]]));
+        const objective = findObjective(pathMap, viewMap, unit.loc, cityMoveInfo);
+        if (objective !== null) {
+          markPath(pathMap, objective);
+          const dir = findDirection(pathMap, unit.loc);
+          if (dir !== null) {
+            const targetLoc = unit.loc + DIR_OFFSET[dir];
+            if (targetLoc >= 0 && targetLoc < MAP_SIZE && goodLoc(state, unit, targetLoc)) {
+              moveUnit(state, unit, targetLoc);
+              scan(state, owner, unit.loc);
+              continue;
+            }
+          }
+        }
+        break;
+      }
+    }
+
+    // Check for adjacent enemies — attack them
+    const adjacent = getAdjacentLocs(unit.loc);
+    let attacked = false;
+    for (const adj of adjacent) {
+      const enemy = state.units.find(
+        (u) => u.loc === adj && u.owner !== owner && u.shipId === null,
+      );
+      if (enemy) {
+        events.push(...attackUnit(state, unit, enemy));
+        attacked = true;
+        break;
+      }
+    }
+    if (attacked) break;
+
+    if (isAirUnit) {
+      // Greedy: pick the adjacent tile that reveals the most unseen tiles
+      let bestLoc: Loc = -1;
+      let bestScore = 0;
+      // Shuffle direction order with game RNG to break ties randomly
+      const dirs = [0, 1, 2, 3, 4, 5, 6, 7];
+      for (let i = dirs.length - 1; i > 0; i--) {
+        const j = gameRandomInt(state, i + 1);
+        [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
+      }
+      for (const d of dirs) {
+        const adj = unit.loc + DIR_OFFSET[d];
+        if (adj < 0 || adj >= MAP_SIZE || !isOnBoard(adj)) continue;
+        const colDiff = Math.abs(locCol(adj) - locCol(unit.loc));
+        if (colDiff > 1) continue;
+        if (!goodLoc(state, unit, adj)) continue;
+        const score = countNewTilesRevealed(viewMap, adj);
+        if (score > bestScore) {
+          bestScore = score;
+          bestLoc = adj;
+        }
+      }
+
+      if (bestLoc === -1 || bestScore === 0) {
+        // No adjacent move reveals new tiles — use BFS to reach distant unseen area
+        const pathMap = createPathMap();
+        const moveInfo = airMoveInfo(" ", new Map([[" ", 1]]));
+        const objective = findObjective(pathMap, viewMap, unit.loc, moveInfo);
+        if (objective === null) {
+          unit.func = UnitBehavior.None;
+          break;
+        }
+        markPath(pathMap, objective);
+        const dir = findDirection(pathMap, unit.loc);
+        if (dir === null) break;
+        const targetLoc = unit.loc + DIR_OFFSET[dir];
+        if (targetLoc < 0 || targetLoc >= MAP_SIZE) break;
+        const r = behaviorMove(state, unit, targetLoc, owner);
+        events.push(...r.events);
+        if (!r.moved || r.died) break;
+      } else {
+        const r = behaviorMove(state, unit, bestLoc, owner);
+        events.push(...r.events);
+        if (r.died) break;
+      }
+    } else {
+      // Ground/sea explore: BFS pathfind toward nearest unexplored
+      const moveInfo = getExploreMoveInfo(unit.type);
+      if (!moveInfo) break;
+
+      const pathMap = createPathMap();
+      const objective = findObjective(pathMap, viewMap, unit.loc, moveInfo);
+      if (objective === null) {
+        unit.func = UnitBehavior.None;
+        break;
+      }
+
+      markPath(pathMap, objective);
+      const dir = findDirection(pathMap, unit.loc);
+      if (dir === null) break;
+
+      const targetLoc = unit.loc + DIR_OFFSET[dir];
+      if (targetLoc < 0 || targetLoc >= MAP_SIZE) break;
+
+      const r = behaviorMove(state, unit, targetLoc, owner);
+      events.push(...r.events);
+      if (!r.moved || r.died) break;
+    }
+  }
+
+  return events;
+}
+
+/**
+ * Auto-move a unit toward its targetLoc waypoint using pathfinding.
+ * Clears waypoint and resets behavior when reached.
+ */
+function goToUnit(state: GameState, unit: UnitState, owner: Owner): TurnEvent[] {
+  const events: TurnEvent[] = [];
+  const viewMap = state.viewMaps[owner];
+  const movesAvailable = objMoves(unit) - unit.moved;
+  if (unit.targetLoc === null) {
+    unit.func = UnitBehavior.None;
+    return events;
+  }
+
+  for (let step = 0; step < movesAvailable; step++) {
+    if (findUnit(state, unit.id) === undefined) break;
+    if (unit.targetLoc === null) break;
+
+    // Fighter fuel check
+    if (unit.type === UnitType.Fighter) {
+      let nearestCityDist = INFINITY;
+      for (const city of state.cities) {
+        if (city.owner === owner) {
+          const d = dist(unit.loc, city.loc);
+          if (d < nearestCityDist) nearestCityDist = d;
+        }
+      }
+      const inCity = nearestCityDist === 0;
+      if (!inCity && unit.range <= nearestCityDist + 2) {
+        // Must return to base — abort goto
+        const pathMap = createPathMap();
+        const cityMoveInfo = airMoveInfo("O", new Map([["O", 1]]));
+        const objective = findObjective(pathMap, viewMap, unit.loc, cityMoveInfo);
+        if (objective !== null) {
+          markPath(pathMap, objective);
+          const dir = findDirection(pathMap, unit.loc);
+          if (dir !== null) {
+            const targetLoc = unit.loc + DIR_OFFSET[dir];
+            if (targetLoc >= 0 && targetLoc < MAP_SIZE && goodLoc(state, unit, targetLoc)) {
+              moveUnit(state, unit, targetLoc);
+              scan(state, owner, unit.loc);
+              continue;
+            }
+          }
+        }
+        break;
+      }
+    }
+
+    // Reached target?
+    if (unit.loc === unit.targetLoc) {
+      unit.func = UnitBehavior.None;
+      unit.targetLoc = null;
+      break;
+    }
+
+    // Get the right MoveInfo for this unit's terrain type
+    const moveInfo = getExploreMoveInfo(unit.type);
+    if (!moveInfo) break;
+
+    // BFS from unit toward the target — use targetLoc's viewMap char as objective
+    // We create a custom MoveInfo that targets the destination
+    const targetContents = viewMap[unit.targetLoc].contents;
+    const gotoMoveInfo = {
+      canMove: moveInfo.canMove,
+      objectives: targetContents + "+. OX*",  // target + traversable tiles near it
+      weights: new Map([[targetContents, 1], ["+", 100], [".", 100], [" ", 100],
+        ["O", 1], ["X", 1], ["*", 1]]),
+    };
+
+    const pathMap = createPathMap();
+    const objective = findObjective(pathMap, viewMap, unit.loc, gotoMoveInfo);
+    if (objective === null) {
+      // Can't reach — cancel
+      unit.func = UnitBehavior.None;
+      unit.targetLoc = null;
+      break;
+    }
+
+    markPath(pathMap, objective);
+    const dir = findDirection(pathMap, unit.loc);
+    if (dir === null) break;
+
+    const targetLoc = unit.loc + DIR_OFFSET[dir];
+    if (targetLoc < 0 || targetLoc >= MAP_SIZE) break;
+
+    const r = behaviorMove(state, unit, targetLoc, owner);
+    events.push(...r.events);
+    if (!r.moved || r.died) break;
+  }
+
+  return events;
+}
+
+/**
+ * Aggressive behavior: seek out and attack enemies.
+ * Uses pathfinding to find nearest enemy unit or city, moves toward it.
+ */
+function aggressiveUnit(state: GameState, unit: UnitState, owner: Owner): TurnEvent[] {
+  const events: TurnEvent[] = [];
+  const viewMap = state.viewMaps[owner];
+  const movesAvailable = objMoves(unit) - unit.moved;
+  const isAirUnit = unit.type === UnitType.Fighter;
+
+  for (let step = 0; step < movesAvailable; step++) {
+    if (findUnit(state, unit.id) === undefined) break;
+
+    // Fighter fuel check
+    if (isAirUnit) {
+      let nearestCityDist = INFINITY;
+      for (const city of state.cities) {
+        if (city.owner === owner) {
+          const d = dist(unit.loc, city.loc);
+          if (d < nearestCityDist) nearestCityDist = d;
+        }
+      }
+      const inCity = nearestCityDist === 0;
+      if (!inCity && unit.range <= nearestCityDist + 2) {
+        const pathMap = createPathMap();
+        const cityMoveInfo = airMoveInfo("O", new Map([["O", 1]]));
+        const objective = findObjective(pathMap, viewMap, unit.loc, cityMoveInfo);
+        if (objective !== null) {
+          markPath(pathMap, objective);
+          const dir = findDirection(pathMap, unit.loc);
+          if (dir !== null) {
+            const targetLoc = unit.loc + DIR_OFFSET[dir];
+            if (targetLoc >= 0 && targetLoc < MAP_SIZE && goodLoc(state, unit, targetLoc)) {
+              moveUnit(state, unit, targetLoc);
+              scan(state, owner, unit.loc);
+              continue;
+            }
+          }
+        }
+        break;
+      }
+    }
+
+    // Check for adjacent enemies — attack immediately
+    const adjacent = getAdjacentLocs(unit.loc);
+    let attacked = false;
+    for (const adj of adjacent) {
+      const enemy = state.units.find(
+        (u) => u.loc === adj && u.owner !== owner && u.shipId === null,
+      );
+      if (enemy) {
+        events.push(...attackUnit(state, unit, enemy));
+        attacked = true;
+        break;
+      }
+      // Also attack enemy cities
+      const cell = state.map[adj];
+      if (cell.cityId !== null) {
+        const city = state.cities[cell.cityId];
+        if (city.owner !== owner && city.owner !== Owner.Unowned) {
+          events.push(...attackCity(state, unit, cell.cityId));
+          attacked = true;
+          break;
+        }
+        if (city.owner === Owner.Unowned && unit.type === UnitType.Army) {
+          events.push(...attackCity(state, unit, cell.cityId));
+          attacked = true;
+          break;
+        }
+      }
+    }
+    if (attacked) break;
+
+    // Pathfind toward enemies: lowercase = enemy units, X = enemy city, * = unowned city
+    const enemyTargets = unit.type === UnitType.Army
+      ? "Xatcfbsdp* "   // armies also target unowned cities, then explore
+      : "Xatcfbsdp ";
+    const enemyWeights = new Map([
+      ["X", 1], ["a", 2], ["t", 2], ["c", 3], ["f", 3],
+      ["b", 3], ["s", 3], ["d", 3], ["p", 3], ["*", 4], [" ", 15],
+    ]);
+
+    const moveInfoBase = getExploreMoveInfo(unit.type);
+    if (!moveInfoBase) break;
+
+    const aggroMoveInfo = {
+      canMove: moveInfoBase.canMove,
+      objectives: enemyTargets,
+      weights: enemyWeights,
+    };
+
+    const pathMap = createPathMap();
+    const objective = findObjective(pathMap, viewMap, unit.loc, aggroMoveInfo);
+    if (objective === null) {
+      unit.func = UnitBehavior.None;
+      break;
+    }
+
+    markPath(pathMap, objective);
+    const dir = findDirection(pathMap, unit.loc);
+    if (dir === null) break;
+
+    const targetLoc = unit.loc + DIR_OFFSET[dir];
+    if (targetLoc < 0 || targetLoc >= MAP_SIZE) break;
+
+    const r = behaviorMove(state, unit, targetLoc, owner);
+    events.push(...r.events);
+    if (!r.moved || r.died) break;
+  }
+
+  return events;
+}
+
+/**
+ * Cautious behavior: explore but avoid enemies.
+ * Moves toward unexplored territory but flees if enemies are adjacent.
+ */
+function cautiousUnit(state: GameState, unit: UnitState, owner: Owner): TurnEvent[] {
+  const events: TurnEvent[] = [];
+  const viewMap = state.viewMaps[owner];
+  const movesAvailable = objMoves(unit) - unit.moved;
+
+  for (let step = 0; step < movesAvailable; step++) {
+    if (findUnit(state, unit.id) === undefined) break;
+
+    // Fighter fuel check
+    if (unit.type === UnitType.Fighter) {
+      let nearestCityDist = INFINITY;
+      for (const city of state.cities) {
+        if (city.owner === owner) {
+          const d = dist(unit.loc, city.loc);
+          if (d < nearestCityDist) nearestCityDist = d;
+        }
+      }
+      const inCity = nearestCityDist === 0;
+      if (!inCity && unit.range <= nearestCityDist + 2) {
+        const pathMap = createPathMap();
+        const cityMoveInfo = airMoveInfo("O", new Map([["O", 1]]));
+        const objective = findObjective(pathMap, viewMap, unit.loc, cityMoveInfo);
+        if (objective !== null) {
+          markPath(pathMap, objective);
+          const dir = findDirection(pathMap, unit.loc);
+          if (dir !== null) {
+            const targetLoc = unit.loc + DIR_OFFSET[dir];
+            if (targetLoc >= 0 && targetLoc < MAP_SIZE && goodLoc(state, unit, targetLoc)) {
+              moveUnit(state, unit, targetLoc);
+              scan(state, owner, unit.loc);
+              continue;
+            }
+          }
+        }
+        break;
+      }
+    }
+
+    // Check for adjacent enemies — flee away from them
+    const adjacent = getAdjacentLocs(unit.loc);
+    let nearestEnemyLoc: Loc | null = null;
+    let nearestEnemyDist = INFINITY;
+    for (const adj of adjacent) {
+      const enemy = state.units.find(
+        (u) => u.loc === adj && u.owner !== owner && u.shipId === null,
+      );
+      if (enemy) {
+        const d = dist(unit.loc, adj);
+        if (d < nearestEnemyDist) {
+          nearestEnemyDist = d;
+          nearestEnemyLoc = adj;
+        }
+      }
+    }
+
+    if (nearestEnemyLoc !== null) {
+      // Flee: move to the adjacent tile furthest from the enemy
+      let bestFleeLoc: Loc = -1;
+      let bestFleeDist = -1;
+      for (const adj of adjacent) {
+        if (!goodLoc(state, unit, adj)) continue;
+        // Don't flee into other enemies
+        const hasEnemy = state.units.some(
+          (u) => u.loc === adj && u.owner !== owner && u.shipId === null,
+        );
+        if (hasEnemy) continue;
+        const d = dist(adj, nearestEnemyLoc);
+        if (d > bestFleeDist) {
+          bestFleeDist = d;
+          bestFleeLoc = adj;
+        }
+      }
+      if (bestFleeLoc !== -1) {
+        const r = behaviorMove(state, unit, bestFleeLoc, owner);
+        events.push(...r.events);
+        if (r.died) break;
+        continue;
+      }
+      break; // cornered
+    }
+
+    // No enemies nearby — explore normally (same as explore behavior)
+    const moveInfo = getExploreMoveInfo(unit.type);
+    if (!moveInfo) break;
+
+    const pathMap = createPathMap();
+    const objective = findObjective(pathMap, viewMap, unit.loc, moveInfo);
+    if (objective === null) {
+      unit.func = UnitBehavior.None;
+      break;
+    }
+
+    markPath(pathMap, objective);
+    const dir = findDirection(pathMap, unit.loc);
+    if (dir === null) break;
+
+    const targetLoc = unit.loc + DIR_OFFSET[dir];
+    if (targetLoc < 0 || targetLoc >= MAP_SIZE) break;
+
+    const r = behaviorMove(state, unit, targetLoc, owner);
+    events.push(...r.events);
+    if (!r.moved || r.died) break;
+  }
+
+  return events;
+}
+
+/**
+ * Process automatic behaviors for a player's units.
+ * Called during executeTurn after explicit player actions.
+ */
+export function processUnitBehaviors(
+  state: GameState,
+  owner: Owner,
+  movedUnits: Set<number>,
+): TurnEvent[] {
+  const events: TurnEvent[] = [];
+
+  // Iterate over a snapshot since units can die during processing
+  const units = [...state.units];
+  for (const unit of units) {
+    if (unit.owner !== owner) continue;
+    if (unit.shipId !== null) continue;
+    if (movedUnits.has(unit.id)) continue;
+    if (unit.type === UnitType.Satellite) continue;
+    if (findUnit(state, unit.id) === undefined) continue;
+
+    switch (unit.func) {
+      case UnitBehavior.Sentry:
+        if (hasVisibleEnemyNearby(state, unit, owner)) {
+          unit.func = UnitBehavior.None;
+        }
+        break;
+
+      case UnitBehavior.Explore:
+        events.push(...exploreUnit(state, unit, owner));
+        break;
+
+      case UnitBehavior.GoTo:
+        events.push(...goToUnit(state, unit, owner));
+        break;
+
+      case UnitBehavior.Aggressive:
+        events.push(...aggressiveUnit(state, unit, owner));
+        break;
+
+      case UnitBehavior.Cautious:
+        events.push(...cautiousUnit(state, unit, owner));
+        break;
+    }
+  }
+
+  return events;
+}
+
 export function executeTurn(
   state: GameState,
   player1Actions: PlayerAction[],
@@ -881,6 +1508,10 @@ export function executeTurn(
     events.push(...processAction(state, action, Owner.Player2));
   }
 
+  // Process unit behaviors (explore, sentry wake-up, etc.)
+  events.push(...processUnitBehaviors(state, Owner.Player1, movedUnits1));
+  events.push(...processUnitBehaviors(state, Owner.Player2, movedUnits2));
+
   // Move satellites (for both players)
   const satellites = state.units.filter((u) => u.type === UnitType.Satellite);
   for (const sat of satellites) {
@@ -895,9 +1526,19 @@ export function executeTurn(
   repairShips(state, Owner.Player1, movedUnits1);
   repairShips(state, Owner.Player2, movedUnits2);
 
-  // Reset moved counters for all units
+  // Reset moved counters and refuel fighters in cities/carriers
   for (const unit of state.units) {
     unit.moved = 0;
+
+    // Refuel fighters at cities or on carriers
+    if (unit.type === UnitType.Fighter && UNIT_ATTRIBUTES[unit.type].range !== INFINITY) {
+      const cell = state.map[unit.loc];
+      const inOwnCity = cell.cityId !== null && state.cities[cell.cityId].owner === unit.owner;
+      const onCarrier = unit.shipId !== null;
+      if (inOwnCity || onCarrier) {
+        unit.range = UNIT_ATTRIBUTES[unit.type].range;
+      }
+    }
   }
 
   // Advance turn
