@@ -9,7 +9,7 @@
 - 18 E2E tests (17 passing, 1 skipped)
 
 ## Latest commit
-`pending` — session 016
+`9802120` — session 016: Configurable maps, fighter fixes
 
 ## Completed
 - [x] Phase 0: Project scaffolding (pnpm monorepo, shared/client/server)
