@@ -11,7 +11,7 @@
 - Monorepo operational, all packages type-check, 156 tests passing
 
 ## Latest commit
-`5c0ce81` — update STATE.md with session 003 commit hash
+`818b93a` — session 004: Phase 3 core game logic engine
 
 ## Completed
 - [x] Clone original VMS-Empire source (github.com/slacy/empire)
