@@ -9,7 +9,7 @@
 - Monorepo operational, all packages type-check, 49 tests passing
 
 ## Latest commit
-`pending` — session 002
+`9122bb2` — session 002: Phase 0 + Phase 1
 
 ## Completed
 - [x] Clone original VMS-Empire source (github.com/slacy/empire)
