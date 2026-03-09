@@ -1,7 +1,7 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Phase 6: Persistence** — Complete
+**Phase 9: Client-Server Integration** — Complete
 
 ## Status
 - Phase 0 (Project Scaffolding) complete
@@ -11,6 +11,9 @@
 - Phase 4 (AI System) complete
 - Phase 5 (Node.js Server) complete
 - Phase 6 (Persistence) complete
+- Phase 7 (Client Rendering) complete
+- Phase 8 (Client Game UI) complete
+- Phase 9 (Client-Server Integration) complete
 - Monorepo operational, all packages type-check, 212 tests passing (184 shared + 28 server)
 
 ## Latest commit
@@ -56,12 +59,37 @@
 - [x] Phase 5: Single-player mode (client-side game loop with AI, no server needed)
 - [x] Phase 6: SQLite schema (games table, WAL mode, UPSERT save, JSON state)
 - [x] Phase 6: Game save/load API (autosave after turns, save on game over, resume endpoint, delete endpoint)
+- [x] Phase 7: PixiJS bootstrap (WebGPU preference, scene graph: world/effects/UI containers)
+- [x] Phase 7: Isometric coordinate system (cartToIso/isoToCart, screenToTile, getVisibleTileBounds)
+- [x] Phase 7: Camera system (WASD/arrow/edge panning, scroll zoom 0.5x-3x, lerp smoothing, bounds clamping)
+- [x] Phase 7: Asset pipeline (geometric placeholder textures for terrain, units, fog, selection)
+- [x] Phase 7: Tilemap renderer (sprite pool with frustum culling, fog of war overlay)
+- [x] Phase 7: Unit renderer (isometric positioning, player colors, health bars, selection glow, move lerp)
+- [x] Phase 7: Particle effects (explosions, death, capture, water ripples)
+- [x] Phase 7: Game bridge (SinglePlayerGame → RenderableState adapter)
+- [x] Phase 8: HTML overlay UI system (CSS-in-JS injection, pointer-events passthrough)
+- [x] Phase 8: HUD — top bar (turn, cities, units) + bottom bar (unit/city info)
+- [x] Phase 8: Minimap — 2px/tile <canvas>, color-coded terrain/cities/units, viewport rect, click-to-navigate
+- [x] Phase 8: Click-to-move input — select unit, green/red tile highlights for valid moves/attacks, click to execute
+- [x] Phase 8: Highlight renderer (sprite pool, pulse animation, move=green, attack=red)
+- [x] Phase 8: Action panel — context-sensitive buttons (skip, sentry, explore, wait, disembark) with hotkeys
+- [x] Phase 8: City management panel — modal production chooser, progress bar, 20% penalty warning
+- [x] Phase 8: Turn flow — auto-cycle units needing orders, camera focus, Next Unit / End Turn
+- [x] Phase 8: Event log — scrollable combat/capture/production events, click-to-pan
+- [x] Phase 8: Menu screens — main menu (New Game), game over (victory/defeat + stats)
+- [x] Phase 8: Action collector — immediate action application with vision updates, batch end-of-turn
+- [x] Phase 9: WebSocket client — auto-reconnect with exponential backoff, typed message protocol
+- [x] Phase 9: State synchronization — server VisibleGameState → RenderableState adapter, turn flow integration
+- [x] Phase 9: Action dispatch — multiplayer actions sent via WebSocket, server validates and applies
+- [x] Phase 9: Lobby UI — main menu (Single Player / Multiplayer), create/join game, waiting screen, game list
+- [x] Phase 9: Protocol types moved to shared package (single source of truth for client & server)
+- [x] Phase 9: Turn flow owner-aware (supports Player 1 or Player 2 in multiplayer)
 
 ## In Progress
 _Nothing currently in progress_
 
 ## Next Steps
-1. **Phase 7: Client Rendering** — PixiJS bootstrap, isometric coords, camera, tilemap
+1. **Phase 10: Polish & Audio** — sound system, visual polish, performance optimization
 
 ## Blockers
 _None_
@@ -74,3 +102,7 @@ _None_
 - Server package now has vitest configured for testing
 - SQLite database stored at `data/empire.db` (WAL mode), `data/` directory auto-created
 - Games autosaved after each turn and on game over; persisted on disconnect timeout
+- UI uses HTML/CSS overlay (pointer-events: none wrapper) for text-heavy panels, PixiJS for minimap highlights
+- Click-to-move replaces WASD unit movement; WASD/arrows for camera panning; keyboard for orders only
+- Protocol types (ClientMessage, ServerMessage, VisibleGameState) in shared package, re-exported by server
+- Dev mode: client on port 5173 auto-connects to WebSocket server on port 3001

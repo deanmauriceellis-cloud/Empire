@@ -12,3 +12,4 @@ export * from "./pathfinding.js";
 export * from "./continent.js";
 export * from "./ai.js";
 export * from "./singleplayer.js";
+export * from "./protocol.js";

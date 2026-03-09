@@ -1,0 +1,44 @@
+Session 010 — 2026-03-09
+Phase 9: Client-Server Integration
+
+## Summary
+Implemented full client-server integration for multiplayer support. The client now
+supports dual-mode operation: single-player (local, no server) and multiplayer
+(WebSocket connection to server). Protocol types were moved to the shared package
+as the canonical source for both client and server.
+
+## New Files
+- packages/shared/src/protocol.ts — Protocol types (GamePhase, ClientMessage,
+  ServerMessage, VisibleGameState, VisibleCity) moved to shared package
+- packages/client/src/net/connection.ts — WebSocket client with auto-reconnect
+  (exponential backoff 500ms→15s), typed send/receive, connection state tracking
+- packages/client/src/net/multiplayer.ts — Multiplayer game adapter:
+  VisibleGameState→RenderableState conversion, action dispatch, lobby game fetch
+
+## Modified Files
+- packages/client/src/main.ts — Complete rewrite for dual-mode (singleplayer/multiplayer).
+  GameMode enum routes all handlers through appropriate code path. Dev mode auto-connects
+  WebSocket to port 3001.
+- packages/client/src/ui/menuScreens.ts — Expanded: main menu (Single Player / Multiplayer),
+  lobby screen (connection status, game list, create/join), waiting screen (game ID + spinner),
+  game over (added Main Menu button)
+- packages/client/src/ui/styles.ts — Added lobby CSS: connection indicators, game list,
+  secondary buttons, waiting spinner animation
+- packages/client/src/ui/turnFlow.ts — Added setOwner() method so multiplayer Player2
+  gets correct unit cycling (was hardcoded to Player1)
+- packages/server/src/protocol.ts — Replaced with re-export from @empire/shared
+- packages/server/src/GameManager.ts — Updated import to use @empire/shared for protocol types
+- packages/shared/src/index.ts — Added protocol.js export
+
+## Verification
+- All packages type-check (tsc --noEmit): shared, server, client clean
+- Client builds successfully (Vite, 311KB main bundle)
+- All 212 tests pass (184 shared + 28 server)
+- No new tests added (integration testing requires browser + server — future Phase 12)
+
+## Architecture Decisions
+- Protocol types in shared package (single source of truth) rather than duplicated
+- Multiplayer adapter converts VisibleGameState to RenderableState client-side
+- Server validates all actions — client sends intents, trusts server response
+- Dev mode detection: port 5173 → WebSocket connects to port 3001
+- TurnFlow made owner-aware for multiplayer Player2 support

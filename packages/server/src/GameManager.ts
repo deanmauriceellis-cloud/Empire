@@ -26,7 +26,7 @@ import type {
   GamePhase,
   VisibleGameState,
   VisibleCity,
-} from "./protocol.js";
+} from "@empire/shared";
 import type { GameDatabase } from "./database.js";
 
 // ─── Player Connection ──────────────────────────────────────────────────────

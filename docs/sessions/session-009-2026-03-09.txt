@@ -1,0 +1,171 @@
+Session 009 — 2026-03-09
+========================
+
+## Summary
+Implemented Phase 8: Client Game UI — the complete game interaction layer. Built an HTML/CSS overlay UI system with HUD, minimap, click-to-move interaction, action panel, city production management, turn flow automation, event log, and menu screens. Originally planned keyboard-based unit movement (QWEASDZC keys), but pivoted to click-to-move with highlighted valid tiles after user feedback. All 212 tests pass, client type-checks cleanly.
+
+## Conversation Context
+- User requested "finish phase 8" at session start
+- Initial implementation used keyboard direction keys (QWEASDZC) for unit movement, matching the original VMS-Empire terminal interface
+- User intervened asking "is there a better way to do this than use keyboard keys?" — preferring modern UI concepts
+- Pivoted to click-to-move: select unit → green/red tile highlights → click to execute move/attack
+- User explicitly wanted to "use all the new concepts of UI to improve the game" and "bake that into our base logic"
+- This freed WASD keys for camera panning (no conflict), keyboard used only for orders/shortcuts
+- User values modernizing the interaction model beyond the original terminal game
+
+## Changes Made
+
+### 1. HTML/CSS Overlay UI System
+- Created `ui/styles.ts` with full CSS injected via `<style>` tag
+- Dark theme with semi-transparent panels, monospace font, blue/gold accents
+- `pointer-events: none` wrapper with `pointer-events: auto` on interactive elements
+- Scrollbar styling, button hover/active states, modal overlay
+
+### 2. HUD (Top Bar + Bottom Bar)
+- Top bar: Turn number, player city count, unit count, version
+- Bottom bar: Selected unit (name, HP, moves, behavior, cargo) or city (production, progress, turns remaining)
+- Falls back to "Click a unit or city to select" when nothing selected
+
+### 3. Minimap
+- Dedicated 200x120 `<canvas>` (2px per tile for 100x60 map)
+- Color-coded: land (green), sea (blue), fog (black), cities (blue/red/gray), units (bright dots)
+- White viewport rectangle showing current camera view
+- Click-to-navigate: click on minimap pans camera to that tile
+
+### 4. Click-to-Move Interaction
+- `moveCalc.ts`: computes valid adjacent moves and attacks for selected unit
+- `highlights.ts`: sprite-pooled tile highlight renderer with pulse animation
+- Green diamonds for valid moves, red diamonds for attack targets
+- Click highlighted tile to execute move/attack; auto-advance when out of moves
+- Right-click to deselect
+
+### 5. Action Panel
+- Context-sensitive buttons based on selection
+- Unit selected: Skip (Space), Sentry (G), Explore (F), Wait for Transport (T), Disembark (U)
+- City selected: Change Production (P)
+- Always shown: Next Unit (N), End Turn (Enter)
+- Buttons grayed out when invalid
+
+### 6. City Production Panel
+- Modal overlay with 3x3 grid of 9 unit types
+- Shows unit char, name, build time, attack strength, max HP
+- Current production highlighted, progress bar with percentage
+- 20% switch penalty warning appears on hover over different production
+- Close via X button or Escape key
+
+### 7. Turn Flow Manager
+- Scans for units needing orders (func=None, has moves, not embarked)
+- Auto-cycles through them, panning camera to each
+- Skip unit (keeps in pool for later) vs mark done (permanent)
+- Next Unit / End Turn buttons
+
+### 8. Event Log
+- Scrollable panel (bottom-left, max 30 events)
+- Color-coded: combat=orange, capture=gold, production=green, death=gray, discovery=blue
+- Click event to pan camera to its location
+
+### 9. Menu Screens
+- Main menu: "EMPIRE REBORN" title, version subtitle, New Game button
+- Game over: Victory/Defeat text, final stats (turn, cities, units), New Game button
+
+### 10. Action Collector
+- Accumulates PlayerActions during a turn
+- Applies actions immediately to GameState via `processAction` for visual feedback
+- Updates vision via `scan` after each move
+- Tracks moved unit IDs for turn flow integration
+- `endTurn()` submits batch to `game.submitTurn(actions)` for AI + production + repair
+
+### 11. Input System Upgrade
+- Added event queues alongside existing polling
+- `consumeClicks()`: left-click events with position + shiftKey
+- `consumeRightClicks()`: right-click events (context menu prevented)
+- `consumeKeyPresses()`: one-shot key events (not held)
+- Existing `isKeyDown()` kept for camera panning (continuous)
+
+## Files Created
+- `packages/client/src/ui/UIManager.ts` — HTML overlay assembly
+- `packages/client/src/ui/styles.ts` — CSS-in-JS (9KB, comprehensive dark theme)
+- `packages/client/src/ui/hud.ts` — top/bottom bar HUD
+- `packages/client/src/ui/minimap.ts` — canvas minimap with click-to-navigate
+- `packages/client/src/ui/actionPanel.ts` — context-sensitive action buttons
+- `packages/client/src/ui/cityPanel.ts` — modal production chooser
+- `packages/client/src/ui/eventLog.ts` — scrollable event log
+- `packages/client/src/ui/turnFlow.ts` — unit order cycling
+- `packages/client/src/ui/menuScreens.ts` — main menu + game over
+- `packages/client/src/game/actionCollector.ts` — action accumulation + immediate application
+- `packages/client/src/game/moveCalc.ts` — valid move/attack computation
+- `packages/client/src/renderer/highlights.ts` — tile highlight sprites
+- `docs/archive/CHANGELOG-sessions-000-003.md` — archived changelog entries
+
+## Files Modified
+- `packages/client/src/main.ts` — complete rewrite (click-to-move, menu flow, turn management)
+- `packages/client/src/core/input.ts` — added click/keypress event queues
+- `packages/client/src/core/camera.ts` — restored WASD panning (no conflict with click-to-move)
+- `packages/client/src/types.ts` — added UIState, TileHighlight, selectedCityId, highlight textures
+- `packages/client/src/constants.ts` — added MOVE_HIGHLIGHT, ATTACK_HIGHLIGHT colors
+- `packages/client/src/assets/placeholders.ts` — added move/attack highlight textures
+- `STATE.md` — updated to Phase 8 complete
+- `CHANGELOG.md` — added v0.8.0 entry, archived sessions 000-003
+- `MEMORY.md` — updated current phase, added Phase 8 architecture section, updated file tree
+
+## Build Status
+- Client: 0 errors, 0 warnings (tsc --noEmit clean)
+- Shared: 184 tests passing
+- Server: 28 tests passing
+- Total: 212 tests passing
+
+## Testing Done
+- TypeScript type-checking: all packages compile cleanly
+- Automated tests: all 212 pass (no client tests yet — UI is visual)
+- Manual: dev server starts successfully, serves HTML
+- NOT tested: full gameplay flow in browser (requires visual verification)
+
+## Decisions & Rationale
+- Decision: HTML/CSS overlay instead of PixiJS UI — Rationale: text-heavy panels need CSS fonts, flexbox, scrolling, hover states; pointer-events passthrough keeps canvas interaction clean
+- Decision: Click-to-move instead of keyboard directions — Rationale: user explicitly preferred modern UI; eliminates WASD/movement key conflict; more intuitive for web game
+- Decision: Apply actions immediately via processAction — Rationale: gives instant visual feedback; moves are no-ops when re-processed by executeTurn; repair tracking uses action list not state
+- Decision: Single camera instance (never recreated) — Rationale: UI components capture camera reference; recreating would leave stale references in minimap/eventLog
+- Decision: G for sentry instead of S — Rationale: S is used for camera panning (WASD); G is for "guard"
+- Decision: Shift+click city to open production — Rationale: regular click selects city, need modifier for modal; also accessible via P key or action panel button
+
+## Open Questions
+- Double-click detection for city panel open (currently using shift+click)
+- Multi-step pathfinding for units with speed > 1 (currently adjacent-only clicks)
+- Should WASD be disabled when a unit is selected? (currently both camera pan and selection coexist)
+- Particle emission for immediate combat during player moves vs end-of-turn AI combat
+
+## Plan Progress
+- Phase 8 (Steps 8.1–8.7): ALL COMPLETE
+  - 8.1 HUD Layout ✓
+  - 8.2 Minimap ✓
+  - 8.3 Input System ✓
+  - 8.4 Unit Action Panel ✓
+  - 8.5 City Management Panel ✓
+  - 8.6 Turn Flow UI ✓
+  - 8.7 Game Menu Screens ✓
+
+## Next Steps
+- Phase 9: Client-Server Integration (Steps 9.1–9.4)
+  - 9.1: WebSocket client (connect, auto-reconnect with backoff)
+  - 9.2: State synchronization (server sends visible state, client applies)
+  - 9.3: Action dispatch (client sends actions, server validates)
+  - 9.4: Lobby UI (list/create/join games)
+
+## Dependencies Added
+- None (all UI built with vanilla HTML/CSS/Canvas + existing PixiJS)
+
+## Optimization Report
+- CHANGELOG.md: 220 lines → archived sessions 000-003 to `docs/archive/CHANGELOG-sessions-000-003.md`, trimmed to ~175 lines
+- STATE.md: 99 lines (under 150 threshold)
+- MEMORY.md: 109 lines (under 150 threshold)
+
+## Full Conversation Summary
+The session began with the user requesting "finish phase 8" (Client Game UI). After thoroughly exploring the existing client codebase (Phase 7: PixiJS rendering engine with isometric coords, camera, tilemap, units, particles, placeholder assets), I designed and planned the full Phase 8 implementation across 7 steps.
+
+The initial implementation used keyboard direction keys (QWEASDZC) for unit movement, following the original VMS-Empire terminal game's interface. I built the complete UI system: HTML/CSS overlay with styles injection, HUD (top/bottom bars), minimap (dedicated canvas with click-to-navigate), action panel, city production modal, event log, turn flow automation, and menu screens. I also created the ActionCollector for managing player actions and the TurnFlow for cycling through units needing orders.
+
+During the implementation, the user noticed I was writing keyboard movement conflict handling and asked "is there a better way to do this than use keyboard keys?" This was a pivotal moment — the user wanted modern web game UX, not a terminal game clone. I proposed click-to-move with highlighted valid tiles, which the user enthusiastically approved ("yes, let us use all the new concepts of UI to improve the game").
+
+I then refactored the input model: created `moveCalc.ts` to compute valid adjacent moves/attacks, `highlights.ts` for sprite-pooled green (move) / red (attack) tile highlights with pulse animation, added highlight textures to the asset pipeline, restored WASD for camera panning, and rewrote `main.ts` to handle click-on-highlighted-tile as the primary movement mechanism. Keyboard shortcuts were kept only for orders (Space=skip, G=sentry, F=explore, Enter=end turn, etc.).
+
+The session ended with all 212 tests passing, clean type-checking across all packages, and the dev server running successfully. The game is now playable as a complete single-player experience with full UI, though it needs visual verification in a browser.

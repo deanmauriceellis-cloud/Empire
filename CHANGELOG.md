@@ -1,5 +1,114 @@
 # Empire Reborn — Changelog
 
+## v0.9.0 — Session 010 (2026-03-09)
+
+### Added
+- **Phase 9: Client-Server Integration** — WebSocket multiplayer, lobby, dual-mode client
+  - `packages/shared/src/protocol.ts` — moved protocol types to shared package (single source of truth for client & server): GamePhase, ClientMessage, ClientAction, ServerMessage, VisibleGameState, VisibleCity
+  - `packages/client/src/net/connection.ts` — WebSocket client connection manager:
+    - Auto-reconnect with exponential backoff (500ms → 15s)
+    - Typed send/receive (ClientMessage, ServerMessage)
+    - Connection state tracking (disconnected, connecting, connected)
+    - `getWebSocketUrl()` helper with dev-mode auto-detect
+  - `packages/client/src/net/multiplayer.ts` — multiplayer game adapter:
+    - Receives VisibleGameState from server, converts to RenderableState for renderer
+    - Action dispatch: moveUnit, attackTarget, setProduction, setBehavior, endTurn, resign
+    - Server message handler routing (game_created, game_joined, state_update, turn_result, game_over, etc.)
+    - `fetchLobbyGames()` REST API helper for lobby game list
+    - `viewCharToTerrain()` view cell contents → TerrainType conversion
+
+### Changed
+- `packages/client/src/main.ts` — complete rewrite for dual-mode (single-player + multiplayer):
+  - GameMode enum: "none" | "singleplayer" | "multiplayer"
+  - All input handlers (click, keyboard, panel actions) route through mode-appropriate code path
+  - Single-player uses ActionCollector (local state, immediate application)
+  - Multiplayer sends actions to server via WebSocket, waits for state_update
+  - Dev mode auto-detects port 5173 and connects WebSocket to port 3001
+- `packages/client/src/ui/menuScreens.ts` — expanded menu system:
+  - Main menu: "Single Player" and "Multiplayer" buttons
+  - Multiplayer lobby: connection status, open games list with join buttons, active games with rejoin
+  - Waiting screen: game ID display for sharing, cancel button, animated spinner
+  - Game over: added "Main Menu" secondary button
+  - `updateConnectionStatus()` for live connection indicator
+- `packages/client/src/ui/styles.ts` — added lobby/multiplayer CSS:
+  - Connection status indicators (green/yellow/red)
+  - Lobby game list (game ID, player count, join buttons)
+  - Secondary button style, waiting spinner animation
+  - h2 heading style for lobby/sub-screens
+- `packages/client/src/ui/turnFlow.ts` — owner-aware unit cycling:
+  - Added `setOwner(owner)` method (defaults to Player1)
+  - `findUnitsNeedingOrders` now uses dynamic owner instead of hardcoded Player1
+- `packages/server/src/protocol.ts` — replaced with re-export from `@empire/shared`
+- `packages/server/src/GameManager.ts` — imports protocol types from `@empire/shared`
+- `packages/shared/src/index.ts` — exports protocol module
+
+## v0.8.0 — Session 009 (2026-03-09)
+
+### Added
+- **Phase 8: Client Game UI** — complete game interaction layer
+  - `packages/client/src/ui/UIManager.ts` — HTML overlay manager, assembles all UI panels
+  - `packages/client/src/ui/styles.ts` — CSS-in-JS injection (dark theme, monospace, semi-transparent panels, pointer-events passthrough)
+  - `packages/client/src/ui/hud.ts` — top bar (turn/cities/units count) + bottom bar (selected unit HP/moves/behavior or city production progress)
+  - `packages/client/src/ui/minimap.ts` — 2px/tile `<canvas>` minimap: color-coded terrain/cities/units, viewport rectangle overlay, click-to-navigate
+  - `packages/client/src/ui/actionPanel.ts` — context-sensitive action buttons with keyboard shortcuts (Skip, Sentry, Explore, Wait for Transport, Disembark, Next Unit, End Turn)
+  - `packages/client/src/ui/cityPanel.ts` — modal production chooser: 3×3 grid of 9 unit types (stats shown), progress bar, 20% switch penalty warning on hover
+  - `packages/client/src/ui/eventLog.ts` — scrollable event log (combat/capture/production/death/discovery), click event to pan camera, 30-event max
+  - `packages/client/src/ui/turnFlow.ts` — auto-cycles units needing orders (func=None, has moves, not embarked), camera focus, skip/done tracking
+  - `packages/client/src/ui/menuScreens.ts` — main menu (New Game button), game over screen (Victory/Defeat + turn/city/unit stats)
+  - `packages/client/src/game/actionCollector.ts` — accumulates PlayerActions, applies immediately to GameState via `processAction` + vision `scan`, batches for end-of-turn `submitTurn`
+  - `packages/client/src/game/moveCalc.ts` — computes valid adjacent move/attack targets for selected unit, returns TileHighlight array
+  - `packages/client/src/renderer/highlights.ts` — sprite-pooled tile highlight renderer with pulse animation (green=move, red=attack), hover overlay
+
+### Changed
+- `packages/client/src/main.ts` — complete rewrite: click-to-move interaction model, menu flow (main menu → game → game over → new game), turn management loop, action dispatch to collector, highlight computation, particle emission tracking
+- `packages/client/src/core/input.ts` — added click event queue (`consumeClicks`), right-click queue (`consumeRightClicks`), one-shot keypress queue (`consumeKeyPresses`); kept existing polling for camera
+- `packages/client/src/core/camera.ts` — WASD + arrow keys for camera panning (no conflict with click-to-move)
+- `packages/client/src/types.ts` — added `UIState`, `TileHighlight` interfaces; added `selectedCityId` to `SelectionState`; added `moveHighlight`/`attackHighlight` to `AssetBundle`
+- `packages/client/src/constants.ts` — added `MOVE_HIGHLIGHT` (0x44cc88) and `ATTACK_HIGHLIGHT` (0xff4444) colors
+- `packages/client/src/assets/placeholders.ts` — added green move highlight and red attack highlight diamond textures
+
+## v0.7.0 — Session 008 (2026-03-09)
+
+### Added
+- **Phase 7: Client Rendering** — complete isometric rendering engine
+  - `packages/client/src/constants.ts` — tile dimensions (64×32), color palette, camera/animation params
+  - `packages/client/src/types.ts` — `RenderableState`, `RenderableTile`, `SelectionState`, `AssetBundle` interfaces
+  - `packages/client/src/iso/coords.ts` — isometric coordinate system:
+    - `cartToIso`/`isoToCart` transforms, `screenToTile` (screen → tile with camera), `getVisibleTileBounds` (frustum culling bounds)
+  - `packages/client/src/core/app.ts` — PixiJS v8 bootstrap:
+    - WebGPU preference with WebGL2 fallback, responsive canvas
+    - Scene graph: worldContainer (camera-transformed), effectsContainer, uiContainer (screen-space)
+  - `packages/client/src/core/camera.ts` — camera system:
+    - WASD/arrow/edge-scroll panning, scroll wheel zoom (0.5×–3×), lerp smoothing, world bounds clamping
+    - `centerOnTile`/`panToTile` helpers
+  - `packages/client/src/core/input.ts` — input manager:
+    - Keyboard/mouse/wheel polling, blur-safe key tracking, context menu prevention
+  - `packages/client/src/assets/placeholders.ts` — placeholder texture generator:
+    - Terrain: isometric diamond tiles (land, sea, city×3 owners)
+    - Units: 9 geometric shapes × 2 player colors (circle, triangle, diamond, hexagons, rectangles, star)
+    - Fog, selection glow, hover highlight textures
+    - All generated via `Graphics` → `renderer.generateTexture()`
+  - `packages/client/src/renderer/tilemap.ts` — tilemap renderer:
+    - Sprite pool with frustum culling (only renders visible tiles)
+    - Fog of war overlay layer (unseen = opaque black, stale = semi-transparent)
+  - `packages/client/src/renderer/units.ts` — unit renderer:
+    - Isometric positioning with lerp movement animation
+    - Player color-coded sprites, health bars (green→yellow→red), pulsing selection glow
+    - Death fade-out animation, depth sorting by Y coordinate
+  - `packages/client/src/renderer/particles.ts` — particle effects system:
+    - Pooled Graphics particles with physics (gravity, velocity, alpha fade)
+    - Emitters: explosion (orange/red burst), death (owner-colored), capture (ring burst), water ripple (expanding rings)
+  - `packages/client/src/game/bridge.ts` — game state adapter:
+    - `buildRenderableState(game)` — converts `SinglePlayerGame` to `RenderableState`
+    - Combines ground truth terrain + player view map, filters visible units/cities
+    - Designed for later swap to multiplayer `VisibleGameState`
+
+### Changed
+- `packages/client/src/main.ts` — rewritten as full game client:
+  - Initializes all rendering systems, creates single-player game
+  - Game loop: input → camera update → tilemap render → unit render → particles → HUD
+  - Centers camera on player's starting city, displays turn/tile info HUD
+
 ## v0.6.0 — Session 007 (2026-03-09)
 
 ### Added
@@ -106,48 +215,4 @@
 - `types.ts` — added `rngState: number` to `GameState` for deterministic randomness
 - `index.ts` — added exports for `game.js`, `pathfinding.js`, `continent.js`
 
-## v0.2.0 — Session 003 (2026-03-09)
-
-### Added
-- **Phase 2: Map Generation** — complete map generator ported from C source
-  - `mapgen.ts` — seedable PRNG (mulberry32), height map with 9-point smoothing, histogram-based waterline, terrain assignment, edge marking, adaptive city placement, BFS continent detection, continent scoring, balanced starting city selection, integrated `generateMap(config)` orchestrator
-  - 27 new tests covering RNG determinism, height map smoothing, water ratio, edge marking, city placement constraints, continent detection, starting city selection, and full integration
-  - Export added to `index.ts`
-
-## v0.1.0 — Session 002 (2026-03-09)
-
-### Added
-- **Phase 0: Project Scaffolding** — full monorepo setup
-  - Root: `package.json`, `pnpm-workspace.yaml`, `tsconfig.base.json`, `.gitignore`
-  - `packages/shared/` — TypeScript + vitest, no build step, consumed via workspace `exports`
-  - `packages/client/` — Vite + PixiJS v8, renders colored rectangle with version label
-  - `packages/server/` — Node.js + Express + ws on port 3001, `/health` endpoint, `/ws` WebSocket
-- **Phase 1: Shared Game Types & Constants** — all game logic types ported from C source
-  - `constants.ts` — Direction, Owner, UnitType, UnitBehavior, TerrainType, TerrainFlag enums; MAP_WIDTH/HEIGHT/SIZE, NUM_CITY, DIR_OFFSET, MOVE_ORDER, sector constants
-  - `units.ts` — UnitAttributes interface + all 9 unit types with exact stats from data.c; attack target lists; canTraverse helper
-  - `types.ts` — Loc, Position, MapCell, ViewMapCell, CityState, UnitState, GameConfig, GameState, PlayerAction, TurnResult, ScanCounts
-  - `utils.ts` — locRow, locCol, rowColLoc, dist (Chebyshev), isOnBoard, getAdjacentLocs, moveInDirection, locSector, sectorCenter
-  - 49 unit tests across 4 test files (constants, units, utils, index)
-
-## v0.0.2 — Session 001 (2026-03-09)
-
-### Changed
-- **Simplified architecture** — rewrote `PLAN.md` with leaner tech stack:
-  - Removed Colyseus → plain WebSocket (`ws`) + Express
-  - Removed Redis → in-memory `Map` for active game state
-  - Removed PostgreSQL → SQLite (`better-sqlite3`)
-  - Removed Better Auth → deferred (add OAuth later if needed)
-  - Removed Turborepo → plain pnpm workspaces
-  - Removed tsup → shared package consumed as raw TypeScript
-  - Removed 3-service deploy → single Dockerfile (Node serves client + WebSocket + API)
-- Total steps: 48 (was 55)
-
-## v0.0.1 — Session 000 (2026-03-09)
-
-### Added
-- Cloned original VMS-Empire source from github.com/slacy/empire
-- Created `PLAN.md` — 12-phase, 55-step implementation plan
-- Created `STATE.md` — project state tracking
-- Created `CHANGELOG.md` — this file
-- Created session protocol with archive-first optimization policy
-- Set up `docs/sessions/` and `docs/archive/` directory structure
+> Earlier sessions (000–003) archived in `docs/archive/CHANGELOG-sessions-000-003.md`

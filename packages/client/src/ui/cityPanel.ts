@@ -1,0 +1,111 @@
+// Empire Reborn — City Production Panel (Modal)
+
+import { UNIT_ATTRIBUTES, UnitType, NUM_UNIT_TYPES } from "@empire/shared";
+import type { CityState } from "@empire/shared";
+
+export interface CityPanel {
+  readonly element: HTMLDivElement;
+  /** Open the panel for a city. */
+  open(city: CityState): void;
+  /** Close the panel. */
+  close(): void;
+  /** Returns the selected unit type if player chose one, or null. */
+  consumeSelection(): { cityId: number; unitType: UnitType } | null;
+  readonly isOpen: boolean;
+}
+
+export function createCityPanel(): CityPanel {
+  const element = document.createElement("div");
+  element.id = "city-panel";
+
+  let currentCity: CityState | null = null;
+  let pendingSelection: { cityId: number; unitType: UnitType } | null = null;
+  let isOpen = false;
+
+  function render(city: CityState): void {
+    const currentAttrs = UNIT_ATTRIBUTES[city.production];
+    const pct = Math.min(100, Math.floor((city.work / currentAttrs.buildTime) * 100));
+    const turnsLeft = Math.max(1, Math.ceil((currentAttrs.buildTime - city.work) / 1));
+
+    let html = `<button class="close-btn" data-action="close">&times;</button>`;
+    html += `<h2>City #${city.id} Production</h2>`;
+
+    // Progress bar
+    html += `<div class="progress-info">Building: <strong>${currentAttrs.name}</strong> — ${pct}% (${turnsLeft} turns left)</div>`;
+    html += `<div class="progress-bar"><div class="fill" style="width:${pct}%"></div></div>`;
+
+    // Production grid
+    html += `<div style="margin-top:12px" class="section-label" style="color:#666;font-size:11px">Choose production:</div>`;
+    html += `<div class="production-grid" style="margin-top:8px">`;
+
+    for (let i = 0; i < NUM_UNIT_TYPES; i++) {
+      const attrs = UNIT_ATTRIBUTES[i];
+      const active = city.production === i ? " active" : "";
+      html += `<button class="prod-btn${active}" data-unit-type="${i}">` +
+        `<span class="prod-name">${attrs.char} ${attrs.name}</span>` +
+        `<span class="prod-stat">${attrs.buildTime}t | ` +
+        `${attrs.strength}atk | ${attrs.maxHits}hp</span>` +
+        `</button>`;
+    }
+
+    html += `</div>`;
+
+    // Penalty warning
+    html += `<div class="penalty-warning" id="penalty-warn">Changing production costs 20% of accumulated work.</div>`;
+
+    element.innerHTML = html;
+  }
+
+  element.addEventListener("click", (e) => {
+    const target = (e.target as HTMLElement).closest("[data-action], [data-unit-type]") as HTMLElement | null;
+    if (!target) return;
+
+    if (target.dataset.action === "close") {
+      isOpen = false;
+      element.classList.remove("visible");
+      return;
+    }
+
+    if (target.dataset.unitType !== undefined && currentCity) {
+      const unitType = parseInt(target.dataset.unitType, 10) as UnitType;
+      pendingSelection = { cityId: currentCity.id, unitType };
+      isOpen = false;
+      element.classList.remove("visible");
+    }
+  });
+
+  element.addEventListener("mouseover", (e) => {
+    const target = (e.target as HTMLElement).closest("[data-unit-type]") as HTMLElement | null;
+    const warn = element.querySelector("#penalty-warn") as HTMLElement | null;
+    if (!warn || !currentCity) return;
+
+    if (target && parseInt(target.dataset.unitType!, 10) !== currentCity.production) {
+      warn.style.display = "block";
+    } else {
+      warn.style.display = "none";
+    }
+  });
+
+  return {
+    element,
+    get isOpen() { return isOpen; },
+
+    open(city: CityState): void {
+      currentCity = city;
+      isOpen = true;
+      render(city);
+      element.classList.add("visible");
+    },
+
+    close(): void {
+      isOpen = false;
+      element.classList.remove("visible");
+    },
+
+    consumeSelection(): { cityId: number; unitType: UnitType } | null {
+      const sel = pendingSelection;
+      pendingSelection = null;
+      return sel;
+    },
+  };
+}

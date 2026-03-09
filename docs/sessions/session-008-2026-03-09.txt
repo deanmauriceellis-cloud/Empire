@@ -1,0 +1,47 @@
+Session 008 — 2026-03-09
+Phase 7: Client Rendering
+
+OBJECTIVE: Implement the complete client-side isometric rendering engine.
+
+COMPLETED:
+- Step 7.1: PixiJS Bootstrap — WebGPU preference, scene graph (world/effects/UI containers)
+- Step 7.2: Isometric Coordinate System — cartToIso/isoToCart, screenToTile, getVisibleTileBounds
+- Step 7.3: Camera System — WASD/arrow/edge panning, scroll zoom 0.5x-3x, lerp smoothing, bounds clamping
+- Step 7.4: Asset Pipeline — geometric placeholder textures (terrain, 9 unit types × 2 players, fog, selection)
+- Step 7.5: Tilemap Renderer — sprite pool with frustum culling, fog of war overlay (unseen/stale/visible)
+- Step 7.6: Unit Renderer — isometric positioning, player colors, health bars, selection glow, move animation
+- Step 7.7: Particle Effects — explosions, death, capture ring, water ripples
+- Game Bridge — SinglePlayerGame → RenderableState adapter for renderer abstraction
+- Main entry point rewritten with full game loop
+
+FILES CREATED (12):
+  packages/client/src/constants.ts
+  packages/client/src/types.ts
+  packages/client/src/iso/coords.ts
+  packages/client/src/core/app.ts
+  packages/client/src/core/camera.ts
+  packages/client/src/core/input.ts
+  packages/client/src/assets/placeholders.ts
+  packages/client/src/game/bridge.ts
+  packages/client/src/renderer/tilemap.ts
+  packages/client/src/renderer/units.ts
+  packages/client/src/renderer/particles.ts
+
+FILES MODIFIED (1):
+  packages/client/src/main.ts — rewritten as full game client
+
+DESIGN DECISIONS:
+- No @pixi/tilemap (not v8-compatible) — sprite pooling with frustum culling instead
+- RenderableState abstraction — renderer never touches GameState directly; bridge adapts
+- Graphics-to-Texture for placeholders — draw once, use Sprite for all instances
+- Fog as overlay sprites — separate layer, not modifying tile textures
+- Lerp-based animation — no tweening library needed
+- Pool sizing up to MAP_WIDTH × MAP_HEIGHT (6000) sprites max
+
+VERIFICATION:
+- TypeScript compiles clean (tsc --noEmit)
+- Production build succeeds (vite build)
+- 184 shared tests still pass
+- No new dependencies added
+
+NEXT: Phase 8 — Client Game UI (HUD, minimap, input system, unit actions, city management, turn flow)
