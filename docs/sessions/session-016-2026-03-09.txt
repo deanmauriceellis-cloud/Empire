@@ -1,0 +1,121 @@
+Session 016 — 2026-03-09
+========================
+
+## Summary
+Added configurable map sizes and terrain types with a game setup screen, fixed starting city placement to maximize distance, and fixed three fighter bugs (disappearing, stuck, fuel management).
+
+## Conversation Context
+- User was playtesting and noticed players start too close to each other — wanted strategic separation
+- Asked if map could be 1000x1000. Discussed performance constraints: pathfinding BFS per unit per turn scales O(cells), so 1M cells would be too slow. Agreed on practical presets up to 200x120.
+- User wanted terrain variety options (islands, oceans, continents, etc.)
+- Proposed and agreed on: mutable constants approach (not massive refactor), 4 map sizes, 4 terrain presets
+- User reported fighter bugs during testing: one disappears, newer ones stuck even on explore
+- Investigation revealed 3 bugs: auto-attack killing fragile fighters, tight fuel margin, and no death on fuel exhaustion
+
+## Changes Made
+
+### 1. Starting City Distance
+- `packages/shared/src/mapgen.ts` — `selectStartingCities()` now picks the pair of shore cities (one per continent) that maximizes Chebyshev distance, instead of random picks
+- Ensures players start on opposite sides of balanced continents
+
+### 2. Configurable Map Dimensions
+- `packages/shared/src/constants.ts` — Changed MAP_WIDTH, MAP_HEIGHT, MAP_SIZE, NUM_CITY, DIR_OFFSET, ROWS_PER_SECTOR, COLS_PER_SECTOR from `const` to `let`
+- Added `configureMapDimensions(width, height)` that recalculates all derived values
+- Added `MapSizePreset` interface and `MAP_SIZE_PRESETS` array: Small (60x40), Standard (100x60), Large (150x90), Huge (200x120)
+- Added `TerrainPreset` interface and `TERRAIN_PRESETS` array: Continents, Pangaea, Archipelago, Islands
+- `numCities` auto-scales via the original formula: `(100 * (W + H)) / 228`
+
+### 3. Satellite Bounce Fix
+- `packages/shared/src/game.ts` — `bounceSatellite()` replaced hardcoded `Math.floor(oldLoc / 100)` with `locRow(oldLoc)`, `>= 58` with `MAP_HEIGHT - 2`, `>= 98` with `MAP_WIDTH - 2`
+
+### 4. Fighter Fuel Management Overhaul
+- Added `fighterFuelCheck()` centralized helper function
+- Old margin: `+2` (too tight — fighter could fly 8 tiles past the safe threshold in one turn)
+- New margin: `+speed` (8 tiles — guarantees one full turn of return flight)
+- Direct coordinate-based return flight (Math.sign(dr, dc)) instead of fragile BFS view-map search
+- Fighters with range=0 are now killed (like satellites) instead of becoming permanently stranded
+- Replaces 4 duplicated fuel check blocks across explore/goto/aggressive/cautious
+
+### 5. Fighter Explore No Auto-Attack
+- Fighters in Explore and Cautious modes no longer auto-attack adjacent enemies
+- With 1 HP and strength 1, auto-attacks were a coin flip for instant death
+- Only Aggressive behavior attacks (as intended)
+
+### 6. Game Setup UI
+- `packages/client/src/ui/menuScreens.ts` — New `showGameSetup(mode)` screen with 2x2 grids for map size and terrain selection
+- Clicking "Single Player" or "Create Game" now goes to setup screen first
+- `GameSetupOptions` type carries selected presets through to game creation
+- `packages/client/src/ui/styles.ts` — CSS for setup options (grid, hover, selected state)
+
+### 7. Camera Reconfiguration
+- `packages/client/src/core/camera.ts` — Added `reconfigure(mw, mh)` method that recomputes world bounds
+- Called in both `startSinglePlayer()` and `startMultiplayerGame()`
+
+### 8. Server/Client Integration
+- `packages/shared/src/singleplayer.ts` — Calls `configureMapDimensions` before map gen, uses `NUM_CITY` for auto-scaled city count
+- `packages/server/src/GameManager.ts` — Same for multiplayer create and game resume
+- `packages/client/src/net/multiplayer.ts` — `createGame()` accepts options, sends config overrides; calls `configureMapDimensions` on state_update
+- `packages/client/src/main.ts` — Routes through setup screen, passes `GameConfig` overrides
+
+## Files Modified
+- `packages/shared/src/constants.ts` — mutable constants, configureMapDimensions, presets
+- `packages/shared/src/game.ts` — fighterFuelCheck, satellite bounce fix, explore no-attack for fighters
+- `packages/shared/src/mapgen.ts` — max-distance starting city selection
+- `packages/shared/src/singleplayer.ts` — configureMapDimensions call, auto-scaled numCities
+- `packages/server/src/GameManager.ts` — configureMapDimensions on create/resume, auto-scaled numCities
+- `packages/client/src/core/camera.ts` — reconfigure() method
+- `packages/client/src/main.ts` — setup screen routing, config overrides, camera reconfigure
+- `packages/client/src/ui/menuScreens.ts` — showGameSetup(), GameSetupOptions type
+- `packages/client/src/ui/styles.ts` — game setup CSS
+- `packages/client/src/net/multiplayer.ts` — createGame options, configureMapDimensions on state
+
+## Build Status
+- Client: 0 errors, 0 warnings, builds clean
+- Server: 0 errors, 0 warnings
+- Shared: 0 errors, 0 warnings
+
+## Testing Done
+- 237 shared tests: all pass
+- 28 server tests: all pass
+- Manual testing by user: found fighter bugs (fixed)
+- E2E tests not re-run this session
+
+## Decisions & Rationale
+- Decision: Mutable `let` constants instead of refactoring all utils to accept width param — Rationale: minimal changes, single-threaded game, only one game at a time
+- Decision: 4 map size presets (max 200x120) instead of free-form input — Rationale: performance limits, balanced gameplay, prevents bad configs
+- Decision: Fighter explore skips combat — Rationale: 1 HP units shouldn't auto-suicide; user can use Aggressive mode explicitly
+- Decision: Fuel margin = speed (8) — Rationale: guarantees full turn of return flight; old +2 was dangerously tight
+- Decision: Direct coordinate flight for fuel return — Rationale: simpler, more reliable than BFS view-map "O" search
+
+## Open Questions
+- None
+
+## Plan Progress
+- All 12 phases remain complete
+- Post-phase polish: map configuration and fighter reliability improvements
+
+## Next Steps
+- Hosting/deployment
+- Art assets (replace placeholders)
+- Lobby auto-refresh
+
+## Dependencies Added
+- None
+
+## Optimization Report
+- CHANGELOG.md archived sessions 008-011 → `docs/archive/CHANGELOG-sessions-008-011.md`
+- CHANGELOG.md: 244 lines → ~130 lines (under 200 threshold)
+- STATE.md: 59 lines → ~52 lines (under 150 threshold)
+
+## Full Conversation Summary
+Session began with the standard protocol: drift check passed (commit 317456d matched STATE.md), archive check flagged CHANGELOG at 244 lines.
+
+User was playtesting and observed that players start too close together. I analyzed `selectStartingCities()` in mapgen.ts — the happy path picked random shore cities from balanced continents with no distance consideration. Fixed by iterating all shore city pairs and picking the max-distance pair.
+
+User then asked about supporting 1000x1000 maps and terrain variety. I explored the codebase and found that while GameConfig supports variable dimensions, the actual constants (MAP_WIDTH, DIR_OFFSET, etc.) were hardcoded. Discussed that 1000x1000 would be too slow (pathfinding per unit scales with cell count). Proposed mutable constants with `configureMapDimensions()`, 4 map size presets, and 4 terrain presets. User agreed.
+
+Implementation: made 7 constants mutable, added the configuration function, presets, a game setup UI screen, camera reconfiguration, and wired everything through single-player and multiplayer paths. Also fixed the satellite bounce hardcoded values.
+
+User continued testing and reported fighters disappearing and getting stuck on explore. Investigation revealed three bugs: (1) explore auto-attacked adjacent enemies — with 1 HP, a 50/50 death; (2) fuel margin of +2 was too tight for speed=8 fighters; (3) fighters reaching range=0 never died, just became permanently stranded. Created a centralized `fighterFuelCheck()` helper that uses coordinate-based direct flight, a proper speed-based margin, and kills stranded fighters. Replaced all 4 duplicated fuel blocks across behavior modes.
+
+All 265 tests pass, client builds clean. Servers restarted for user to continue testing.

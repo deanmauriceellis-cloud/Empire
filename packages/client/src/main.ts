@@ -13,7 +13,8 @@ import {
   DIR_OFFSET,
   objMoves,
 } from "@empire/shared";
-import type { SinglePlayerGame, TurnEvent, VisibleGameState } from "@empire/shared";
+import type { SinglePlayerGame, TurnEvent, VisibleGameState, GameConfig } from "@empire/shared";
+import type { GameSetupOptions } from "./ui/menuScreens.js";
 import { createApp } from "./core/app.js";
 import { createCamera } from "./core/camera.js";
 import { createInput } from "./core/input.js";
@@ -259,10 +260,20 @@ async function init() {
 
   // ─── Start Single Player ───────────────────────────────────────────────
 
-  function startSinglePlayer(): void {
+  function startSinglePlayer(options?: GameSetupOptions): void {
     mode = "singleplayer";
-    game = createSinglePlayerGame();
+    const configOverrides: Partial<GameConfig> = {};
+    if (options) {
+      configOverrides.mapWidth = options.mapSize.width;
+      configOverrides.mapHeight = options.mapSize.height;
+      configOverrides.waterRatio = options.terrain.waterRatio;
+      configOverrides.smoothPasses = options.terrain.smoothPasses;
+    }
+    game = createSinglePlayerGame(configOverrides);
     collector = createActionCollector(game);
+
+    // Reconfigure camera for the new map dimensions
+    camera.reconfigure(game.state.config.mapWidth, game.state.config.mapHeight);
 
     const playerCity = game.state.cities.find((c) => c.owner === Owner.Player1);
     if (playerCity) {
@@ -292,6 +303,12 @@ async function init() {
     if (mp.owner !== null) {
       ui.turnFlow.setOwner(mp.owner);
     }
+
+    // Reconfigure camera for the server's map dimensions
+    if (mp.visibleState) {
+      camera.reconfigure(mp.visibleState.config.mapWidth, mp.visibleState.config.mapHeight);
+    }
+
     resetSelection();
     ui.eventLog.clear();
     ui.menus.hide();
@@ -906,7 +923,7 @@ async function init() {
     if (menuAction !== null) {
       audio.playUIClick();
       if (menuAction === "new-game") {
-        startSinglePlayer();
+        ui.menus.showGameSetup("singleplayer");
       } else if (menuAction === "multiplayer") {
         // Connect and show lobby
         if (connState === "disconnected") {
@@ -914,11 +931,7 @@ async function init() {
         }
         refreshLobby();
       } else if (menuAction === "create-online") {
-        if (connState !== "connected") {
-          conn.connect();
-        }
-        mp.reset();
-        mp.createGame();
+        ui.menus.showGameSetup("multiplayer");
       } else if (menuAction === "back-to-main") {
         mp.reset();
         conn.disconnect();
@@ -926,6 +939,14 @@ async function init() {
         mode = "none";
         gameStarted = false;
         ui.menus.showMainMenu();
+      } else if (typeof menuAction === "object" && menuAction.type === "start-game") {
+        startSinglePlayer(menuAction.options);
+      } else if (typeof menuAction === "object" && menuAction.type === "start-online") {
+        if (connState !== "connected") {
+          conn.connect();
+        }
+        mp.reset();
+        mp.createGame(menuAction.options);
       } else if (typeof menuAction === "object" && menuAction.type === "join-game") {
         if (connState !== "connected") {
           conn.connect();

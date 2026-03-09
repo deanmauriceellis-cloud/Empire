@@ -3,6 +3,8 @@
 // Ported from VMS-Empire (object.c, attack.c, usermove.c, compmove.c)
 
 import {
+  MAP_WIDTH,
+  MAP_HEIGHT,
   MAP_SIZE,
   DIR_OFFSET,
   Direction,
@@ -25,7 +27,7 @@ import type {
   TurnResult,
   PlayerAction,
 } from "./types.js";
-import { isOnBoard, getAdjacentLocs, locCol, locRow, dist } from "./utils.js";
+import { isOnBoard, getAdjacentLocs, locCol, locRow, rowColLoc, dist } from "./utils.js";
 import {
   createPathMap,
   findObjective,
@@ -424,12 +426,12 @@ export function moveSatellite(state: GameState, unit: UnitState): TurnEvent[] {
 function bounceSatellite(behavior: UnitBehavior, oldLoc: Loc, _newLoc: Loc): UnitBehavior {
   // Determine which edge was hit and reverse that component
   const col = locCol(oldLoc);
-  const row = Math.floor(oldLoc / 100); // MAP_WIDTH
+  const row = locRow(oldLoc);
 
   const isNorth = row <= 1;
-  const isSouth = row >= 58; // MAP_HEIGHT - 2
+  const isSouth = row >= MAP_HEIGHT - 2;
   const isWest = col <= 1;
-  const isEast = col >= 98; // MAP_WIDTH - 2
+  const isEast = col >= MAP_WIDTH - 2;
 
   switch (behavior) {
     case UnitBehavior.MoveNE:
@@ -878,6 +880,84 @@ function getExploreMoveInfo(unitType: UnitType) {
 }
 
 /**
+ * Fighter fuel management helper.
+ * Returns "ok" if the fighter has enough fuel to keep going,
+ * "return" if it needs to head back to base (and moves one step toward it),
+ * or "stranded" if no path to base exists.
+ * Fighters that reach range 0 are killed.
+ */
+function fighterFuelCheck(
+  state: GameState,
+  unit: UnitState,
+  owner: Owner,
+  events: TurnEvent[],
+): "ok" | "return" | "stranded" {
+  if (unit.type !== UnitType.Fighter) return "ok";
+
+  // Kill fighter if fuel is exhausted
+  if (unit.range <= 0) {
+    events.push(...killUnit(state, unit.id));
+    return "stranded";
+  }
+
+  // Find nearest own city distance
+  let nearestCityDist = INFINITY;
+  let nearestCityLoc: Loc = -1;
+  for (const city of state.cities) {
+    if (city.owner === owner) {
+      const d = dist(unit.loc, city.loc);
+      if (d < nearestCityDist) {
+        nearestCityDist = d;
+        nearestCityLoc = city.loc;
+      }
+    }
+  }
+
+  // If in a city, no fuel concern
+  if (nearestCityDist === 0) return "ok";
+
+  // Safety margin: need enough range to fly back + 1 turn of speed buffer
+  const speed = UNIT_ATTRIBUTES[unit.type].speed;
+  if (unit.range > nearestCityDist + speed) return "ok";
+
+  // Must return to base — fly directly toward nearest city
+  if (nearestCityLoc >= 0) {
+    const unitRow = locRow(unit.loc);
+    const unitCol = locCol(unit.loc);
+    const cityRow = locRow(nearestCityLoc);
+    const cityCol = locCol(nearestCityLoc);
+    const dr = Math.sign(cityRow - unitRow);
+    const dc = Math.sign(cityCol - unitCol);
+    const targetLoc = rowColLoc(unitRow + dr, unitCol + dc);
+    if (targetLoc >= 0 && targetLoc < MAP_SIZE && goodLoc(state, unit, targetLoc)) {
+      moveUnit(state, unit, targetLoc);
+      scan(state, owner, unit.loc);
+      return "return";
+    }
+  }
+
+  // Fallback: BFS toward own city
+  const viewMap = state.viewMaps[owner];
+  const pathMap = createPathMap();
+  const cityMoveInfo = airMoveInfo("O", new Map([["O", 1]]));
+  const objective = findObjective(pathMap, viewMap, unit.loc, cityMoveInfo);
+  if (objective !== null) {
+    markPath(pathMap, objective);
+    const dir = findDirection(pathMap, unit.loc);
+    if (dir !== null) {
+      const targetLoc = unit.loc + DIR_OFFSET[dir];
+      if (targetLoc >= 0 && targetLoc < MAP_SIZE && goodLoc(state, unit, targetLoc)) {
+        moveUnit(state, unit, targetLoc);
+        scan(state, owner, unit.loc);
+        return "return";
+      }
+    }
+  }
+
+  return "stranded";
+}
+
+/**
  * Smart move for behavior-driven units.
  * Checks for enemies and capturable cities at target before moving.
  * Returns events and whether the move was successful.
@@ -972,51 +1052,28 @@ function exploreUnit(state: GameState, unit: UnitState, owner: Owner): TurnEvent
   for (let step = 0; step < movesAvailable; step++) {
     if (findUnit(state, unit.id) === undefined) break;
 
-    // Fighter fuel check — return to base if range is getting low
-    if (unit.type === UnitType.Fighter) {
-      let nearestCityDist = INFINITY;
-      for (const city of state.cities) {
-        if (city.owner === owner) {
-          const d = dist(unit.loc, city.loc);
-          if (d < nearestCityDist) nearestCityDist = d;
-        }
-      }
-      const inCity = nearestCityDist === 0;
-      if (!inCity && unit.range <= nearestCityDist + 2) {
-        // Return to nearest city
-        const pathMap = createPathMap();
-        const cityMoveInfo = airMoveInfo("O", new Map([["O", 1]]));
-        const objective = findObjective(pathMap, viewMap, unit.loc, cityMoveInfo);
-        if (objective !== null) {
-          markPath(pathMap, objective);
-          const dir = findDirection(pathMap, unit.loc);
-          if (dir !== null) {
-            const targetLoc = unit.loc + DIR_OFFSET[dir];
-            if (targetLoc >= 0 && targetLoc < MAP_SIZE && goodLoc(state, unit, targetLoc)) {
-              moveUnit(state, unit, targetLoc);
-              scan(state, owner, unit.loc);
-              continue;
-            }
-          }
-        }
-        break;
-      }
-    }
+    // Fighter fuel management
+    const fuelStatus = fighterFuelCheck(state, unit, owner, events);
+    if (fuelStatus === "stranded") break;
+    if (fuelStatus === "return") continue;
 
-    // Check for adjacent enemies — attack them
-    const adjacent = getAdjacentLocs(unit.loc);
-    let attacked = false;
-    for (const adj of adjacent) {
-      const enemy = state.units.find(
-        (u) => u.loc === adj && u.owner !== owner && u.shipId === null,
-      );
-      if (enemy) {
-        events.push(...attackUnit(state, unit, enemy));
-        attacked = true;
-        break;
+    // Non-fighter units: check for adjacent enemies and attack them
+    // Fighters skip this — they're too fragile (1 HP) to auto-engage
+    if (!isAirUnit) {
+      const adjacent = getAdjacentLocs(unit.loc);
+      let attacked = false;
+      for (const adj of adjacent) {
+        const enemy = state.units.find(
+          (u) => u.loc === adj && u.owner !== owner && u.shipId === null,
+        );
+        if (enemy) {
+          events.push(...attackUnit(state, unit, enemy));
+          attacked = true;
+          break;
+        }
       }
+      if (attacked) break;
     }
-    if (attacked) break;
 
     if (isAirUnit) {
       // Greedy: pick the adjacent tile that reveals the most unseen tiles
@@ -1108,36 +1165,10 @@ function goToUnit(state: GameState, unit: UnitState, owner: Owner): TurnEvent[] 
     if (findUnit(state, unit.id) === undefined) break;
     if (unit.targetLoc === null) break;
 
-    // Fighter fuel check
-    if (unit.type === UnitType.Fighter) {
-      let nearestCityDist = INFINITY;
-      for (const city of state.cities) {
-        if (city.owner === owner) {
-          const d = dist(unit.loc, city.loc);
-          if (d < nearestCityDist) nearestCityDist = d;
-        }
-      }
-      const inCity = nearestCityDist === 0;
-      if (!inCity && unit.range <= nearestCityDist + 2) {
-        // Must return to base — abort goto
-        const pathMap = createPathMap();
-        const cityMoveInfo = airMoveInfo("O", new Map([["O", 1]]));
-        const objective = findObjective(pathMap, viewMap, unit.loc, cityMoveInfo);
-        if (objective !== null) {
-          markPath(pathMap, objective);
-          const dir = findDirection(pathMap, unit.loc);
-          if (dir !== null) {
-            const targetLoc = unit.loc + DIR_OFFSET[dir];
-            if (targetLoc >= 0 && targetLoc < MAP_SIZE && goodLoc(state, unit, targetLoc)) {
-              moveUnit(state, unit, targetLoc);
-              scan(state, owner, unit.loc);
-              continue;
-            }
-          }
-        }
-        break;
-      }
-    }
+    // Fighter fuel management
+    const fuelStatus = fighterFuelCheck(state, unit, owner, events);
+    if (fuelStatus === "stranded") break;
+    if (fuelStatus === "return") continue;
 
     // Reached target?
     if (unit.loc === unit.targetLoc) {
@@ -1197,35 +1228,10 @@ function aggressiveUnit(state: GameState, unit: UnitState, owner: Owner): TurnEv
   for (let step = 0; step < movesAvailable; step++) {
     if (findUnit(state, unit.id) === undefined) break;
 
-    // Fighter fuel check
-    if (isAirUnit) {
-      let nearestCityDist = INFINITY;
-      for (const city of state.cities) {
-        if (city.owner === owner) {
-          const d = dist(unit.loc, city.loc);
-          if (d < nearestCityDist) nearestCityDist = d;
-        }
-      }
-      const inCity = nearestCityDist === 0;
-      if (!inCity && unit.range <= nearestCityDist + 2) {
-        const pathMap = createPathMap();
-        const cityMoveInfo = airMoveInfo("O", new Map([["O", 1]]));
-        const objective = findObjective(pathMap, viewMap, unit.loc, cityMoveInfo);
-        if (objective !== null) {
-          markPath(pathMap, objective);
-          const dir = findDirection(pathMap, unit.loc);
-          if (dir !== null) {
-            const targetLoc = unit.loc + DIR_OFFSET[dir];
-            if (targetLoc >= 0 && targetLoc < MAP_SIZE && goodLoc(state, unit, targetLoc)) {
-              moveUnit(state, unit, targetLoc);
-              scan(state, owner, unit.loc);
-              continue;
-            }
-          }
-        }
-        break;
-      }
-    }
+    // Fighter fuel management
+    const fuelStatus = fighterFuelCheck(state, unit, owner, events);
+    if (fuelStatus === "stranded") break;
+    if (fuelStatus === "return") continue;
 
     // Check for adjacent enemies — attack immediately
     const adjacent = getAdjacentLocs(unit.loc);
@@ -1309,35 +1315,10 @@ function cautiousUnit(state: GameState, unit: UnitState, owner: Owner): TurnEven
   for (let step = 0; step < movesAvailable; step++) {
     if (findUnit(state, unit.id) === undefined) break;
 
-    // Fighter fuel check
-    if (unit.type === UnitType.Fighter) {
-      let nearestCityDist = INFINITY;
-      for (const city of state.cities) {
-        if (city.owner === owner) {
-          const d = dist(unit.loc, city.loc);
-          if (d < nearestCityDist) nearestCityDist = d;
-        }
-      }
-      const inCity = nearestCityDist === 0;
-      if (!inCity && unit.range <= nearestCityDist + 2) {
-        const pathMap = createPathMap();
-        const cityMoveInfo = airMoveInfo("O", new Map([["O", 1]]));
-        const objective = findObjective(pathMap, viewMap, unit.loc, cityMoveInfo);
-        if (objective !== null) {
-          markPath(pathMap, objective);
-          const dir = findDirection(pathMap, unit.loc);
-          if (dir !== null) {
-            const targetLoc = unit.loc + DIR_OFFSET[dir];
-            if (targetLoc >= 0 && targetLoc < MAP_SIZE && goodLoc(state, unit, targetLoc)) {
-              moveUnit(state, unit, targetLoc);
-              scan(state, owner, unit.loc);
-              continue;
-            }
-          }
-        }
-        break;
-      }
-    }
+    // Fighter fuel management
+    const fuelStatus = fighterFuelCheck(state, unit, owner, events);
+    if (fuelStatus === "stranded") break;
+    if (fuelStatus === "return") continue;
 
     // Check for adjacent enemies — flee away from them
     const adjacent = getAdjacentLocs(unit.loc);

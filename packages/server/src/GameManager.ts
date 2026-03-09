@@ -14,6 +14,8 @@ import {
   MAP_WIDTH,
   MAP_HEIGHT,
   MAP_SIZE,
+  NUM_CITY,
+  configureMapDimensions,
   generateMap,
   initViewMap,
   scan,
@@ -120,13 +122,18 @@ export class GameManager {
 
   private handleCreateGame(ws: WebSocket, configOverrides?: Partial<GameConfig>): void {
     const gameId = randomUUID().slice(0, 8);
+
+    // Configure dimensions first so NUM_CITY scales correctly
+    const w = configOverrides?.mapWidth ?? DEFAULT_CONFIG.mapWidth;
+    const h = configOverrides?.mapHeight ?? DEFAULT_CONFIG.mapHeight;
+    configureMapDimensions(w, h);
+
     const config: GameConfig = {
       ...DEFAULT_CONFIG,
+      numCities: NUM_CITY, // auto-scaled by configureMapDimensions
       seed: Math.floor(Math.random() * 2 ** 32),
       ...configOverrides,
     };
-
-    // Generate map
     const mapResult = generateMap(config);
 
     // Build initial game state
@@ -554,6 +561,9 @@ export class GameManager {
 
     // Only resume games that were in progress (not completed lobby games)
     if (saved.phase === "lobby") return false;
+
+    // Restore map dimensions from saved config
+    configureMapDimensions(saved.state.config.mapWidth, saved.state.config.mapHeight);
 
     const game: ActiveGame = {
       id: gameId,

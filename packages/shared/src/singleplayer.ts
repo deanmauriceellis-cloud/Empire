@@ -3,7 +3,7 @@
 // No server needed — same GameState + executeTurn interface.
 
 import { type GameState, type GameConfig, type PlayerAction, type TurnResult } from "./types.js";
-import { Owner, MAP_WIDTH, MAP_HEIGHT } from "./constants.js";
+import { Owner, MAP_WIDTH, MAP_HEIGHT, NUM_CITY, configureMapDimensions } from "./constants.js";
 import { generateMap } from "./mapgen.js";
 import { initViewMap, scan, executeTurn } from "./game.js";
 import { computeAITurn } from "./ai.js";
@@ -23,10 +23,15 @@ export interface SinglePlayerGame {
  * Player 1 = human, Player 2 = AI.
  */
 export function createSinglePlayerGame(configOverrides?: Partial<GameConfig>): SinglePlayerGame {
+  // Configure global map dimensions first so NUM_CITY scales correctly
+  const w = configOverrides?.mapWidth ?? MAP_WIDTH;
+  const h = configOverrides?.mapHeight ?? MAP_HEIGHT;
+  configureMapDimensions(w, h);
+
   const config: GameConfig = {
-    mapWidth: MAP_WIDTH,
-    mapHeight: MAP_HEIGHT,
-    numCities: 70,
+    mapWidth: w,
+    mapHeight: h,
+    numCities: NUM_CITY, // auto-scaled by configureMapDimensions
     waterRatio: 70,
     smoothPasses: 5,
     minCityDist: 2,

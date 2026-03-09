@@ -9,6 +9,7 @@ import {
   DIR_OFFSET,
   locRow,
   locCol,
+  configureMapDimensions,
   type Loc,
   type TurnEvent,
   type VisibleGameState,
@@ -63,7 +64,7 @@ export interface MultiplayerGame {
   readonly turnEvents: ReadonlyArray<TurnEvent>;
 
   /** Create a new multiplayer game on the server. */
-  createGame(): void;
+  createGame(options?: { mapSize: { width: number; height: number }; terrain: { waterRatio: number; smoothPasses: number } }): void;
   /** Join an existing game by ID. */
   joinGame(gameId: string): void;
   /** Send a move action to the server. */
@@ -112,8 +113,20 @@ export function createMultiplayerGame(
     get winner() { return winner; },
     get turnEvents() { return turnEvents; },
 
-    createGame(): void {
-      conn.send({ type: "create_game" });
+    createGame(options?: { mapSize: { width: number; height: number }; terrain: { waterRatio: number; smoothPasses: number } }): void {
+      if (options) {
+        conn.send({
+          type: "create_game",
+          config: {
+            mapWidth: options.mapSize.width,
+            mapHeight: options.mapSize.height,
+            waterRatio: options.terrain.waterRatio,
+            smoothPasses: options.terrain.smoothPasses,
+          },
+        });
+      } else {
+        conn.send({ type: "create_game" });
+      }
     },
 
     joinGame(id: string): void {
@@ -212,6 +225,8 @@ export function createMultiplayerGame(
         case "state_update":
           visibleState = msg.state;
           turnEvents = []; // clear previous turn events on new state
+          // Ensure map dimensions match server's config
+          configureMapDimensions(msg.state.config.mapWidth, msg.state.config.mapHeight);
           events.onStateUpdate(msg.state);
           break;
 

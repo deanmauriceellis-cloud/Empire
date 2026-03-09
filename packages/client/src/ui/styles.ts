@@ -516,6 +516,75 @@ const CSS = `
   padding: 24px 0;
 }
 
+/* ─── Game Setup ────────────────────────────────────────────────────────── */
+
+#menu-screen .setup-section {
+  margin-bottom: 20px;
+  width: 420px;
+}
+
+#menu-screen .setup-label {
+  color: #888;
+  font-size: 12px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  letter-spacing: 1px;
+}
+
+#menu-screen .setup-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+#menu-screen .setup-option {
+  pointer-events: auto;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid #333;
+  color: #aaa;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  text-align: left;
+  transition: all 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+#menu-screen .setup-option:hover {
+  background: rgba(68,136,255,0.1);
+  border-color: #48f;
+  color: #ccc;
+}
+
+#menu-screen .setup-option.selected {
+  background: rgba(68,136,255,0.2);
+  border-color: #48f;
+  color: #fff;
+}
+
+#menu-screen .setup-option .option-name {
+  font-weight: bold;
+  color: inherit;
+  font-size: 13px;
+}
+
+#menu-screen .setup-option .option-detail {
+  color: #4af;
+  font-size: 11px;
+}
+
+#menu-screen .setup-option .option-desc {
+  color: #666;
+  font-size: 10px;
+}
+
+#menu-screen .setup-option.selected .option-desc {
+  color: #888;
+}
+
 /* ─── Waiting Spinner ────────────────────────────────────────────────────── */
 
 #menu-screen .waiting-spinner {

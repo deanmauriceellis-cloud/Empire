@@ -31,29 +31,36 @@ export interface Camera {
 
   /** Smoothly move camera to center on a tile. */
   panToTile(col: number, row: number): void;
+
+  /** Reconfigure camera bounds for a new map size. */
+  reconfigure(mapWidth: number, mapHeight: number): void;
 }
 
 export function createCamera(mapWidth: number, mapHeight: number): Camera {
   // Compute world bounds in iso space
-  const topLeft = cartToIso(0, 0);
-  const topRight = cartToIso(mapWidth - 1, 0);
-  const bottomLeft = cartToIso(0, mapHeight - 1);
-  const bottomRight = cartToIso(mapWidth - 1, mapHeight - 1);
+  let worldMinX: number, worldMaxX: number, worldMinY: number, worldMaxY: number;
 
-  const worldMinX = bottomLeft.x - HALF_TILE_W;
-  const worldMaxX = topRight.x + HALF_TILE_W;
-  const worldMinY = topLeft.y - HALF_TILE_H;
-  const worldMaxY = bottomRight.y + HALF_TILE_H;
+  function computeBounds(mw: number, mh: number): void {
+    const topLeft = cartToIso(0, 0);
+    const topRight = cartToIso(mw - 1, 0);
+    const bottomLeft = cartToIso(0, mh - 1);
+    const bottomRight = cartToIso(mw - 1, mh - 1);
+    worldMinX = bottomLeft.x - HALF_TILE_W;
+    worldMaxX = topRight.x + HALF_TILE_W;
+    worldMinY = topLeft.y - HALF_TILE_H;
+    worldMaxY = bottomRight.y + HALF_TILE_H;
+  }
 
-  let x = (worldMinX + worldMaxX) / 2;
-  let y = (worldMinY + worldMaxY) / 2;
+  computeBounds(mapWidth, mapHeight);
+
+  let x = (worldMinX! + worldMaxX!) / 2;
+  let y = (worldMinY! + worldMaxY!) / 2;
   let zoom = 1.0;
   let targetX = x;
   let targetY = y;
   let targetZoom = zoom;
 
   function clampPosition(vw: number, vh: number): void {
-    // Allow viewing entire map but don't pan past edges
     const halfViewW = vw / 2 / zoom;
     const halfViewH = vh / 2 / zoom;
     targetX = Math.max(worldMinX + halfViewW, Math.min(worldMaxX - halfViewW, targetX));
@@ -123,6 +130,16 @@ export function createCamera(mapWidth: number, mapHeight: number): Camera {
       const iso = cartToIso(col, row);
       targetX = iso.x;
       targetY = iso.y;
+    },
+
+    reconfigure(mw: number, mh: number): void {
+      computeBounds(mw, mh);
+      zoom = 1.0;
+      targetZoom = 1.0;
+      x = (worldMinX + worldMaxX) / 2;
+      y = (worldMinY + worldMaxY) / 2;
+      targetX = x;
+      targetY = y;
     },
   };
 }

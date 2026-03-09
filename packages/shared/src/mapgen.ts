@@ -397,11 +397,22 @@ export function selectStartingCities(
   // Pick the most balanced pair (easiest start)
   const pair = pairs[0];
 
-  // Pick a random shore city from each continent
-  const city1Idx = pair.cont1.shoreCities[irand(rng, pair.cont1.shoreCities.length)];
-  const city2Idx = pair.cont2.shoreCities[irand(rng, pair.cont2.shoreCities.length)];
+  // Pick the pair of shore cities (one per continent) that maximizes distance
+  let bestDist = -1;
+  let bestC1 = pair.cont1.shoreCities[0];
+  let bestC2 = pair.cont2.shoreCities[0];
+  for (const c1 of pair.cont1.shoreCities) {
+    for (const c2 of pair.cont2.shoreCities) {
+      const d = dist(cities[c1].loc, cities[c2].loc);
+      if (d > bestDist) {
+        bestDist = d;
+        bestC1 = c1;
+        bestC2 = c2;
+      }
+    }
+  }
 
-  return [city1Idx, city2Idx];
+  return [bestC1, bestC2];
 }
 
 /** Fallback: pick two cities that are maximally far apart. */
