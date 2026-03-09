@@ -1,12 +1,13 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Phase 11: Deployment** — Complete
+**Phase 12: Testing Strategy** — In Progress (12.1 + 12.2 complete)
 
 ## Status
-- Phases 0–10 complete
-- Phase 11 (Deployment) complete
-- Monorepo operational, all packages type-check, 212 tests passing (184 shared + 28 server)
+- Phases 0–11 complete
+- Phase 12.1 (Unit test coverage) complete — 93.6% statement coverage on shared
+- Phase 12.2 (Integration tests) complete — AI vs AI 100 turns, save/load, determinism
+- Monorepo operational, all packages type-check, 265 tests passing (237 shared + 28 server)
 
 ## Latest commit
 `8087904` — session 012: Phase 11 Deployment
@@ -90,12 +91,18 @@
 - [x] Phase 11: Dockerfile — single-container build (node:22-slim + pnpm + Vite build)
 - [x] Phase 11: .dockerignore for lean image builds
 - [x] Phase 11: Root `start` script and expanded `test` script
+- [x] Phase 12.1: Unit test coverage — shared 84.2% → 93.6% (game.ts 76% → 99%, ai.ts 70% → 80%)
+- [x] Phase 12.2: Integration tests — AI vs AI 100 turns, save/load round-trip, deterministic replay
 
 ## In Progress
-_Nothing currently in progress_
+- Phase 12.3: E2E tests (Playwright critical paths, perf benchmarks)
+
+## Completed (this session)
+- [x] Phase 12.1: Unit test coverage — shared package 84.2% → 93.6% statements
+- [x] Phase 12.2: Integration tests — AI vs AI (100 turns), save/load round-trip, determinism
 
 ## Next Steps
-1. **Phase 12: Testing Strategy** — unit test coverage, integration tests, E2E tests
+1. **Phase 12.3: E2E Tests** — Playwright for critical paths, perf benchmarks
 2. **Hosting** — deploy to server (any host running Node/Docker)
 
 ## Blockers
@@ -104,7 +111,8 @@ _None_
 ## Notes
 - Server runs on port 3001 (port 3000 used by another application)
 - Shared package consumed as raw TS via workspace `exports` field — no build step needed
-- 212 tests total: 184 shared + 28 server (21 GameManager + 7 database)
+- 265 tests total: 237 shared + 28 server (21 GameManager + 7 database)
+- Shared coverage: 93.6% statements, 88.4% branches, 95.7% functions
 - GameState now includes `rngState` field for deterministic combat/satellite random rolls
 - Server package now has vitest configured for testing
 - SQLite database stored at `data/empire.db` (WAL mode), `data/` directory auto-created

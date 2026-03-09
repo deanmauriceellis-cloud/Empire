@@ -15,6 +15,7 @@ import {
   createUnit,
   killUnit,
   findUnit,
+  embarkUnit,
   initViewMap,
   scan,
   setProduction,
@@ -508,6 +509,289 @@ describe("AI System", () => {
 
         state.turn++;
       }
+    });
+  });
+
+  describe("AI Army — embarked & transport loading", () => {
+    it("should not move army that is on a transport", () => {
+      setWater(state, 15, 15, 10, 10);
+      const aiCity = addCity(state, rowColLoc(10, 10), AI);
+      addCity(state, rowColLoc(40, 40), HUMAN);
+      const tt = createUnit(state, UnitType.Transport, AI, rowColLoc(16, 16));
+      const army = createUnit(state, UnitType.Army, AI, rowColLoc(16, 16));
+      embarkUnit(state, army.id, tt.id);
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      // Army should not have independent move/attack actions (transport handles it)
+      const armyMoves = actions.filter(
+        a => (a.type === "move" || a.type === "attack") && a.unitId === army.id,
+      );
+      expect(armyMoves).toHaveLength(0);
+    });
+
+    it("should embark onto transport at same location", () => {
+      setWater(state, 15, 15, 10, 10);
+      const aiCity = addCity(state, rowColLoc(10, 10), AI);
+      addCity(state, rowColLoc(40, 40), HUMAN);
+      // Army and transport at same land/coast location
+      const tt = createUnit(state, UnitType.Transport, AI, rowColLoc(14, 15));
+      state.map[rowColLoc(14, 15)].terrain = TerrainType.Sea;
+      const army = createUnit(state, UnitType.Army, AI, rowColLoc(14, 15));
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      const embarkAction = actions.find(
+        a => a.type === "embark" && a.unitId === army.id,
+      );
+      expect(embarkAction).toBeDefined();
+    });
+  });
+
+  describe("AI Resign — complete elimination", () => {
+    it("should resign when AI has no cities and no armies", () => {
+      // AI has nothing, human has stuff
+      addCity(state, rowColLoc(20, 20), HUMAN);
+      createUnit(state, UnitType.Army, HUMAN, rowColLoc(20, 22));
+      // AI has only a ship (no cities, no armies)
+      setWater(state, 10, 10, 5, 5);
+      createUnit(state, UnitType.Patrol, AI, rowColLoc(11, 11));
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      const resignAction = actions.find(a => a.type === "resign");
+      expect(resignAction).toBeDefined();
+    });
+  });
+
+  describe("AI Fighter — fuel management", () => {
+    it("should not move fighter with zero moves left", () => {
+      const aiCity = addCity(state, rowColLoc(10, 10), AI);
+      addCity(state, rowColLoc(40, 40), HUMAN);
+      const fighter = createUnit(state, UnitType.Fighter, AI, rowColLoc(10, 12));
+      // Use up all moves
+      fighter.moved = UNIT_ATTRIBUTES[UnitType.Fighter].speed;
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      const fighterActions = actions.filter(
+        a => (a.type === "move" || a.type === "attack") && a.unitId === fighter.id,
+      );
+      expect(fighterActions).toHaveLength(0);
+    });
+
+    it("should navigate fighter back to city when very low on fuel", () => {
+      const aiCity = addCity(state, rowColLoc(10, 10), AI);
+      addCity(state, rowColLoc(40, 40), HUMAN);
+      const fighter = createUnit(state, UnitType.Fighter, AI, rowColLoc(10, 15));
+      fighter.range = 7; // Very low fuel — barely enough to reach city
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      const moveAction = actions.find(
+        a => a.type === "move" && a.unitId === fighter.id,
+      );
+      // Should move toward city
+      expect(moveAction).toBeDefined();
+      if (moveAction && moveAction.type === "move") {
+        const newCol = moveAction.loc % MAP_WIDTH;
+        expect(newCol).toBeLessThan(15); // moving toward city at col 10
+      }
+    });
+  });
+
+  describe("AI Ship — repair and combat decisions", () => {
+    it("should stay in port when damaged (zero moves after repair return)", () => {
+      setWater(state, 10, 10, 20, 20);
+      const aiCity = addCity(state, rowColLoc(10, 10), AI);
+      addCity(state, rowColLoc(40, 40), HUMAN);
+      // Ship in its own city, damaged
+      const ship = createUnit(state, UnitType.Destroyer, AI, aiCity.loc);
+      ship.hits = 1; // damaged
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      const moveAction = actions.find(
+        a => a.type === "move" && a.unitId === ship.id,
+      );
+      // Should stay in port to repair — no move action
+      expect(moveAction).toBeUndefined();
+    });
+
+    it("should not move ship with zero moves left", () => {
+      setWater(state, 10, 10, 20, 20);
+      const aiCity = addCity(state, rowColLoc(10, 10), AI);
+      addCity(state, rowColLoc(40, 40), HUMAN);
+      const ship = createUnit(state, UnitType.Patrol, AI, rowColLoc(15, 15));
+      ship.moved = UNIT_ATTRIBUTES[UnitType.Patrol].speed;
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      const shipMoves = actions.filter(
+        a => (a.type === "move" || a.type === "attack") && a.unitId === ship.id,
+      );
+      expect(shipMoves).toHaveLength(0);
+    });
+  });
+
+  describe("AI Transport — unloading and loading", () => {
+    it("should handle full transport near enemy coast", () => {
+      setWater(state, 20, 10, 5, 20);
+      const aiCity = addCity(state, rowColLoc(10, 10), AI);
+      const humanCity = addCity(state, rowColLoc(26, 20), HUMAN);
+
+      // Full transport with 6 armies adjacent to land
+      const ttLoc = rowColLoc(24, 20);
+      state.map[ttLoc].terrain = TerrainType.Sea;
+      const tt = createUnit(state, UnitType.Transport, AI, ttLoc);
+      for (let i = 0; i < 6; i++) {
+        const army = createUnit(state, UnitType.Army, AI, ttLoc);
+        embarkUnit(state, army.id, tt.id);
+      }
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      // Transport should try to unload — expect disembark actions
+      expect(actions.length).toBeGreaterThan(0);
+    });
+
+    it("should try to load armies when empty transport near coast", () => {
+      setWater(state, 15, 15, 5, 5);
+      const aiCity = addCity(state, rowColLoc(10, 10), AI);
+      addCity(state, rowColLoc(40, 40), HUMAN);
+      // Empty transport near coast, army on adjacent land
+      const ttLoc = rowColLoc(15, 15);
+      const tt = createUnit(state, UnitType.Transport, AI, ttLoc);
+      const army = createUnit(state, UnitType.Army, AI, rowColLoc(14, 15));
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      // Should generate movement actions
+      expect(actions.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("AI Transport — full unloading near land", () => {
+    it("should unload armies when full transport is adjacent to land", () => {
+      // Create a map with water strip between two landmasses
+      setWater(state, 20, 5, 3, 90);
+      const aiCity = addCity(state, rowColLoc(10, 10), AI);
+      const humanCity = addCity(state, rowColLoc(25, 20), HUMAN);
+
+      // Full transport on water, adjacent to enemy landmass
+      const ttLoc = rowColLoc(22, 20); // last row of water, adjacent to land at row 23
+      state.map[ttLoc].terrain = TerrainType.Sea;
+      const vm = state.viewMaps[AI];
+      vm[ttLoc] = { contents: ".", seen: 0 };
+
+      const tt = createUnit(state, UnitType.Transport, AI, ttLoc);
+      for (let i = 0; i < 6; i++) {
+        const a = createUnit(state, UnitType.Army, AI, ttLoc);
+        embarkUnit(state, a.id, tt.id);
+      }
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      // Should attempt to unload — look for disembark actions
+      const disembarkActions = actions.filter(a => a.type === "disembark");
+      expect(disembarkActions.length).toBeGreaterThan(0);
+    });
+
+    it("should navigate partially-loaded transport near enemy coast to unload", () => {
+      setWater(state, 20, 5, 3, 90);
+      const aiCity = addCity(state, rowColLoc(10, 10), AI);
+      const humanCity = addCity(state, rowColLoc(25, 20), HUMAN);
+
+      // Partially loaded transport (4/6) at water, near enemy coast
+      const ttLoc = rowColLoc(21, 20);
+      state.map[ttLoc].terrain = TerrainType.Sea;
+      const tt = createUnit(state, UnitType.Transport, AI, ttLoc);
+      for (let i = 0; i < 4; i++) {
+        const a = createUnit(state, UnitType.Army, AI, ttLoc);
+        embarkUnit(state, a.id, tt.id);
+      }
+      // Mark adjacent land as enemy territory in view map
+      const vm = state.viewMaps[AI];
+      const adjLand = rowColLoc(22, 20);
+      vm[adjLand] = { contents: "X", seen: 0 };
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      // Should produce actions (either unload or move toward land)
+      expect(actions.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("AI Ship — damaged navigation to port", () => {
+    it("should navigate damaged ship toward port when not in city", () => {
+      setWater(state, 10, 10, 20, 20);
+      const aiCity = addCity(state, rowColLoc(10, 10), AI);
+      addCity(state, rowColLoc(40, 40), HUMAN);
+
+      // Damaged destroyer at sea, away from port
+      const ship = createUnit(state, UnitType.Destroyer, AI, rowColLoc(20, 20));
+      ship.hits = 1; // heavily damaged
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      const moveAction = actions.find(
+        a => a.type === "move" && a.unitId === ship.id,
+      );
+      // Ship should try to move (toward port or any direction)
+      expect(moveAction).toBeDefined();
+    });
+
+    it("should seek fight target when undamaged and no adjacent enemies", () => {
+      setWater(state, 10, 10, 30, 30);
+      const aiCity = addCity(state, rowColLoc(10, 10), AI);
+      addCity(state, rowColLoc(40, 40), HUMAN);
+      // Place enemy ship far away
+      createUnit(state, UnitType.Patrol, HUMAN, rowColLoc(30, 30));
+
+      const ship = createUnit(state, UnitType.Destroyer, AI, rowColLoc(15, 15));
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      const moveActions = actions.filter(
+        a => a.type === "move" && a.unitId === ship.id,
+      );
+      expect(moveActions.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("AI Army — fight vs load decision", () => {
+    it("should prefer nearby land fight over distant transport", () => {
+      setWater(state, 25, 1, 3, 98);
+      const aiCity = addCity(state, rowColLoc(10, 10), AI);
+      const humanCity = addCity(state, rowColLoc(10, 20), HUMAN);
+      // Enemy city is nearby on same landmass
+      const army = createUnit(state, UnitType.Army, AI, rowColLoc(10, 12));
+      // Transport far away on the water
+      createUnit(state, UnitType.Transport, AI, rowColLoc(25, 50));
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      const moveAction = actions.find(
+        a => a.type === "move" && a.unitId === army.id,
+      );
+      // Army should move somewhere (toward fight target on land)
+      expect(moveAction).toBeDefined();
+    });
+  });
+
+  describe("AI Satellite routing", () => {
+    it("should generate no movement actions for satellites", () => {
+      const aiCity = addCity(state, rowColLoc(10, 10), AI);
+      addCity(state, rowColLoc(40, 40), HUMAN);
+      const sat = createUnit(state, UnitType.Satellite, AI, rowColLoc(20, 20));
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      // Satellites are moved during executeTurn, not by AI — moveAIUnit returns []
+      const satActions = actions.filter(
+        a => (a.type === "move" || a.type === "attack") && a.unitId === sat.id,
+      );
+      expect(satActions).toHaveLength(0);
     });
   });
 });

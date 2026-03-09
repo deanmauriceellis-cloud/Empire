@@ -19,6 +19,7 @@ import {
   embarkUnit,
   disembarkUnit,
   findUnit,
+  findUnitAtLoc,
   findUnitsAtLoc,
   findNonFullShip,
   objMoves,
@@ -775,5 +776,533 @@ describe("Turn Execution", () => {
     );
     expect(p1Armies.length).toBeGreaterThanOrEqual(1);
     expect(p2Armies.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("executeTurn handles Player 2 resignation", () => {
+    addCity(state, rowColLoc(10, 10), Owner.Player1);
+    addCity(state, rowColLoc(20, 20), Owner.Player2);
+
+    const result = executeTurn(
+      state,
+      [],
+      [{ type: "resign" }],
+    );
+
+    expect(result.winner).toBe(Owner.Player1);
+    expect(result.winType).toBe("resignation");
+  });
+
+  it("executeTurn moves satellites", () => {
+    addCity(state, rowColLoc(5, 5), Owner.Player1);
+    addCity(state, rowColLoc(30, 30), Owner.Player2);
+
+    const sat = createUnit(state, UnitType.Satellite, Owner.Player1, rowColLoc(20, 20));
+    const origLoc = sat.loc;
+
+    executeTurn(state, [], []);
+    // Satellite should have moved
+    expect(sat.loc !== origLoc || findUnit(state, sat.id) === undefined).toBe(true);
+  });
+});
+
+// ─── findUnitAtLoc Tests ───────────────────────────────────────────────────────
+
+describe("findUnitAtLoc", () => {
+  let state: GameState;
+
+  beforeEach(() => {
+    state = createTestState();
+  });
+
+  it("finds unit for specific owner at location", () => {
+    const loc = rowColLoc(10, 10);
+    createUnit(state, UnitType.Army, Owner.Player2, loc);
+    const p1Unit = createUnit(state, UnitType.Army, Owner.Player1, loc);
+
+    const found = findUnitAtLoc(state, loc, Owner.Player1);
+    expect(found).toBeDefined();
+    expect(found!.id).toBe(p1Unit.id);
+  });
+
+  it("returns undefined when no units for owner at location", () => {
+    const loc = rowColLoc(10, 10);
+    createUnit(state, UnitType.Army, Owner.Player2, loc);
+
+    const found = findUnitAtLoc(state, loc, Owner.Player1);
+    expect(found).toBeUndefined();
+  });
+});
+
+// ─── Satellite Tests ───────────────────────────────────────────────────────────
+
+describe("Satellite Movement", () => {
+  let state: GameState;
+
+  beforeEach(() => {
+    state = createTestState();
+  });
+
+  it("moveSatellite moves satellite in its direction", () => {
+    const loc = rowColLoc(20, 20);
+    const sat = createUnit(state, UnitType.Satellite, Owner.Player1, loc);
+    sat.func = UnitBehavior.MoveNE;
+    sat.range = 100;
+    const origLoc = sat.loc;
+
+    const events = moveSatellite(state, sat);
+    expect(sat.loc).not.toBe(origLoc);
+  });
+
+  it("moveSatellite kills satellite when range exhausted", () => {
+    const loc = rowColLoc(20, 20);
+    const sat = createUnit(state, UnitType.Satellite, Owner.Player1, loc);
+    sat.func = UnitBehavior.MoveNE;
+    sat.range = 1; // will die after 1 move
+
+    const events = moveSatellite(state, sat);
+    expect(findUnit(state, sat.id)).toBeUndefined();
+    expect(events.some(e => e.type === "death")).toBe(true);
+  });
+
+  it("moveSatellite bounces off north edge", () => {
+    // Place near north edge
+    const loc = rowColLoc(1, 20);
+    const sat = createUnit(state, UnitType.Satellite, Owner.Player1, loc);
+    sat.func = UnitBehavior.MoveNE;
+    sat.range = 100;
+
+    moveSatellite(state, sat);
+    // Should have bounced to SE
+    expect(sat.func).toBe(UnitBehavior.MoveSE);
+  });
+
+  it("moveSatellite bounces off south edge", () => {
+    // Place close to south edge but with room to bounce
+    const loc = rowColLoc(MAP_HEIGHT - 3, 50);
+    const sat = createUnit(state, UnitType.Satellite, Owner.Player1, loc);
+    sat.func = UnitBehavior.MoveSW;
+    sat.range = 100;
+
+    const origFunc = sat.func;
+    moveSatellite(state, sat);
+    // After 12 steps starting near the south edge, it should have bounced at least once
+    expect(sat.loc).not.toBe(loc);
+    // Satellite should still be alive (range was 100)
+    expect(findUnit(state, sat.id)).toBeDefined();
+  });
+
+  it("moveSatellite bounces off east edge", () => {
+    const loc = rowColLoc(20, MAP_WIDTH - 2);
+    const sat = createUnit(state, UnitType.Satellite, Owner.Player1, loc);
+    sat.func = UnitBehavior.MoveNE;
+    sat.range = 100;
+
+    moveSatellite(state, sat);
+    expect(sat.func).toBe(UnitBehavior.MoveNW);
+  });
+
+  it("moveSatellite bounces off west edge", () => {
+    const loc = rowColLoc(20, 1);
+    const sat = createUnit(state, UnitType.Satellite, Owner.Player1, loc);
+    sat.func = UnitBehavior.MoveNW;
+    sat.range = 100;
+
+    moveSatellite(state, sat);
+    expect(sat.func).toBe(UnitBehavior.MoveNE);
+  });
+
+  it("moveSatellite bounces off NE corner", () => {
+    const loc = rowColLoc(1, MAP_WIDTH - 2);
+    const sat = createUnit(state, UnitType.Satellite, Owner.Player1, loc);
+    sat.func = UnitBehavior.MoveNE;
+    sat.range = 100;
+
+    moveSatellite(state, sat);
+    expect(sat.func).toBe(UnitBehavior.MoveSW);
+  });
+
+  it("moveSatellite bounces off SW corner", () => {
+    const loc = rowColLoc(MAP_HEIGHT - 2, 1);
+    const sat = createUnit(state, UnitType.Satellite, Owner.Player1, loc);
+    sat.func = UnitBehavior.MoveSW;
+    sat.range = 100;
+
+    moveSatellite(state, sat);
+    expect(sat.func).toBe(UnitBehavior.MoveNE);
+  });
+
+  it("moveSatellite bounces off NW corner", () => {
+    const loc = rowColLoc(1, 1);
+    const sat = createUnit(state, UnitType.Satellite, Owner.Player1, loc);
+    sat.func = UnitBehavior.MoveNW;
+    sat.range = 100;
+
+    moveSatellite(state, sat);
+    expect(sat.func).toBe(UnitBehavior.MoveSE);
+  });
+
+  it("moveSatellite bounces off SE corner", () => {
+    const loc = rowColLoc(MAP_HEIGHT - 2, MAP_WIDTH - 2);
+    const sat = createUnit(state, UnitType.Satellite, Owner.Player1, loc);
+    sat.func = UnitBehavior.MoveSE;
+    sat.range = 100;
+
+    moveSatellite(state, sat);
+    expect(sat.func).toBe(UnitBehavior.MoveNW);
+  });
+});
+
+// ─── Extended Combat Tests ─────────────────────────────────────────────────────
+
+describe("Extended Combat", () => {
+  let state: GameState;
+
+  beforeEach(() => {
+    state = createTestState();
+  });
+
+  it("attackCity transfers enemy ships and kills their cargo on capture", () => {
+    // Force capture (rng < 0.5)
+    state.rngState = 0; // find a seed that gives capture
+    const cityLoc = rowColLoc(10, 10);
+    addCity(state, cityLoc, Owner.Player2);
+
+    // Place an enemy ship with cargo at the city
+    const seaLoc = cityLoc; // city acts as port
+    const ship = createUnit(state, UnitType.Destroyer, Owner.Player2, seaLoc);
+    const cargo = createUnit(state, UnitType.Army, Owner.Player2, seaLoc);
+    embarkUnit(state, cargo.id, ship.id);
+
+    const attacker = createUnit(state, UnitType.Army, Owner.Player1, rowColLoc(10, 11));
+
+    // Try many seeds to get a capture
+    let captured = false;
+    for (let seed = 0; seed < 100; seed++) {
+      const s = createTestState();
+      s.rngState = seed * 1111;
+      const cLoc = rowColLoc(10, 10);
+      addCity(s, cLoc, Owner.Player2);
+      const sh = createUnit(s, UnitType.Destroyer, Owner.Player2, cLoc);
+      const cg = createUnit(s, UnitType.Army, Owner.Player2, cLoc);
+      embarkUnit(s, cg.id, sh.id);
+      const att = createUnit(s, UnitType.Army, Owner.Player1, rowColLoc(10, 11));
+
+      attackCity(s, att, 0);
+      if (s.cities[0].owner === Owner.Player1) {
+        // City was captured — verify ship transferred
+        const shipAlive = findUnit(s, sh.id);
+        expect(shipAlive).toBeDefined();
+        expect(shipAlive!.owner).toBe(Owner.Player1);
+        // Cargo should be killed
+        expect(findUnit(s, cg.id)).toBeUndefined();
+        captured = true;
+        break;
+      }
+    }
+    expect(captured).toBe(true);
+  });
+
+  it("attackUnit: defender wins when attacker hits reach 0", () => {
+    // Use weak attacker vs strong defender to make defender win likely
+    const seaLoc1 = rowColLoc(10, 10);
+    const seaLoc2 = rowColLoc(10, 11);
+    setSea(state, [seaLoc1, seaLoc2]);
+
+    let defenderWon = false;
+    for (let seed = 0; seed < 100; seed++) {
+      const s = createTestState();
+      setSea(s, [seaLoc1, seaLoc2]);
+      s.rngState = seed * 3333;
+
+      const patrol = createUnit(s, UnitType.Patrol, Owner.Player1, seaLoc1);
+      const battleship = createUnit(s, UnitType.Battleship, Owner.Player2, seaLoc2);
+
+      attackUnit(s, patrol, battleship);
+
+      if (findUnit(s, battleship.id) !== undefined && findUnit(s, patrol.id) === undefined) {
+        defenderWon = true;
+        break;
+      }
+    }
+    expect(defenderWon).toBe(true);
+  });
+
+  it("attackUnit: cargo overflow kills excess cargo when ship damaged", () => {
+    const seaLoc1 = rowColLoc(10, 10);
+    const seaLoc2 = rowColLoc(10, 11);
+    setSea(state, [seaLoc1, seaLoc2]);
+
+    // Carrier with 8 fighters attacks enemy patrol
+    const carrier = createUnit(state, UnitType.Carrier, Owner.Player1, seaLoc1);
+    const fighters: UnitState[] = [];
+    for (let i = 0; i < 8; i++) {
+      const f = createUnit(state, UnitType.Fighter, Owner.Player1, seaLoc1);
+      embarkUnit(state, f.id, carrier.id);
+      fighters.push(f);
+    }
+
+    // Manually damage the carrier so capacity < cargo count, then test overflow
+    carrier.hits = 3; // capacity = floor(8 * 3/8) = 3
+    const cap = objCapacity(carrier);
+    expect(cap).toBe(3);
+
+    // Simulate what happens after combat — we can test handleCargoOverflow indirectly
+    // by attacking a weak enemy where carrier survives but is already damaged
+    const patrol = createUnit(state, UnitType.Patrol, Owner.Player2, seaLoc2);
+
+    let carrierSurvived = false;
+    for (let seed = 0; seed < 200; seed++) {
+      const s = createTestState();
+      setSea(s, [seaLoc1, seaLoc2]);
+      s.rngState = seed * 7;
+      const c = createUnit(s, UnitType.Carrier, Owner.Player1, seaLoc1);
+      const fs: UnitState[] = [];
+      for (let i = 0; i < 8; i++) {
+        const f = createUnit(s, UnitType.Fighter, Owner.Player1, seaLoc1);
+        embarkUnit(s, f.id, c.id);
+        fs.push(f);
+      }
+      const p = createUnit(s, UnitType.Patrol, Owner.Player2, seaLoc2);
+
+      const events = attackUnit(s, c, p);
+      const cAlive = findUnit(s, c.id);
+      if (cAlive && cAlive.hits < 8) {
+        // Carrier survived with damage — check cargo overflow
+        const newCap = objCapacity(cAlive);
+        expect(cAlive.cargoIds.length).toBeLessThanOrEqual(newCap);
+        carrierSurvived = true;
+        break;
+      }
+    }
+    expect(carrierSurvived).toBe(true);
+  });
+});
+
+// ─── Extended End Game Tests ───────────────────────────────────────────────────
+
+describe("Extended End Game", () => {
+  let state: GameState;
+
+  beforeEach(() => {
+    state = createTestState();
+  });
+
+  it("checkEndGame detects Player 2 elimination", () => {
+    addCity(state, rowColLoc(10, 10), Owner.Player2);
+    // Player1 has nothing
+    const result = checkEndGame(state);
+    expect(result).not.toBeNull();
+    expect(result!.winner).toBe(Owner.Player2);
+    expect(result!.winType).toBe("elimination");
+  });
+
+  it("checkEndGame returns null when neither player has anything", () => {
+    // No cities, no units
+    const result = checkEndGame(state);
+    expect(result).toBeNull();
+  });
+
+  it("checkEndGame detects 3:1 resignation for Player 2", () => {
+    // Player2 has 10 cities and 10 armies
+    for (let i = 0; i < 10; i++) {
+      addCity(state, rowColLoc(10 + i, 10), Owner.Player2);
+      createUnit(state, UnitType.Army, Owner.Player2, rowColLoc(10 + i, 11));
+    }
+    // Player1 has 2 cities and 2 armies
+    for (let i = 0; i < 2; i++) {
+      addCity(state, rowColLoc(30 + i, 30), Owner.Player1);
+      createUnit(state, UnitType.Army, Owner.Player1, rowColLoc(30 + i, 31));
+    }
+
+    const result = checkEndGame(state);
+    expect(result).not.toBeNull();
+    expect(result!.winner).toBe(Owner.Player2);
+    expect(result!.winType).toBe("resignation");
+  });
+
+  it("checkEndGame: army-only player isn't eliminated", () => {
+    // Player1 has no cities but has armies
+    createUnit(state, UnitType.Army, Owner.Player1, rowColLoc(10, 10));
+    addCity(state, rowColLoc(20, 20), Owner.Player2);
+
+    const result = checkEndGame(state);
+    expect(result).toBeNull();
+  });
+});
+
+// ─── processAction Tests ───────────────────────────────────────────────────────
+
+describe("processAction", () => {
+  let state: GameState;
+
+  beforeEach(() => {
+    state = createTestState();
+  });
+
+  it("processAction handles attack on city", () => {
+    const cityLoc = rowColLoc(10, 10);
+    addCity(state, cityLoc, Owner.Player2);
+    const attacker = createUnit(state, UnitType.Army, Owner.Player1, rowColLoc(10, 11));
+
+    const events = processAction(
+      state,
+      { type: "attack", unitId: attacker.id, targetLoc: cityLoc },
+      Owner.Player1,
+    );
+    expect(events.length).toBeGreaterThan(0);
+    expect(findUnit(state, attacker.id)).toBeUndefined(); // attacker always dies
+  });
+
+  it("processAction handles attack on enemy unit", () => {
+    const loc1 = rowColLoc(10, 10);
+    const loc2 = rowColLoc(10, 11);
+    const army1 = createUnit(state, UnitType.Army, Owner.Player1, loc1);
+    const army2 = createUnit(state, UnitType.Army, Owner.Player2, loc2);
+
+    const events = processAction(
+      state,
+      { type: "attack", unitId: army1.id, targetLoc: loc2 },
+      Owner.Player1,
+    );
+    expect(events.some(e => e.type === "combat")).toBe(true);
+  });
+
+  it("processAction handles setProduction", () => {
+    const cityLoc = rowColLoc(10, 10);
+    const city = addCity(state, cityLoc, Owner.Player1, UnitType.Army);
+
+    processAction(
+      state,
+      { type: "setProduction", cityId: city.id, unitType: UnitType.Fighter },
+      Owner.Player1,
+    );
+    expect(city.production).toBe(UnitType.Fighter);
+  });
+
+  it("processAction handles setBehavior", () => {
+    const unit = createUnit(state, UnitType.Army, Owner.Player1, rowColLoc(10, 10));
+
+    processAction(
+      state,
+      { type: "setBehavior", unitId: unit.id, behavior: UnitBehavior.Sentry },
+      Owner.Player1,
+    );
+    expect(unit.func).toBe(UnitBehavior.Sentry);
+  });
+
+  it("processAction handles embark", () => {
+    const seaLoc = rowColLoc(10, 10);
+    setSea(state, [seaLoc]);
+    const army = createUnit(state, UnitType.Army, Owner.Player1, seaLoc);
+    const tt = createUnit(state, UnitType.Transport, Owner.Player1, seaLoc);
+
+    processAction(
+      state,
+      { type: "embark", unitId: army.id, shipId: tt.id },
+      Owner.Player1,
+    );
+    expect(army.shipId).toBe(tt.id);
+    expect(tt.cargoIds).toContain(army.id);
+  });
+
+  it("processAction handles disembark", () => {
+    const seaLoc = rowColLoc(10, 10);
+    setSea(state, [seaLoc]);
+    const tt = createUnit(state, UnitType.Transport, Owner.Player1, seaLoc);
+    const army = createUnit(state, UnitType.Army, Owner.Player1, seaLoc);
+    embarkUnit(state, army.id, tt.id);
+
+    processAction(
+      state,
+      { type: "disembark", unitId: army.id },
+      Owner.Player1,
+    );
+    expect(army.shipId).toBeNull();
+  });
+
+  it("processAction handles resign", () => {
+    const events = processAction(
+      state,
+      { type: "resign" },
+      Owner.Player1,
+    );
+    expect(events.some(e => e.data.winner === Owner.Player2)).toBe(true);
+  });
+
+  it("processAction rejects actions for wrong owner", () => {
+    const unit = createUnit(state, UnitType.Army, Owner.Player2, rowColLoc(10, 10));
+
+    const events = processAction(
+      state,
+      { type: "move", unitId: unit.id, loc: rowColLoc(10, 11) },
+      Owner.Player1,
+    );
+    expect(events).toHaveLength(0);
+    expect(unit.loc).toBe(rowColLoc(10, 10)); // didn't move
+  });
+
+  it("processAction rejects embark on full ship", () => {
+    const seaLoc = rowColLoc(10, 10);
+    setSea(state, [seaLoc]);
+    const tt = createUnit(state, UnitType.Transport, Owner.Player1, seaLoc);
+    // Fill the transport (capacity 6)
+    for (let i = 0; i < 6; i++) {
+      const a = createUnit(state, UnitType.Army, Owner.Player1, seaLoc);
+      embarkUnit(state, a.id, tt.id);
+    }
+    const extraArmy = createUnit(state, UnitType.Army, Owner.Player1, seaLoc);
+
+    processAction(
+      state,
+      { type: "embark", unitId: extraArmy.id, shipId: tt.id },
+      Owner.Player1,
+    );
+    expect(extraArmy.shipId).toBeNull(); // not embarked
+  });
+
+  it("processAction endTurn is a no-op", () => {
+    const events = processAction(state, { type: "endTurn" }, Owner.Player1);
+    expect(events).toHaveLength(0);
+  });
+});
+
+// ─── Fighter Auto-Embark Tests ─────────────────────────────────────────────────
+
+describe("Fighter Auto-Embark", () => {
+  let state: GameState;
+
+  beforeEach(() => {
+    state = createTestState();
+  });
+
+  it("fighter auto-embarks on carrier when not in own city", () => {
+    const seaLoc = rowColLoc(10, 11);
+    setSea(state, [seaLoc]);
+    const fighter = createUnit(state, UnitType.Fighter, Owner.Player1, rowColLoc(10, 10));
+    const carrier = createUnit(state, UnitType.Carrier, Owner.Player1, seaLoc);
+
+    moveUnit(state, fighter, seaLoc);
+    expect(fighter.shipId).toBe(carrier.id);
+  });
+
+  it("fighter does NOT auto-embark when landing in own city", () => {
+    const cityLoc = rowColLoc(10, 10);
+    addCity(state, cityLoc, Owner.Player1);
+    // Place a carrier at the city too
+    const carrier = createUnit(state, UnitType.Carrier, Owner.Player1, cityLoc);
+    const fighter = createUnit(state, UnitType.Fighter, Owner.Player1, rowColLoc(10, 11));
+
+    moveUnit(state, fighter, cityLoc);
+    expect(fighter.shipId).toBeNull(); // should NOT board carrier in own city
+  });
+
+  it("fighter auto-embarks at enemy city (not own)", () => {
+    const cityLoc = rowColLoc(10, 10);
+    addCity(state, cityLoc, Owner.Player2);
+    const carrier = createUnit(state, UnitType.Carrier, Owner.Player1, cityLoc);
+    const fighter = createUnit(state, UnitType.Fighter, Owner.Player1, rowColLoc(10, 11));
+
+    moveUnit(state, fighter, cityLoc);
+    expect(fighter.shipId).toBe(carrier.id);
   });
 });

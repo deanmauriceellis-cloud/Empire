@@ -1,5 +1,25 @@
 # Empire Reborn — Changelog
 
+## v0.12.0 — Session 013 (2026-03-09)
+
+### Added
+- **Phase 12.1: Unit Test Coverage** — shared package 84.2% → 93.6% statement coverage
+  - `game.test.ts`: +34 tests covering satellite movement/bouncing, processAction (all action types),
+    fighter auto-embark logic, city capture with ship transfer, defender-wins combat, cargo overflow,
+    Player 2 elimination/resignation, executeTurn satellite movement + P2 resignation
+  - `ai.test.ts`: +10 tests covering embarked army skip, transport embark, AI elimination resign,
+    zero-moves-left units, transport unloading near land, ship repair/navigation, fight-vs-load decision,
+    satellite routing (default case)
+- **Phase 12.2: Integration Tests** — `integration.test.ts`
+  - AI vs AI full-game simulation (100 turns, seed 42)
+  - AI vs AI with different seed (50 turns, seed 9999)
+  - Save/load round-trip (JSON serialize → deserialize → continue playing)
+  - Deterministic replay (same seed → identical actions + outcomes for 20 turns)
+
+### Changed
+- `packages/shared/package.json` — added `@vitest/coverage-v8` dev dependency for coverage reporting
+- Total tests: 212 → 265 (237 shared + 28 server)
+
 ## v0.11.0 — Session 012 (2026-03-09)
 
 ### Added

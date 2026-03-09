@@ -1,0 +1,55 @@
+Session 013 — 2026-03-09
+Phase 12: Testing Strategy (Steps 12.1 + 12.2)
+
+Goal: Improve test coverage to 90%+ on shared package, add integration tests.
+
+Starting state:
+- 212 tests (184 shared + 28 server)
+- Shared coverage: 84.2% stmts, 84.1% branches, 92.2% functions
+- Key gaps: game.ts (76%), ai.ts (70%)
+
+Work performed:
+
+1. Added @vitest/coverage-v8 dependency (matched to vitest 3.2.x)
+
+2. game.test.ts — added 34 new tests:
+   - findUnitAtLoc: owner-filtered lookup, not found case
+   - Satellite Movement: 10 tests — move, range death, bounce off all 4 edges + 4 corners
+   - Extended Combat: city capture with ship transfer + cargo kill, defender wins, cargo overflow
+   - Extended End Game: Player 2 elimination, null when empty, P2 3:1 resignation, army-only survival
+   - processAction: all 7 action types (attack city, attack unit, setProduction, setBehavior,
+     embark, disembark, resign) + wrong owner rejection, full ship rejection, endTurn no-op
+   - Fighter Auto-Embark: carrier in non-city, skip in own city, embark at enemy city
+   - Turn Execution: Player 2 resignation, satellite movement during turn
+
+3. ai.test.ts — added 10 new tests:
+   - Embarked army skip (shipId !== null → no actions)
+   - Army embark onto transport at same location
+   - AI resign on complete elimination (0 cities + 0 armies)
+   - Fighter zero moves left, low-fuel return to city
+   - Ship zero moves left, damaged ship stay in port
+   - Transport full unload near land, empty transport near coast
+   - Ship seek fight target when undamaged
+   - Army fight vs load decision
+   - Satellite routing (default case returns [])
+
+4. integration.test.ts — created new file with 4 tests:
+   - AI vs AI 100 turns (seed 42) — full game simulation
+   - AI vs AI 50 turns (seed 9999) — different map
+   - Save/load round-trip (JSON serialize/deserialize + continue)
+   - Deterministic replay (same seed → identical outcomes)
+
+End state:
+- 265 tests (237 shared + 28 server), all passing
+- Shared coverage: 93.6% stmts, 88.4% branches, 95.7% functions
+- game.ts: 76% → 98.9% statements, 100% functions
+- ai.ts: 69.8% → 79.8% statements
+- Remaining ai.ts gaps: deep transport unload/load view map logic, complex
+  pathfinding branches reachable only through specific map configurations
+
+Files modified:
+- packages/shared/package.json (added @vitest/coverage-v8)
+- packages/shared/src/__tests__/game.test.ts (+34 tests)
+- packages/shared/src/__tests__/ai.test.ts (+10 tests)
+- packages/shared/src/__tests__/integration.test.ts (new, +4 tests)
+- STATE.md, CHANGELOG.md, this session log
