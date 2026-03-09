@@ -1,0 +1,10 @@
+node_modules
+.git
+*.md
+docs/
+packages/client/dist
+packages/server/dist
+packages/shared/dist
+data/
+.vscode
+.idea

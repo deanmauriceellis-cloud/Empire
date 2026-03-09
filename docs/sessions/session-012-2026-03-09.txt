@@ -1,0 +1,107 @@
+Session 012 — 2026-03-09
+========================
+
+## Summary
+Completed Phase 11 (Deployment) — enabled production static file serving in the server, created a Dockerfile for containerized deployment, and verified the full build + serve pipeline works end-to-end.
+
+## Conversation Context
+- User said "continue" to proceed with Phase 11: Deployment (the next item in PLAN.md)
+- No special requests or pivots — straightforward implementation of the deployment plan
+- Session was brief and focused: explore current config → implement → test → verify
+
+## Changes Made
+
+### 1. Production Static File Serving
+- Enabled `express.static()` in `packages/server/src/index.ts` to serve the Vite-built client from `packages/client/dist`
+- Added SPA fallback route using Express v5's `/{*splat}` syntax (Express v5 uses `path-to-regexp` v8 which no longer accepts bare `*`)
+- Added `path` and `fileURLToPath` imports for proper `__dirname` resolution in ESM
+
+### 2. Dockerfile
+- Created single-container production Dockerfile:
+  - Base: `node:22-slim` with pnpm enabled via `corepack enable pnpm`
+  - Dependency layer caching: copies package.json files first, runs `pnpm install --frozen-lockfile`, then copies source
+  - Builds client with `pnpm --filter @empire/client build`
+  - Runs server with `pnpm --filter @empire/server start`
+  - Exposes port 3001, declares `/app/data` volume for SQLite persistence
+  - Sets `NODE_ENV=production`
+
+### 3. Root Scripts
+- Added `start` script to root package.json (runs server)
+- Expanded `test` script to include both shared and server tests
+
+### 4. .dockerignore
+- Excludes: node_modules, .git, *.md, docs/, dist dirs, data/, IDE dirs
+
+## Files Created
+- `Dockerfile` — production Docker image definition
+- `.dockerignore` — Docker build context exclusions
+- `docs/archive/CHANGELOG-sessions-004-007.md` — archived changelog entries
+- `docs/sessions/session-012-2026-03-09.txt` — this file
+
+## Files Modified
+- `packages/server/src/index.ts` — enabled static file serving + SPA fallback
+- `package.json` (root) — added `start` script, expanded `test` script
+- `STATE.md` — updated to reflect Phase 11 completion
+- `CHANGELOG.md` — added session 012 entry, archived sessions 004-007
+
+## Build Status
+- Client: 0 errors, 0 warnings (tsc + vite build succeeds, 750 modules, ~97KB gzipped)
+- Server: 0 errors, 0 warnings (starts and serves client + API + WebSocket)
+- Shared: 0 errors, 0 warnings
+- Docker: builds successfully in ~24s, container runs and serves game
+
+## Testing Done
+- `pnpm build` — client Vite production build succeeds
+- `pnpm start` — server starts, verified:
+  - `GET /health` returns `{"status":"ok","version":"0.1.0"}`
+  - `GET /` serves client HTML (index.html with Vite-built assets)
+  - `GET /api/games` returns `{"active":[],"saved":[]}`
+- `docker build -t empire-reborn .` — image builds successfully
+- `docker run -d -p 3002:3001 empire-reborn` — container serves game correctly
+- 184 shared tests passing
+- 28 server tests passing
+- NOT tested: full game playthrough in production mode, multiplayer WebSocket in container
+
+## Decisions & Rationale
+- Decision: Single-stage Dockerfile (no multi-stage) — Rationale: Server uses `tsx` for runtime TS transpilation, so we need dev dependencies at runtime. A multi-stage build would save ~50MB but add complexity for marginal gain.
+- Decision: Express v5 `/{*splat}` instead of `*` — Rationale: Express v5 uses path-to-regexp v8 which requires named wildcard parameters. Bare `*` throws `PathError`.
+- Decision: SPA fallback as catch-all — Rationale: Client is a SPA, any non-API/non-static route should serve index.html for client-side routing.
+- Decision: Archive sessions 004-007 from CHANGELOG — Rationale: CHANGELOG exceeded 200-line threshold (was 256 lines).
+
+## Open Questions
+- Phase 12 (Testing Strategy) is the only remaining planned phase — user may want to proceed or deploy first
+- No CI/CD pipeline yet — could add GitHub Actions in a future session
+- No HTTPS/reverse proxy config — would be needed for real hosting
+
+## Plan Progress
+- Step 11.1 (Production Build) — COMPLETE
+- Step 11.2 (Hosting) — partially done (Dockerfile ready, not yet deployed to a remote host)
+- All of Phases 0–11 now complete
+
+## Next Steps
+- Phase 12: Testing Strategy (unit coverage, integration tests, E2E with Playwright)
+- Optionally: deploy to remote host, add CI/CD, HTTPS
+
+## Dependencies Added
+- None (no new packages)
+
+## Optimization Report
+- CHANGELOG.md: archived sessions 004-007 to `docs/archive/CHANGELOG-sessions-004-007.md` (256 → ~165 lines)
+- STATE.md: under threshold (121 lines), condensed phase list
+- MEMORY.md: under threshold (136 lines), added deployment section
+
+## Full Conversation Summary
+Session began with the standard start protocol: read STATE.md, CHANGELOG.md, PLAN.md, ran drift check (passed — STATE.md matched git log). Briefed user on Phase 11 being next. User said "continue".
+
+Explored the current build configuration: Vite config, all package.json files, server entry point, client WebSocket URL logic. Noted that static file serving was commented out in the server, and the client already had production-ready WebSocket URL detection (uses `location.host` when not in dev mode on port 5173).
+
+Implementation was straightforward:
+1. Enabled `express.static()` in the server to serve client dist
+2. Added SPA fallback route — hit a snag with Express v5's path-to-regexp v8 rejecting bare `*`, fixed by using `/{*splat}` syntax
+3. Created Dockerfile with layer caching for dependencies
+4. Created .dockerignore
+5. Added root `start` and expanded `test` scripts
+
+Verification was thorough: tested `pnpm build`, `pnpm start` (health check + HTML serving + API), Docker build, Docker run with port mapping. All 212 tests still pass.
+
+Session end protocol: archived CHANGELOG sessions 004-007 (was over 200-line threshold), updated STATE.md, CHANGELOG.md, MEMORY.md, created session audit log.

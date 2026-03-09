@@ -1,24 +1,15 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Phase 10: Polish & Audio** — Complete
+**Phase 11: Deployment** — Complete
 
 ## Status
-- Phase 0 (Project Scaffolding) complete
-- Phase 1 (Shared Game Types & Constants) complete
-- Phase 2 (Map Generation) complete
-- Phase 3 (Core Game Logic Engine) complete
-- Phase 4 (AI System) complete
-- Phase 5 (Node.js Server) complete
-- Phase 6 (Persistence) complete
-- Phase 7 (Client Rendering) complete
-- Phase 8 (Client Game UI) complete
-- Phase 9 (Client-Server Integration) complete
-- Phase 10 (Polish & Audio) complete
+- Phases 0–10 complete
+- Phase 11 (Deployment) complete
 - Monorepo operational, all packages type-check, 212 tests passing (184 shared + 28 server)
 
 ## Latest commit
-`7329879` — session 011: Phase 10 Audio system, visual polish, performance optimization
+`pending` — session 012: Phase 11 Deployment
 
 ## Completed
 - [x] Clone original VMS-Empire source (github.com/slacy/empire)
@@ -94,12 +85,18 @@
 - [x] Phase 10: Unit shadows — ground-level ellipse shadows (stay grounded during bob)
 - [x] Phase 10: Screen shake — combat/capture/death triggered camera jitter with decay
 - [x] Phase 10: Minimap caching — terrain ImageData cached, only units+viewport redrawn per frame
+- [x] Phase 11: Production static file serving (server serves client build)
+- [x] Phase 11: SPA fallback route (Express v5 `/{*splat}` syntax)
+- [x] Phase 11: Dockerfile — single-container build (node:22-slim + pnpm + Vite build)
+- [x] Phase 11: .dockerignore for lean image builds
+- [x] Phase 11: Root `start` script and expanded `test` script
 
 ## In Progress
 _Nothing currently in progress_
 
 ## Next Steps
-1. **Phase 11: Deployment** — production build, Dockerfile, hosting
+1. **Phase 12: Testing Strategy** — unit test coverage, integration tests, E2E tests
+2. **Hosting** — deploy to server (any host running Node/Docker)
 
 ## Blockers
 _None_

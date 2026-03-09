@@ -1,9 +1,13 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import { createServer } from "node:http";
 import { WebSocketServer } from "ws";
 import { GAME_VERSION } from "@empire/shared";
 import { GameManager } from "./GameManager.js";
 import { GameDatabase } from "./database.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const PORT = Number(process.env.PORT) || 3001;
 
@@ -56,8 +60,13 @@ app.delete("/api/games/:id", (req, res) => {
 
 // ─── Static File Serving (production) ───────────────────────────────────────
 
-// In production, serve client build from packages/client/dist
-// app.use(express.static("../client/dist"));
+const clientDist = path.resolve(__dirname, "../../client/dist");
+app.use(express.static(clientDist));
+
+// SPA fallback — serve index.html for any non-API, non-WS route
+app.get("/{*splat}", (_req, res) => {
+  res.sendFile(path.join(clientDist, "index.html"));
+});
 
 server.listen(PORT, () => {
   console.log(`Empire Reborn server v${GAME_VERSION} listening on port ${PORT}`);

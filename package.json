@@ -6,7 +6,8 @@
     "dev:client": "pnpm --filter @empire/client dev",
     "dev:server": "pnpm --filter @empire/server dev",
     "build": "pnpm --filter @empire/client build",
-    "test": "pnpm --filter @empire/shared test",
+    "start": "pnpm --filter @empire/server start",
+    "test": "pnpm --filter @empire/shared test && pnpm --filter @empire/server test",
     "lint": "tsc --noEmit"
   },
   "pnpm": {
