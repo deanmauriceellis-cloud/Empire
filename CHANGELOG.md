@@ -1,5 +1,36 @@
 # Empire Reborn — Changelog
 
+## v0.5.0 — Session 006 (2026-03-09)
+
+### Added
+- **Phase 5: Node.js Server** — complete WebSocket game manager and single-player mode
+  - `packages/server/src/protocol.ts` — WebSocket message protocol:
+    - `ClientMessage` union: create_game, join_game, action, end_turn, resign
+    - `ServerMessage` union: welcome, game_created, game_joined, game_started, state_update, turn_result, game_over, player_disconnected/reconnected, error
+    - `VisibleGameState` — fog-of-war filtered state per player
+    - `VisibleCity` — hides enemy production/work details
+  - `packages/server/src/GameManager.ts` — core game manager:
+    - **Game tracking**: `Map<gameId, ActiveGame>` in-memory store
+    - **Message routing**: handles all client message types with validation
+    - **Action validation**: ownership checks before applying any action
+    - **Turn execution**: both players must end turn, then `executeTurn()` runs
+    - **Visible state**: per-player fog-of-war filtering (cities, units, events)
+    - **Game lifecycle**: lobby → playing → game_over phases
+    - **Reconnection**: 5-minute timeout, holds game state for disconnected players
+    - **Cleanup**: lobby games removed when empty, active games after both disconnect
+    - **REST API**: `getActiveGames()` for `/api/games` endpoint
+  - `packages/shared/src/singleplayer.ts` — client-side single-player:
+    - `createSinglePlayerGame(config?)` — creates game with AI opponent
+    - `submitTurn(actions)` — runs player + AI actions via `executeTurn()`
+    - No server required — same shared game logic interface
+  - 15 server tests (GameManager.test.ts): connection, create/join, turn execution, action validation, resign, visible state hiding, disconnect/reconnect
+  - 5 shared tests (singleplayer.test.ts): creation, turns, production, multi-turn, game over
+
+### Changed
+- `packages/server/src/index.ts` — wired GameManager, added `/api/games` endpoint, `express.json()` middleware
+- `packages/shared/src/index.ts` — added export for `singleplayer.js`
+- `packages/server/package.json` — added vitest devDependency and test script
+
 ## v0.4.0 — Session 005 (2026-03-09)
 
 ### Added

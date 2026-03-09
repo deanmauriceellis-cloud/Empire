@@ -1,7 +1,7 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Phase 4: AI System** — Complete
+**Phase 5: Node.js Server** — Complete
 
 ## Status
 - Phase 0 (Project Scaffolding) complete
@@ -9,10 +9,11 @@
 - Phase 2 (Map Generation) complete
 - Phase 3 (Core Game Logic Engine) complete
 - Phase 4 (AI System) complete
-- Monorepo operational, all packages type-check, 179 tests passing
+- Phase 5 (Node.js Server) complete
+- Monorepo operational, all packages type-check, 199 tests passing (184 shared + 15 server)
 
 ## Latest commit
-`5b454c4` — session 005: Phase 4 AI system
+`31d319a` — session 005: Phase 4 AI system
 
 ## Completed
 - [x] Clone original VMS-Empire source (github.com/slacy/empire)
@@ -48,13 +49,17 @@
 - [x] Phase 4: AI fighter movement (attack, fuel management, return-to-base)
 - [x] Phase 4: AI ship movement (damage-based repair, port seeking, patrol/explore)
 - [x] Phase 4: AI turn orchestrator (computeAITurn, vision refresh, MOVE_ORDER, surrender)
+- [x] Phase 5: WebSocket game manager (GameManager class, message protocol, action validation)
+- [x] Phase 5: Game lifecycle (lobby → playing → game_over, reconnection with 5-min timeout)
+- [x] Phase 5: State broadcast (per-player visible state, fog-of-war event filtering, enemy info hiding)
+- [x] Phase 5: Single-player mode (client-side game loop with AI, no server needed)
 
 ## In Progress
 _Nothing currently in progress_
 
 ## Next Steps
-1. **Phase 5: Node.js Server** — WebSocket game manager, game lifecycle, state broadcast
-2. **Phase 6: Persistence** — SQLite schema, game save/load API
+1. **Phase 6: Persistence** — SQLite schema, game save/load API
+2. **Phase 7: Client Rendering** — PixiJS bootstrap, isometric coords, camera, tilemap
 
 ## Blockers
 _None_
@@ -62,5 +67,6 @@ _None_
 ## Notes
 - Server runs on port 3001 (port 3000 used by another application)
 - Shared package consumed as raw TS via workspace `exports` field — no build step needed
-- 179 unit tests covering all Phase 0–4 functionality
+- 199 tests total: 184 shared (179 original + 5 singleplayer) + 15 server (GameManager)
 - GameState now includes `rngState` field for deterministic combat/satellite random rolls
+- Server package now has vitest configured for testing
