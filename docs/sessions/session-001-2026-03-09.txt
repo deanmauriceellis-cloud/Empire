@@ -1,0 +1,78 @@
+Session 001 — 2026-03-09
+========================
+
+## Summary
+Architecture simplification session. Reviewed the existing 55-step plan and stripped out over-engineered infrastructure (Colyseus, Redis, Better Auth, Turborepo, tsup, multi-service deploy) in favor of a lean stack: plain WebSockets, SQLite, pnpm workspaces, and a single-server deployment. All game logic, AI, rendering, and UI phases remain unchanged.
+
+## Conversation Context
+- User asked to examine the architecture and simplify it
+- User stated: "I am hosting a website, I don't mind using node.js to take care of state between different users"
+- This indicated preference for a simple self-hosted setup rather than multi-service cloud architecture
+- User asked whether simplification would limit future game logic and graphical development — confirmed it would not, since the simplification only affects infrastructure plumbing, not the game engine or renderer
+- User approved the simplified direction and requested PLAN.md be rewritten
+
+## Changes Made
+### 1. Architecture Simplification (PLAN.md rewrite)
+- Analyzed each infrastructure component for necessity
+- Identified 6 over-engineered elements: Colyseus, Redis, Better Auth, Turborepo, tsup, 3-service deploy
+- Rewrote PLAN.md with simplified alternatives
+- Preserved all game mechanics, AI, rendering, and UI phases verbatim
+
+## Files Created
+- `docs/sessions/session-001-2026-03-09.txt` (this file)
+
+## Files Modified
+- `PLAN.md` — complete rewrite with simplified tech stack and consolidated phases
+- `STATE.md` — updated to reflect new stack and next steps
+- `CHANGELOG.md` — added v0.0.2 session 001 entry
+- `MEMORY.md` (memory dir) — updated tech stack and step count
+
+## Build Status
+- No build system yet — still in planning phase
+
+## Testing Done
+- No testing applicable — documentation-only changes
+
+## Decisions & Rationale
+- Decision: Replace Colyseus with plain ws — Rationale: Empire is turn-based, doesn't need real-time delta sync or room management
+- Decision: Replace Redis with in-memory Map — Rationale: single server process, turn-based game, active state fits in memory
+- Decision: Replace PostgreSQL with SQLite — Rationale: simpler deployment, no external DB service, sufficient for game saves
+- Decision: Remove Better Auth — Rationale: premature; can add OAuth later without architectural changes
+- Decision: Remove Turborepo — Rationale: 3-package monorepo doesn't benefit from build caching
+- Decision: Remove tsup — Rationale: shared package can be consumed directly via workspace references
+- Decision: Single-server deploy — Rationale: user self-hosts, one Node process serves everything
+
+## Open Questions
+- None
+
+## Plan Progress
+- No PLAN.md steps completed (still Phase 0, not started)
+- PLAN.md itself was restructured: 55 steps → 48 steps
+- Game logic phases (1-4) untouched, infrastructure phases (5-6, 9, 11) simplified
+
+## Next Steps
+- Step 0.1: Initialize pnpm monorepo
+- Step 0.2: Configure shared package
+- Step 0.3: Configure client package
+- Step 0.4: Configure server package
+
+## Dependencies Added
+- None (planning only)
+
+## Optimization Report
+- No optimization needed — all files under thresholds:
+  - PLAN.md: 353 lines (no threshold for reference docs)
+  - STATE.md: 40 lines (threshold: 150)
+  - CHANGELOG.md: 30 lines (threshold: 200)
+  - MEMORY.md: 52 lines (threshold: 150)
+
+## Full Conversation Summary
+Session began with the standard protocol: loaded STATE.md, CHANGELOG.md, and session-protocol.md, ran drift check (no drift found), confirmed all files under archive thresholds. Briefed user on Phase 0 status and suggested starting scaffolding.
+
+User redirected the session toward architecture review, asking to simplify the stack. They noted they host their own website and are fine using Node.js for multiplayer state management. This signaled that the original plan's multi-service cloud architecture (Cloudflare Pages + Fly.io + R2, Colyseus, Redis, Better Auth) was over-engineered for their use case.
+
+I presented a detailed analysis of what was over-engineered and why, proposing replacements: plain WebSockets instead of Colyseus, in-memory state instead of Redis, SQLite instead of PostgreSQL, simple sessions instead of Better Auth, pnpm workspaces instead of Turborepo, and a single Docker deploy instead of 3 services. Emphasized that all game logic (Phases 1-4) and all rendering/UI (Phases 7-8, 10) would be completely unaffected.
+
+User asked whether the simplification would constrain future game logic and graphical development. Confirmed it would not — the three-package separation (shared/client/server) keeps concerns cleanly isolated. The game engine doesn't know about networking, the renderer doesn't know about the server, and switching from plain WebSockets to something heavier later would only require changing the transport layer.
+
+User approved and asked to rewrite the plan. PLAN.md was rewritten with the simplified stack, reducing total steps from 55 to 48 while preserving all gameplay and graphics phases. Session ended with documentation updates.

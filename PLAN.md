@@ -5,43 +5,36 @@
 |-------|-----------|
 | Renderer | PixiJS v8 (WebGPU/WebGL2) |
 | Client | TypeScript + Vite |
-| Server | Node.js + Colyseus |
-| Database | PostgreSQL (JSONB) + Redis |
-| Auth | Better Auth |
-| Frontend CDN | Cloudflare Pages |
-| Server Hosting | Fly.io or Hetzner |
-| Assets | Cloudflare R2 |
-| Map Design | Tiled Editor |
+| Server | Node.js + Express + ws |
+| Database | SQLite (better-sqlite3) |
+| Monorepo | pnpm workspaces |
+| Deploy | Single Node server (serves client + WebSocket) |
 
 ---
 
-## Phase 0: Project Scaffolding (Steps 0.1–0.5)
+## Phase 0: Project Scaffolding (Steps 0.1–0.4)
 
 ### Step 0.1: Initialize Monorepo
-- pnpm workspace with Turborepo
-- Three packages: `packages/shared`, `packages/client`, `packages/server`
-- Root: `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`
-- **Verify**: `pnpm install` and `pnpm -r build` succeed
+- pnpm workspace with three packages: `packages/shared`, `packages/client`, `packages/server`
+- Root: `pnpm-workspace.yaml`, `tsconfig.base.json`
+- Shared package referenced directly as workspace dependency (no build step)
+- **Verify**: `pnpm install` succeeds, shared types importable from client and server
 
 ### Step 0.2: Configure Shared Package
 - TypeScript targeting ES2022, vitest for testing
-- Build with tsup (ESM + CJS output)
-- **Verify**: `pnpm --filter shared build` and `test` succeed
+- No build — consumed as raw TS via workspace references
+- **Verify**: `pnpm --filter shared test` succeeds
 
 ### Step 0.3: Configure Client Package
-- Vite + TypeScript + PixiJS v8 + `@pixi/tilemap`
+- Vite + TypeScript + PixiJS v8
 - Basic `index.html` + `src/main.ts` rendering a colored rectangle
 - **Verify**: `pnpm --filter client dev` shows rectangle in browser
 
 ### Step 0.4: Configure Server Package
-- Node.js + TypeScript (tsx) + Colyseus v0.15+
-- Health check at `/health`, placeholder GameRoom
-- **Verify**: `curl localhost:2567/health` returns 200
-
-### Step 0.5: CI/CD Skeleton
-- GitHub Actions: lint, typecheck, test on push
-- ESLint + Prettier at root
-- **Verify**: Push triggers CI, all pass
+- Node.js + TypeScript (tsx) + Express + ws
+- Health check at `GET /health`, static file serving for client build
+- WebSocket endpoint at `/ws`
+- **Verify**: `curl localhost:3000/health` returns 200
 
 ---
 
@@ -174,49 +167,47 @@
 
 ---
 
-## Phase 5: Colyseus Server (Steps 5.1–5.5)
+## Phase 5: Node.js Server (Steps 5.1–5.4)
 
-### Step 5.1: State Schema
-- Colyseus Schema classes mirroring shared types
-- `@filter` to send only player's own viewMap
-- **Verify**: Serialize/deserialize round-trip
+### Step 5.1: WebSocket Game Manager
+- `GameManager` class: tracks active games in memory (Map<gameId, GameState>)
+- WebSocket message protocol: JSON `{ type, gameId, payload }`
+- Message types: `create_game`, `join_game`, `action`, `end_turn`, `set_production`, `resign`
+- Server validates all actions against shared game rules before applying
+- **Verify**: Two WebSocket clients create and join a game
 
-### Step 5.2: Game Room Lifecycle
-- onCreate (map gen), onJoin (assign slot), onLeave (reconnect timer), onDispose (save)
-- Lock after 2 players (or 1 for single-player)
-- **Verify**: Two clients join, one disconnects/reconnects
+### Step 5.2: Game Lifecycle
+- Create game → generate map → wait for players → play → game over
+- Game phases: LOBBY → PLAYING → GAME_OVER
+- On player disconnect: hold game state for reconnection (configurable timeout)
+- On both players gone: persist to DB, remove from memory
+- **Verify**: Full lifecycle from create to game over
 
-### Step 5.3: Message Handlers
-- `action`, `end_turn`, `set_production`, `resign` messages
-- Server validates all actions against shared game rules
-- **Verify**: Valid action applied, invalid action rejected
+### Step 5.3: State Broadcast
+- After each turn: send each player only their visible state (`getVisibleState`)
+- Send game events (combat results, city captures) as they happen
+- **Verify**: Player A cannot see Player B's hidden units
 
-### Step 5.4: Game Phases
-- LOBBY → SETUP → PLAYER_TURN ↔ AI_TURN → GAME_OVER
-- **Verify**: Full flow through all phases
-
-### Step 5.5: Reconnection and Persistence
-- Disconnect: snapshot to Redis (TTL=1hr)
-- Autosave to PostgreSQL every 10 turns
-- Resume game from DB after restart
-- **Verify**: Disconnect/reconnect preserves state
+### Step 5.4: Single-Player Mode
+- Client runs shared game logic locally, AI in web worker
+- No server needed — same `GameState` + `executeTurn` interface
+- **Verify**: Play full game offline against AI
 
 ---
 
-## Phase 6: Database & Auth (Steps 6.1–6.3)
+## Phase 6: Persistence (Steps 6.1–6.2)
 
-### Step 6.1: PostgreSQL Schema
-- Tables: `users`, `games` (JSONB state), `game_players`, `game_events`
-- **Verify**: Migrations run, test data queryable
+### Step 6.1: SQLite Schema
+- Tables: `games` (id, state JSON, created_at, updated_at, status)
+- Optional: `players` table if auth is added later
+- Save on game completion + periodic autosave for active games
+- **Verify**: Save and load a game state round-trip
 
-### Step 6.2: Better Auth Integration
-- OAuth: Discord, Google + email/password
-- JWT sessions, Colyseus middleware for auth validation
-- **Verify**: OAuth flow → user created → room join with token
-
-### Step 6.3: Game Save/Load API
-- REST: `GET /api/games`, `POST /api/games`, `POST /api/games/:id/resume`, `GET /api/profile`
-- **Verify**: Create → play → save → restore round-trip
+### Step 6.2: Game Save/Load API
+- `GET /api/games` — list saved games
+- `POST /api/games` — create new game
+- `POST /api/games/:id/resume` — reload game into memory, rejoin via WebSocket
+- **Verify**: Create → play → save → restart server → resume
 
 ---
 
@@ -298,27 +289,25 @@
 
 ---
 
-## Phase 9: Client-Server Integration (Steps 9.1–9.5)
+## Phase 9: Client-Server Integration (Steps 9.1–9.4)
 
-### Step 9.1: Colyseus Client Setup
-- Connect, room discovery, join with auth, reconnection
-- **Verify**: Client connects and receives state
+### Step 9.1: WebSocket Client
+- Connect to server, auto-reconnect with backoff
+- Message send/receive matching server protocol
+- **Verify**: Client connects and receives initial game state
 
 ### Step 9.2: State Synchronization
-- Schema change listeners, efficient diffing, optimistic updates
-- **Verify**: Two clients see each other's moves within 100ms
+- Server sends visible state after each turn
+- Client applies state updates to renderer
+- **Verify**: Two clients see each other's moves
 
 ### Step 9.3: Action Dispatch
-- Send actions, queue during lag, handle rejections
+- Client sends actions via WebSocket, server validates and applies
+- Rejection feedback shown to player
 - **Verify**: Valid/invalid action feedback
 
-### Step 9.4: Single-Player Mode
-- Run shared logic locally, AI in web worker
-- Same interface as network client
-- **Verify**: Play without server, AI takes turns
-
-### Step 9.5: Lobby and Matchmaking
-- List/create/join games, quick match, private invite codes
+### Step 9.4: Lobby UI
+- List open games, create game, join game, invite link
 - **Verify**: Two players find and join same game
 
 ---
@@ -342,12 +331,18 @@
 
 ---
 
-## Phase 11: Deployment (Steps 11.1–11.4)
+## Phase 11: Deployment (Steps 11.1–11.2)
 
-### Step 11.1: Client → Cloudflare Pages
-### Step 11.2: Server → Fly.io/Hetzner (Docker)
-### Step 11.3: Assets → Cloudflare R2
-### Step 11.4: Monitoring → Sentry + structured logging
+### Step 11.1: Production Build
+- Vite builds client → `dist/` static files
+- Server serves `dist/` + handles WebSocket + API routes
+- Single Dockerfile: Node server serving everything
+- **Verify**: `docker build && docker run` serves playable game
+
+### Step 11.2: Hosting
+- Deploy to user's server (any host running Node/Docker)
+- Optional: Sentry for error tracking, structured logging
+- **Verify**: Game accessible from public URL
 
 ---
 

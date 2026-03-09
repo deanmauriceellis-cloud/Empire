@@ -4,30 +4,30 @@
 **Phase 0: Project Scaffolding** — Not yet started
 
 ## Status
-- Planning complete (PLAN.md finalized)
+- Planning complete (PLAN.md revised with simplified architecture)
 - Session protocol established
 - Original C source analyzed and documented
 - No code written yet
 
 ## Latest commit
-`e7c4ead` — session 000: project planning and session protocol setup
+`17024c7` — update STATE.md with session 000 commit hash
 
 ## Completed
 - [x] Clone original VMS-Empire source (github.com/slacy/empire)
 - [x] Analyze all original game mechanics (9 units, combat, AI, map gen, fog of war)
-- [x] Research and select tech stack (PixiJS v8, Colyseus, PostgreSQL, TypeScript)
-- [x] Create 12-phase, 55-step implementation plan (PLAN.md)
+- [x] Research and select tech stack (PixiJS v8, Node.js + ws, SQLite, TypeScript)
+- [x] Create 12-phase implementation plan (PLAN.md)
 - [x] Establish session protocol with archive-first optimization
+- [x] Architecture simplification — removed Colyseus, Redis, Better Auth, Turborepo, tsup
 
 ## In Progress
 _Nothing currently in progress_
 
 ## Next Steps
-1. **Step 0.1**: Initialize pnpm monorepo with Turborepo (shared/client/server packages)
-2. **Step 0.2**: Configure shared package (TypeScript + vitest + tsup)
+1. **Step 0.1**: Initialize pnpm monorepo (shared/client/server packages)
+2. **Step 0.2**: Configure shared package (TypeScript + vitest, no build step)
 3. **Step 0.3**: Configure client package (Vite + PixiJS v8)
-4. **Step 0.4**: Configure server package (Colyseus + TypeScript)
-5. **Step 0.5**: CI/CD skeleton (GitHub Actions)
+4. **Step 0.4**: Configure server package (Node.js + Express + ws)
 
 ## Blockers
 _None_
@@ -38,3 +38,4 @@ _None_
 - Combat: 50% city capture, alternating-round unit combat
 - Shared TypeScript package enables code reuse between client and server
 - Server-authoritative architecture prevents cheating in multiplayer
+- Simplified stack: Express + ws instead of Colyseus, SQLite instead of PostgreSQL + Redis, single-server deploy
