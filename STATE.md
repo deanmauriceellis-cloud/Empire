@@ -10,7 +10,7 @@
 - Monorepo operational, all packages type-check, 76 tests passing
 
 ## Latest commit
-`9122bb2` — session 002: Phase 0 + Phase 1
+`8a245ac` — session 003: Phase 2 map generation
 
 ## Completed
 - [x] Clone original VMS-Empire source (github.com/slacy/empire)
