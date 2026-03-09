@@ -14,7 +14,7 @@
 - Monorepo operational, all packages type-check, 212 tests passing (184 shared + 28 server)
 
 ## Latest commit
-`7a7a1bf` — session 006: Phase 5 Node.js server
+`cd09647` — session 007: Phase 6 Persistence
 
 ## Completed
 - [x] Clone original VMS-Empire source (github.com/slacy/empire)
