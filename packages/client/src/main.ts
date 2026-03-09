@@ -85,8 +85,8 @@ async function init() {
   // ─── Multiplayer Connection ─────────────────────────────────────────────
   let connState: ConnectionState = "disconnected";
 
-  // In dev mode (Vite on port 5173), connect to server on port 3001
-  const wsUrl = location.port === "5173"
+  // In dev mode (Vite on port 5174), connect to server on port 3001
+  const wsUrl = location.port === "5174"
     ? `ws://${location.hostname}:3001/ws`
     : getWebSocketUrl();
 
@@ -191,7 +191,7 @@ async function init() {
   // ─── Lobby ──────────────────────────────────────────────────────────────
 
   async function refreshLobby(): Promise<void> {
-    const serverUrl = location.port === "5173"
+    const serverUrl = location.port === "5174"
       ? `http://${location.hostname}:3001`
       : "";
     const { active } = await fetchLobbyGames(serverUrl);

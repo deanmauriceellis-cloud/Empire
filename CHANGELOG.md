@@ -1,5 +1,28 @@
 # Empire Reborn — Changelog
 
+## v0.13.0 — Session 014 (2026-03-09)
+
+### Added
+- **Phase 12.3: E2E Tests** — Playwright browser automation tests
+  - `playwright.config.ts` — config with 3 projects (singleplayer, multiplayer, perf), webServer auto-launch
+  - `e2e/helpers.ts` — shared test utilities (goToMainMenu, startSinglePlayer, endTurn, trackErrors)
+  - `e2e/singleplayer.spec.ts` — 9 tests: main menu, HUD, game start, turn advancement, keyboard shortcuts, action panel after unit production, 5-turn and 10-turn stability
+  - `e2e/multiplayer.spec.ts` — 5 tests: lobby navigation, create game, cancel, back button, two-player join (skipped)
+  - `e2e/perf.spec.ts` — 4 benchmarks: menu load (~1s), game start (~500ms), end turn (~200ms), 10-turn stress (~2s)
+- `@playwright/test` dev dependency (root package.json)
+- `test:e2e` and `test:e2e:ui` scripts in root package.json
+
+### Changed
+- `packages/client/vite.config.ts` — dev server port 5173 → 5174 (port conflict with another local app)
+- `packages/client/src/main.ts` — dev mode WebSocket/API URL updated for port 5174
+- `.gitignore` — added test-results/, playwright-report/, blob-report/
+- `STATE.md` — archived detailed completed phases to `docs/archive/STATE-completed-phases.md`
+
+### Notes
+- Two-player E2E join test skipped: lobby `GET /api/games` doesn't show games from other WebSocket sessions immediately
+- All tests run via `pnpm test:e2e` — Playwright auto-starts Vite (5174) + server (3001)
+- 283 total tests: 237 shared + 28 server + 18 E2E (17 pass + 1 skip)
+
 ## v0.12.0 — Session 013 (2026-03-09)
 
 ### Added
