@@ -60,3 +60,14 @@ export const UNIT_DEATH_FADE_MS = 300;
 
 export const FOG_UNSEEN_ALPHA = 1.0;
 export const FOG_STALE_ALPHA = 0.45;
+export const FOG_LERP_SPEED = 3.0; // alpha units per second for fog transitions
+
+// ─── Visual Polish ──────────────────────────────────────────────────────────
+
+export const WATER_ANIM_SPEED = 1.5;       // wave cycle speed
+export const WATER_ANIM_AMPLITUDE = 0.06;  // alpha oscillation range
+export const UNIT_IDLE_BOB_SPEED = 2.0;    // bobbing frequency
+export const UNIT_IDLE_BOB_AMOUNT = 1.5;   // pixels of vertical bob
+export const UNIT_SHADOW_ALPHA = 0.25;     // shadow opacity
+export const SCREEN_SHAKE_INTENSITY = 4;   // max pixels of shake
+export const SCREEN_SHAKE_DECAY = 8;       // shake decay speed (per second)

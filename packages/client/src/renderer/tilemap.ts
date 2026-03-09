@@ -1,10 +1,14 @@
 // Empire Reborn — Tilemap Renderer
-// Renders terrain tiles with frustum culling and fog of war overlay.
+// Renders terrain tiles with frustum culling, animated water, and smooth fog transitions.
 
 import { Container, Sprite, type Texture } from "pixi.js";
 import { TerrainType, Owner } from "@empire/shared";
 import { cartToIso, getVisibleTileBounds } from "../iso/coords.js";
-import { HALF_TILE_W, HALF_TILE_H, FOG_UNSEEN_ALPHA, FOG_STALE_ALPHA } from "../constants.js";
+import {
+  HALF_TILE_W, HALF_TILE_H,
+  FOG_UNSEEN_ALPHA, FOG_STALE_ALPHA, FOG_LERP_SPEED,
+  WATER_ANIM_SPEED, WATER_ANIM_AMPLITUDE,
+} from "../constants.js";
 import type { AssetBundle, RenderableState } from "../types.js";
 import type { Camera } from "../core/camera.js";
 
@@ -16,6 +20,10 @@ export class TilemapRenderer {
   private activeTiles = 0;
   private activeFog = 0;
   private assets: AssetBundle;
+  private time = 0;
+
+  // Fog alpha tracking for smooth transitions (keyed by loc)
+  private fogAlphaMap = new Map<number, number>();
 
   constructor(worldContainer: Container, assets: AssetBundle) {
     this.assets = assets;
@@ -61,7 +69,9 @@ export class TilemapRenderer {
     return this.assets.terrain.land;
   }
 
-  update(state: RenderableState, camera: Camera, viewportW: number, viewportH: number): void {
+  update(state: RenderableState, camera: Camera, viewportW: number, viewportH: number, dt: number): void {
+    this.time += dt;
+
     const bounds = getVisibleTileBounds(
       camera, viewportW, viewportH,
       state.mapWidth, state.mapHeight,
@@ -69,6 +79,9 @@ export class TilemapRenderer {
 
     this.activeTiles = 0;
     this.activeFog = 0;
+
+    // Water animation: subtle alpha oscillation
+    const waterPulse = 1.0 + Math.sin(this.time * WATER_ANIM_SPEED) * WATER_ANIM_AMPLITUDE;
 
     for (let row = bounds.minRow; row <= bounds.maxRow; row++) {
       for (let col = bounds.minCol; col <= bounds.maxCol; col++) {
@@ -85,21 +98,37 @@ export class TilemapRenderer {
         sprite.texture = this.getTerrainTexture(tile.terrain, tile.cityOwner);
         sprite.position.set(px, py);
         sprite.visible = true;
-        sprite.alpha = 1;
 
-        // Fog overlay
+        // Animate water tiles with phase offset based on position
+        if (tile.terrain === TerrainType.Sea && tile.cityOwner === null) {
+          const phase = Math.sin(this.time * WATER_ANIM_SPEED + col * 0.3 + row * 0.5) * WATER_ANIM_AMPLITUDE;
+          sprite.alpha = 1.0 + phase;
+        } else {
+          sprite.alpha = 1;
+        }
+
+        // Fog overlay with smooth alpha transitions
+        let targetAlpha = 0;
         if (tile.seen === -1) {
-          // Never seen: full black
-          const fog = this.getFogSprite(this.activeFog++);
-          fog.position.set(px, py);
-          fog.alpha = FOG_UNSEEN_ALPHA;
-          fog.visible = true;
+          targetAlpha = FOG_UNSEEN_ALPHA;
         } else if (tile.seen < state.turn) {
-          // Seen but stale: semi-transparent
+          targetAlpha = FOG_STALE_ALPHA;
+        }
+
+        // Get current fog alpha for this tile
+        const currentAlpha = this.fogAlphaMap.get(loc) ?? targetAlpha;
+        // Lerp toward target
+        const newAlpha = currentAlpha + Math.sign(targetAlpha - currentAlpha) *
+          Math.min(Math.abs(targetAlpha - currentAlpha), FOG_LERP_SPEED * dt);
+
+        if (newAlpha > 0.01) {
           const fog = this.getFogSprite(this.activeFog++);
           fog.position.set(px, py);
-          fog.alpha = FOG_STALE_ALPHA;
+          fog.alpha = newAlpha;
           fog.visible = true;
+          this.fogAlphaMap.set(loc, newAlpha);
+        } else {
+          this.fogAlphaMap.set(loc, 0);
         }
       }
     }

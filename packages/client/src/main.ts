@@ -1,5 +1,5 @@
 // Empire Reborn — Client Entry Point
-// Phase 9: Dual-mode — Single Player (local) and Multiplayer (WebSocket).
+// Phase 10: Dual-mode + Audio + Visual Polish.
 
 import {
   GAME_VERSION,
@@ -23,12 +23,14 @@ import { TilemapRenderer } from "./renderer/tilemap.js";
 import { UnitRenderer } from "./renderer/units.js";
 import { ParticleSystem } from "./renderer/particles.js";
 import { HighlightRenderer } from "./renderer/highlights.js";
+import { createScreenShake } from "./renderer/screenShake.js";
 import { screenToTile } from "./iso/coords.js";
 import { createActionCollector, type ActionCollector } from "./game/actionCollector.js";
 import { computeHighlights, getClickAction } from "./game/moveCalc.js";
 import { createUIManager } from "./ui/UIManager.js";
 import { createConnection, getWebSocketUrl, type ConnectionState } from "./net/connection.js";
 import { createMultiplayerGame, fetchLobbyGames, type MultiplayerGame } from "./net/multiplayer.js";
+import { createAudioManager, type AudioManager } from "./audio/AudioManager.js";
 import type { SelectionState, UIState, TileHighlight, RenderableState } from "./types.js";
 
 // ─── Game Mode ───────────────────────────────────────────────────────────────
@@ -55,6 +57,17 @@ async function init() {
   const unitRenderer = new UnitRenderer(worldContainer, assets);
   const particles = new ParticleSystem(effectsContainer);
   const highlightRenderer = new HighlightRenderer(worldContainer, assets);
+
+  // ─── Audio ──────────────────────────────────────────────────────────
+  const audio: AudioManager = createAudioManager();
+
+  // Resume audio context on first user interaction
+  const resumeAudio = () => { audio.resume(); };
+  canvas.addEventListener("click", resumeAudio, { once: true });
+  canvas.addEventListener("keydown", resumeAudio, { once: true });
+
+  // ─── Screen Shake ──────────────────────────────────────────────────
+  const shake = createScreenShake();
 
   // ─── UI ───────────────────────────────────────────────────────────────
   const ui = createUIManager(camera);
@@ -112,6 +125,7 @@ async function init() {
     onStateUpdate(state) {
       if (mode === "multiplayer" && gameStarted) {
         // State update from server — refresh turn flow
+        audio.playTurnStart();
         ui.turnFlow.startTurn(stateForTurnFlow(state) as any);
         ui.turnFlow.nextUnit(stateForTurnFlow(state) as any, camera);
         if (ui.turnFlow.currentUnitId !== null) {
@@ -133,6 +147,8 @@ async function init() {
 
     onGameOver(winner, winType) {
       if (mode !== "multiplayer" || !mp.owner) return;
+      audio.stopAmbient();
+      audio.playGameOver(winner === mp.owner);
       const rs = mp.buildRenderableState();
       const playerCities = rs ? rs.cities.filter((c) => c.owner === mp.owner).length : 0;
       const playerUnits = rs ? rs.units.filter((u) => u.owner === mp.owner).length : 0;
@@ -264,6 +280,8 @@ async function init() {
     ui.eventLog.clear();
     ui.menus.hide();
     gameStarted = true;
+    audio.playGameStart();
+    audio.startAmbient();
     console.log(`Empire Reborn v${GAME_VERSION} — Single player started`);
   }
 
@@ -290,6 +308,8 @@ async function init() {
       }
     }
 
+    audio.playGameStart();
+    audio.startAmbient();
     console.log(`Empire Reborn v${GAME_VERSION} — Multiplayer game started`);
   }
 
@@ -438,6 +458,7 @@ async function init() {
     if (playerUnit) {
       selection.selectedUnitId = playerUnit.id;
       selection.selectedCityId = null;
+      audio.playSelect();
       refreshHighlights();
       return;
     }
@@ -481,8 +502,13 @@ async function init() {
       success = collector.moveUnit(unitId, directionFromLocs(
         game.state.units.find((u) => u.id === unitId)!.loc, loc,
       ));
+      if (success) {
+        const u = game.state.units.find((u) => u.id === unitId);
+        if (u) audio.playMove(u.type);
+      }
     } else {
       success = collector.attackTarget(unitId, loc);
+      if (success) audio.playCombat();
     }
 
     if (success) {
@@ -508,9 +534,11 @@ async function init() {
 
     if (highlight.type === "attack") {
       mp.attackTarget(unit.id, loc);
+      audio.playCombat();
     } else {
       const dir = directionFromLocs(unit.loc, loc);
       mp.moveUnit(unit.id, dir);
+      audio.playMove(unit.type);
     }
 
     // After sending, clear highlights — server will send updated state
@@ -547,12 +575,20 @@ async function init() {
   function emitParticleForEvent(event: TurnEvent): void {
     if (event.type === "combat") {
       particles.emitExplosion(event.loc);
+      audio.playExplosion();
+      shake.trigger(0.6);
     } else if (event.type === "capture") {
       const owner = mode === "singleplayer" ? Owner.Player1 : (mp.owner ?? Owner.Player1);
       particles.emitCapture(event.loc, owner);
+      audio.playCapture();
+      shake.trigger(0.3);
     } else if (event.type === "death") {
       const owner = event.data?.owner as number ?? Owner.Player2;
       particles.emitDeath(event.loc, owner);
+      audio.playDeath();
+      shake.trigger(0.4);
+    } else if (event.type === "production") {
+      audio.playProduction();
     }
   }
 
@@ -576,6 +612,7 @@ async function init() {
   // ─── End Turn ─────────────────────────────────────────────────────────
 
   function handleEndTurn(): void {
+    audio.playTurnEnd();
     if (mode === "singleplayer") {
       handleSinglePlayerEndTurn();
     } else if (mode === "multiplayer") {
@@ -594,6 +631,8 @@ async function init() {
 
     if (game.isGameOver) {
       const uiState = buildUIState();
+      audio.stopAmbient();
+      audio.playGameOver(game.winner === Owner.Player1);
       ui.menus.showGameOver(
         game.winner!,
         Owner.Player1,
@@ -606,6 +645,7 @@ async function init() {
 
     collector.reset();
     lastEventCount = 0;
+    audio.playTurnStart();
     ui.turnFlow.startTurn(game.state);
     ui.turnFlow.nextUnit(game.state, camera);
     if (ui.turnFlow.currentUnitId !== null) {
@@ -818,6 +858,7 @@ async function init() {
     // ─── Menu handling ──────────────────────────────────────────────────
     const menuAction = ui.menus.consumeAction();
     if (menuAction !== null) {
+      audio.playUIClick();
       if (menuAction === "new-game") {
         startSinglePlayer();
       } else if (menuAction === "multiplayer") {
@@ -835,6 +876,7 @@ async function init() {
       } else if (menuAction === "back-to-main") {
         mp.reset();
         conn.disconnect();
+        audio.stopAmbient();
         mode = "none";
         gameStarted = false;
         ui.menus.showMainMenu();
@@ -858,6 +900,7 @@ async function init() {
     // ─── City panel actions ─────────────────────────────────────────────
     const citySel = ui.cityPanel.consumeSelection();
     if (citySel) {
+      audio.playUIClick();
       if (mode === "singleplayer") {
         collector.setProduction(citySel.cityId, citySel.unitType);
       } else {
@@ -868,6 +911,7 @@ async function init() {
     // ─── Action panel button clicks ─────────────────────────────────────
     const panelAction = ui.actionPanel.consumeClick();
     if (panelAction) {
+      audio.playUIClick();
       handlePanelAction(panelAction);
     }
 
@@ -915,13 +959,20 @@ async function init() {
       selection.hoveredTile = null;
     }
 
+    // ─── Screen Shake ──────────────────────────────────────────────────
+    shake.update(dt);
+
     // ─── Render ─────────────────────────────────────────────────────────
     const currentState = getCurrentRenderableState();
     if (currentState) {
-      tilemap.update(currentState, camera, vw, vh);
+      tilemap.update(currentState, camera, vw, vh, dt);
       highlightRenderer.update(currentHighlights, selection, currentState.mapWidth, dt);
       unitRenderer.update(currentState.units, selection, dt);
       particles.update(dt);
+
+      // Apply screen shake offset to world container
+      worldContainer.x += shake.offsetX;
+      worldContainer.y += shake.offsetY;
 
       // ─── Update UI ──────────────────────────────────────────────────
       const uiState = buildUIState();

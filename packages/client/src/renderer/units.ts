@@ -1,17 +1,21 @@
 // Empire Reborn — Unit Renderer
 // Renders units with isometric positioning, player colors, health bars,
-// selection glow, and smooth movement animation.
+// selection glow, smooth movement animation, idle bobbing, and shadows.
 
 import { Container, Sprite, Graphics } from "pixi.js";
 import { locRow, locCol, UNIT_ATTRIBUTES, Owner } from "@empire/shared";
 import type { UnitState } from "@empire/shared";
 import { cartToIso } from "../iso/coords.js";
-import { UNIT_MOVE_LERP, COLORS } from "../constants.js";
+import {
+  UNIT_MOVE_LERP, COLORS,
+  UNIT_IDLE_BOB_SPEED, UNIT_IDLE_BOB_AMOUNT, UNIT_SHADOW_ALPHA,
+} from "../constants.js";
 import type { AssetBundle, SelectionState } from "../types.js";
 
 interface UnitSprite {
   container: Container;
   sprite: Sprite;
+  shadow: Graphics;
   healthBar: Graphics | null;
   selectionGlow: Graphics;
   currentX: number;
@@ -19,6 +23,7 @@ interface UnitSprite {
   targetX: number;
   targetY: number;
   fadeAlpha: number;   // for death fade-out (-1 = alive)
+  bobOffset: number;   // randomized phase offset for bobbing
 }
 
 export class UnitRenderer {
@@ -39,6 +44,13 @@ export class UnitRenderer {
   private createUnitSprite(unit: UnitState): UnitSprite {
     const container = new Container();
     container.sortableChildren = true;
+
+    // Shadow (rendered below everything)
+    const shadow = new Graphics();
+    shadow.ellipse(0, 4, 10, 4);
+    shadow.fill({ color: 0x000000, alpha: UNIT_SHADOW_ALPHA });
+    shadow.zIndex = -1;
+    container.addChild(shadow);
 
     // Selection glow (rendered below unit)
     const selectionGlow = new Graphics();
@@ -74,6 +86,7 @@ export class UnitRenderer {
     return {
       container,
       sprite,
+      shadow,
       healthBar,
       selectionGlow,
       currentX: iso.x,
@@ -81,6 +94,7 @@ export class UnitRenderer {
       targetX: iso.x,
       targetY: iso.y,
       fadeAlpha: -1,
+      bobOffset: Math.random() * Math.PI * 2, // randomize phase
     };
   }
 
@@ -130,8 +144,18 @@ export class UnitRenderer {
       if (Math.abs(us.targetX - us.currentX) < 0.5) us.currentX = us.targetX;
       if (Math.abs(us.targetY - us.currentY) < 0.5) us.currentY = us.targetY;
 
-      us.container.position.set(us.currentX, us.currentY);
-      us.container.zIndex = us.currentY; // depth sort by Y
+      // Idle bobbing (only when not moving)
+      const isMoving = Math.abs(us.targetX - us.currentX) > 1 || Math.abs(us.targetY - us.currentY) > 1;
+      let bobY = 0;
+      if (!isMoving) {
+        bobY = Math.sin(this.time * UNIT_IDLE_BOB_SPEED + us.bobOffset) * UNIT_IDLE_BOB_AMOUNT;
+      }
+
+      us.container.position.set(us.currentX, us.currentY + bobY);
+      us.container.zIndex = us.currentY; // depth sort by base Y (not bobbed)
+
+      // Shadow stays on ground (no bob)
+      us.shadow.position.set(0, -bobY);
 
       // Update texture (in case owner changed via capture)
       const textureKey = `unit_${unit.type}_${unit.owner}`;

@@ -1,5 +1,43 @@
 # Empire Reborn — Changelog
 
+## v0.10.0 — Session 011 (2026-03-09)
+
+### Added
+- **Phase 10: Polish & Audio** — procedural sound system, visual polish, performance optimization
+  - `packages/client/src/audio/AudioManager.ts` — Web Audio API sound manager:
+    - Procedural oscillator-based synthesis (no external dependencies, no sound files)
+    - Per-category gain nodes: master, SFX, music — independently controllable
+    - Audio context auto-resume on first user gesture (browser autoplay policy)
+    - Sound effects: move (unit-type-specific), combat, explosion, death, capture, production, turn start/end, game start, game over (victory/defeat variants)
+    - Ambient system: low drone pad (55Hz sine) with LFO frequency modulation
+  - `packages/client/src/renderer/screenShake.ts` — camera shake effect:
+    - Triggered on combat, capture, death events with configurable intensity
+    - Random X/Y jitter with exponential decay (8/s decay rate)
+
+### Changed
+- `packages/client/src/renderer/tilemap.ts` — animated water + smooth fog:
+  - Sea tiles oscillate alpha using per-tile sine wave with position-based phase offsets
+  - Fog overlay lerps alpha toward target (3.0/s) instead of hard switching
+  - Added `dt` parameter to `update()` for time-based animations
+  - Fog alpha tracking via `Map<loc, alpha>` for smooth reveal transitions
+- `packages/client/src/renderer/units.ts` — idle animations + shadows:
+  - Units bob vertically when idle (2Hz sine, 1.5px amplitude, random phase per unit)
+  - Ground-level ellipse shadow beneath each unit (stays grounded during bob)
+  - Shadow alpha: 0.25, subtle depth grounding effect
+- `packages/client/src/ui/minimap.ts` — performance: terrain caching:
+  - Terrain ImageData cached and reused across frames
+  - Only redraws when turn changes or tile hash changes
+  - Units + viewport rectangle still drawn every frame
+  - ~60% reduction in minimap CPU per frame
+- `packages/client/src/constants.ts` — new visual polish constants:
+  - FOG_LERP_SPEED, WATER_ANIM_SPEED/AMPLITUDE, UNIT_IDLE_BOB_SPEED/AMOUNT
+  - UNIT_SHADOW_ALPHA, SCREEN_SHAKE_INTENSITY/DECAY
+- `packages/client/src/main.ts` — full audio + screen shake integration:
+  - Sound effects wired to: movement, combat, events, turn flow, menus, production
+  - Screen shake applied to worldContainer after camera transform
+  - Ambient audio starts on game start, stops on game over / back to menu
+  - Audio context resumed on first canvas click/keydown
+
 ## v0.9.0 — Session 010 (2026-03-09)
 
 ### Added

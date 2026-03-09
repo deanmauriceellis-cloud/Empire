@@ -1,7 +1,7 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Phase 9: Client-Server Integration** — Complete
+**Phase 10: Polish & Audio** — Complete
 
 ## Status
 - Phase 0 (Project Scaffolding) complete
@@ -14,6 +14,7 @@
 - Phase 7 (Client Rendering) complete
 - Phase 8 (Client Game UI) complete
 - Phase 9 (Client-Server Integration) complete
+- Phase 10 (Polish & Audio) complete
 - Monorepo operational, all packages type-check, 212 tests passing (184 shared + 28 server)
 
 ## Latest commit
@@ -84,12 +85,21 @@
 - [x] Phase 9: Lobby UI — main menu (Single Player / Multiplayer), create/join game, waiting screen, game list
 - [x] Phase 9: Protocol types moved to shared package (single source of truth for client & server)
 - [x] Phase 9: Turn flow owner-aware (supports Player 1 or Player 2 in multiplayer)
+- [x] Phase 10: Sound system — procedural Web Audio API synthesis (no external dependencies)
+- [x] Phase 10: Audio integration — move, combat, explosion, death, capture, production, turn, game over sounds
+- [x] Phase 10: Ambient audio — low drone pad with LFO modulation during gameplay
+- [x] Phase 10: Animated water — per-tile sine wave alpha oscillation with position-based phase offsets
+- [x] Phase 10: Smooth fog transitions — fog alpha lerp instead of hard switches
+- [x] Phase 10: Unit idle bobbing — sinusoidal vertical animation with random phase per unit
+- [x] Phase 10: Unit shadows — ground-level ellipse shadows (stay grounded during bob)
+- [x] Phase 10: Screen shake — combat/capture/death triggered camera jitter with decay
+- [x] Phase 10: Minimap caching — terrain ImageData cached, only units+viewport redrawn per frame
 
 ## In Progress
 _Nothing currently in progress_
 
 ## Next Steps
-1. **Phase 10: Polish & Audio** — sound system, visual polish, performance optimization
+1. **Phase 11: Deployment** — production build, Dockerfile, hosting
 
 ## Blockers
 _None_
@@ -106,3 +116,6 @@ _None_
 - Click-to-move replaces WASD unit movement; WASD/arrows for camera panning; keyboard for orders only
 - Protocol types (ClientMessage, ServerMessage, VisibleGameState) in shared package, re-exported by server
 - Dev mode: client on port 5173 auto-connects to WebSocket server on port 3001
+- Audio uses Web Audio API with procedural synthesis — no sound files or external libraries needed
+- Audio context auto-resumed on first user click/keypress (browser autoplay policy)
+- Volume categories: master, SFX, music — each independently controllable
