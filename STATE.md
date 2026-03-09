@@ -10,7 +10,7 @@
 - No code written yet
 
 ## Latest commit
-`17024c7` — update STATE.md with session 000 commit hash
+`7599df4` — session 001: simplify architecture
 
 ## Completed
 - [x] Clone original VMS-Empire source (github.com/slacy/empire)
