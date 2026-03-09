@@ -10,7 +10,7 @@
 - No code written yet
 
 ## Latest commit
-_Pre-session — original VMS-Empire clone only_
+`e7c4ead` — session 000: project planning and session protocol setup
 
 ## Completed
 - [x] Clone original VMS-Empire source (github.com/slacy/empire)
