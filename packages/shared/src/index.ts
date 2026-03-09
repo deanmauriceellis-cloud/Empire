@@ -10,3 +10,4 @@ export * from "./mapgen.js";
 export * from "./game.js";
 export * from "./pathfinding.js";
 export * from "./continent.js";
+export * from "./ai.js";

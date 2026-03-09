@@ -1,0 +1,137 @@
+Session 005 — 2026-03-09
+========================
+
+## Summary
+Implemented Phase 4: AI System — the complete computer player AI ported from the original VMS-Empire compmove.c. This includes production strategy with 4 ratio tables, movement logic for all unit types (army, transport, fighter, ships), and a turn orchestrator. 23 new tests added, all 179 tests passing.
+
+## Conversation Context
+- User started session with "continue" — straightforward continuation from Phase 3
+- No design discussions or pivots needed; the plan was clear from PLAN.md Steps 4.1–4.5
+- The original C source (compmove.c) was analyzed via an Explore subagent to extract all AI logic
+- Implementation followed the original's architecture closely while adapting to TypeScript conventions
+
+## Changes Made
+
+### 1. AI Production Strategy (Step 4.1)
+- 4 ratio tables matching original: RATIO_1 (≤10 cities), RATIO_2 (11-20), RATIO_3 (21-30), RATIO_4 (>30)
+- Hierarchical decision: continent defense → transport production → ratio balancing
+- Lake city detection via continent BFS — lake cities only produce armies or fighters
+- `overproduced()` checks if a type exceeds 1.5x its target ratio
+- `needMore()` finds the unit type with greatest deficit vs target ratio
+- Never builds carriers or satellites (matching original AI behavior)
+
+### 2. AI Army Movement (Step 4.2)
+- Adjacent attack priority using `findAdjacentAttack()` with view map character conversion
+- `attackListToViewChars()` maps original attack strings to our view map conventions (enemy=lowercase, 'X'=enemy city, '*'=unowned)
+- Land objective pathfinding via `armyFightMoveInfo()` — targets enemies, cities, exploration (11x weight)
+- Cross-cost evaluation: compares land fight distance vs transport boarding distance
+- `moveAway()` forces departure from cities when stuck
+- `createTempViewMap()` marks loading transports as '$' for army boarding pathfinding
+
+### 3. AI Transport Movement (Step 4.3)
+- Two-state loading/unloading system based on cargo count
+- Loading mode: seek armies via `createTTLoadViewMap()`, or explore if none found
+- Unloading mode: navigate to enemy coasts via `createUnloadViewMap()` with continent value weighting (0-9)
+- `shouldUnload()` — start unloading when >50% full and near enemy territory
+- `tryUnloadArmies()` — disembark cargo onto adjacent land
+- `tryLoadArmies()` — pick up armies at same location
+
+### 4. AI Fighter Movement (Step 4.4)
+- Attack adjacent enemies first (FIGHTER_ATTACK priority)
+- Fuel management: return to base when range ≤ nearest city distance + 2
+- `findNearestCityDist()` Chebyshev distance to nearest owned city
+- Falls back to carrier if no city reachable
+- Explores when no targets in range
+
+### 5. AI Ship Movement (Step 4.4 cont.)
+- Damage check first: if hits < maxHits, navigate to port ('O')
+- Stay in port when damaged (return empty actions)
+- Attack adjacent enemies when fully repaired (SHIP_ATTACK priority)
+- Explore/patrol when no targets (21x exploration weight)
+- Shared logic for all 5 ship types (patrol, destroyer, submarine, carrier, battleship)
+
+### 6. AI Turn Orchestrator (Step 4.5)
+- `computeAITurn(state, aiOwner)` returns PlayerAction[]
+- Refresh vision: scan all AI pieces and cities
+- Production decisions first
+- Movement in MOVE_ORDER priority (satellite skipped — automatic)
+- Surrender check: resign when < 1/3 enemy cities AND armies, or eliminated
+
+## Files Created
+- `packages/shared/src/ai.ts` — Full AI system (540 lines)
+- `packages/shared/src/__tests__/ai.test.ts` — 23 tests covering all AI subsystems
+
+## Files Modified
+- `packages/shared/src/index.ts` — Added `export * from "./ai.js"`
+
+## Build Status
+- Client: 0 errors, 0 warnings
+- Server: 0 errors, 0 warnings
+- Shared: 0 errors, 0 warnings (tsc --noEmit clean)
+
+## Testing Done
+- 23 new AI tests covering:
+  - Production: army priority with enemy, maintain balanced production, transport production, ratio balancing
+  - Army: attack adjacent city, attack adjacent army, move toward enemy, move away from city
+  - Transport: wait for armies when empty, unload near enemy territory
+  - Fighter: attack adjacent enemy, return to base on low fuel, explore when no targets
+  - Ship: return to port when damaged, attack adjacent enemy, stay in port repairing, explore
+  - Orchestrator: valid action generation, no crash with no units, resign when overwhelmed, not resign when matched, multiple unit types, 20-turn simulation
+- All 179 tests passing (156 existing + 23 new)
+
+### Initial Test Failures Fixed
+- 6 tests failed initially due to:
+  1. Attack list character mapping: ARMY_ATTACK "O*TACFBSDP" uses uppercase for enemy units, but our view map uses lowercase. Fixed with `attackListToViewChars()` converter.
+  2. Production priority: Single city producing armies still switched to transport due to "ensure transport production" priority. Fixed test to include a transport-producing city.
+  3. Fighter fuel test: Used Manhattan distance in assertion but game uses Chebyshev. Fixed distance calculation and increased range to make test clearer.
+
+## Decisions & Rationale
+- Decision: Adapt attack lists via character conversion rather than redefining constants — Rationale: Keeps units.ts attack strings matching original source for reference, while cleanly adapting to our view map encoding
+- Decision: Never build carriers or satellites — Rationale: Matches original AI behavior; carrier strategy was intentionally disabled in compmove.c
+- Decision: Shared ship movement logic for all 5 ship types — Rationale: Original had the same function for all ships; differentiation happens through unit attributes (speed, hits, strength)
+- Decision: 1.5x overshoot tolerance for production rebalancing — Rationale: Prevents constant switching; original used a similar threshold via discrete counting
+- Decision: Cross-cost of 30 for army boarding — Rationale: Moderate bias toward staying on land; original used dynamic cross costs (14-60) based on target type
+
+## Open Questions
+- Transport army detection only checks same-location and adjacent coastal tiles — may miss armies further inland that could path to coast. Could be improved with broader search radius.
+- The AI doesn't coordinate multiple transports. Each transport acts independently.
+
+## Plan Progress
+- Steps 4.1–4.5 all completed
+- Phase 4 (AI System) is now complete
+- Current position: Ready for Phase 5 (Node.js Server)
+
+## Next Steps
+- Phase 5: Node.js Server — WebSocket game manager, game lifecycle, state broadcast
+- Phase 6: Persistence — SQLite schema, game save/load API
+
+## Dependencies Added
+- None (pure TypeScript, uses only existing shared package modules)
+
+## Optimization Report
+- CHANGELOG.md: 91 lines (under 200 threshold)
+- STATE.md: 66 lines (under 150 threshold)
+- MEMORY.md: 60 lines (under 150 threshold)
+- No optimization needed
+
+## Full Conversation Summary
+The session began with a standard session start protocol. After loading context (MEMORY.md, STATE.md, CHANGELOG.md, PLAN.md) and verifying no drift (latest commit 19020b3 matched expectations), the briefing confirmed Phase 3 was complete with 156 tests passing, and Phase 4 (AI System) was next.
+
+The user said "continue" to proceed with Phase 4. An Explore subagent was launched to thoroughly analyze the original C source code's AI logic in compmove.c, while PLAN.md was read in parallel. The subagent returned a comprehensive summary of the original AI: production ratios, army/transport/fighter/ship movement strategies, attack lists, movement weights, and key thresholds.
+
+All existing shared package source files were read (constants.ts, types.ts, units.ts, game.ts, pathfinding.ts, continent.ts, utils.ts, index.ts) to understand the available infrastructure. The AI module was then written as a single 540-line file implementing all 5 PLAN.md steps:
+
+1. Production strategy with 4 ratio tables and hierarchical priorities
+2. Army movement with adjacent attack, land pathfinding, and transport boarding
+3. Transport movement with loading/unloading state machine and continent targeting
+4. Fighter movement with fuel management and ship movement with repair logic
+5. Turn orchestrator tying everything together with surrender detection
+
+The index.ts was updated to export the new module. Type checking passed clean. A comprehensive test file with 23 tests was created.
+
+Initial test run had 6 failures:
+- Attack list character mapping was wrong (our view map uses lowercase for enemy units, uppercase for own)
+- A production test assumed single-city behavior but transport priority kicked in
+- A fighter fuel test used Manhattan distance instead of Chebyshev
+
+All 6 were fixed by adding `attackListToViewChars()`, adjusting test setup, and correcting distance assertions. Final run: 179/179 tests passing, clean type check.

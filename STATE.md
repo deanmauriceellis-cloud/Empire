@@ -1,17 +1,18 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Phase 3: Core Game Logic Engine** — Complete
+**Phase 4: AI System** — Complete
 
 ## Status
 - Phase 0 (Project Scaffolding) complete
 - Phase 1 (Shared Game Types & Constants) complete
 - Phase 2 (Map Generation) complete
 - Phase 3 (Core Game Logic Engine) complete
-- Monorepo operational, all packages type-check, 156 tests passing
+- Phase 4 (AI System) complete
+- Monorepo operational, all packages type-check, 179 tests passing
 
 ## Latest commit
-`818b93a` — session 004: Phase 3 core game logic engine
+`pending` — session 005: Phase 4 AI system
 
 ## Completed
 - [x] Clone original VMS-Empire source (github.com/slacy/empire)
@@ -41,13 +42,19 @@
 - [x] Phase 3: Pathfinding engine (BFS perimeter-list, findObjective, markPath, findDirection)
 - [x] Phase 3: Continent analysis on view maps (mapContinent, scanContinent, isLake, findExploreLocs)
 - [x] Phase 3: Turn execution engine (executeTurn, processAction, checkEndGame, 3:1 resignation)
+- [x] Phase 4: AI production strategy (4 ratio tables, continent defense, transport priority)
+- [x] Phase 4: AI army movement (adjacent attack, land pathfinding, transport boarding)
+- [x] Phase 4: AI transport movement (loading/unloading modes, continent value targeting)
+- [x] Phase 4: AI fighter movement (attack, fuel management, return-to-base)
+- [x] Phase 4: AI ship movement (damage-based repair, port seeking, patrol/explore)
+- [x] Phase 4: AI turn orchestrator (computeAITurn, vision refresh, MOVE_ORDER, surrender)
 
 ## In Progress
 _Nothing currently in progress_
 
 ## Next Steps
-1. **Phase 4: AI System** — AI production strategy, army/transport/fighter/ship movement, turn orchestrator
-2. **Phase 5: Node.js Server** — WebSocket game manager, game lifecycle, state broadcast
+1. **Phase 5: Node.js Server** — WebSocket game manager, game lifecycle, state broadcast
+2. **Phase 6: Persistence** — SQLite schema, game save/load API
 
 ## Blockers
 _None_
@@ -55,5 +62,5 @@ _None_
 ## Notes
 - Server runs on port 3001 (port 3000 used by another application)
 - Shared package consumed as raw TS via workspace `exports` field — no build step needed
-- 156 unit tests covering all Phase 0–3 functionality
+- 179 unit tests covering all Phase 0–4 functionality
 - GameState now includes `rngState` field for deterministic combat/satellite random rolls

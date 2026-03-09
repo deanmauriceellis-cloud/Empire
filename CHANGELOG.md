@@ -1,5 +1,21 @@
 # Empire Reborn — Changelog
 
+## v0.4.0 — Session 005 (2026-03-09)
+
+### Added
+- **Phase 4: AI System** — complete AI player ported from C source (`compmove.c`)
+  - `ai.ts` — full AI decision engine:
+    - **Production strategy**: 4 ratio tables (≤10/≤20/≤30/>30 cities), hierarchical priorities (continent defense → transport production → ratio balancing), lake city detection, `overproduced()`/`needMore()` rebalancing
+    - **Army movement**: `aiArmyMove` — adjacent attack priority via `attackListToViewChars()` conversion, land objective pathfinding, cross-cost transport boarding evaluation, `moveAway()` for stuck units
+    - **Transport movement**: `aiTransportMove` — two-state loading/unloading system, continent value weighting (0-9), `createUnloadViewMap()` coastal targeting, `createTTLoadViewMap()` army seeking, `tryUnloadArmies()`/`tryLoadArmies()` cargo management
+    - **Fighter movement**: `aiFighterMove` — attack → fuel check (range ≤ nearest city + 2) → return-to-base → explore, `findNearestCityDist()` helper
+    - **Ship movement**: `aiShipMove` — damage-aware port repair (stay stationary), adjacent attack, patrol/explore; shared logic for all 5 ship types
+    - **Turn orchestrator**: `computeAITurn(state, aiOwner)` → `PlayerAction[]` — vision refresh, production decisions, MOVE_ORDER movement, surrender check (< 1/3 enemy strength)
+  - 23 new tests in `ai.test.ts` covering production, army, transport, fighter, ship, orchestrator, and 20-turn simulation
+
+### Changed
+- `index.ts` — added export for `ai.js`
+
 ## v0.3.0 — Session 004 (2026-03-09)
 
 ### Added
