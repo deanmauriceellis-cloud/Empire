@@ -1,0 +1,129 @@
+Session 002 — 2026-03-09
+========================
+
+## Summary
+Implemented Phase 0 (Project Scaffolding) and Phase 1 (Shared Game Types & Constants). Set up the pnpm monorepo with three packages (shared, client, server), ported all core enums, unit attributes, game state interfaces, and utility functions from the original C source, and wrote 49 unit tests. All packages type-check cleanly.
+
+## Conversation Context
+- User said "let's start, continue" — wanted to begin Phase 0 scaffolding immediately
+- No discussion of alternatives; followed PLAN.md steps 0.1–0.4 then 1.1–1.4 sequentially
+- User noted port 3000 is used by another application → changed server to port 3001
+- After Phase 0+1 completed, user chose session end rather than continuing to Phase 2
+- User values momentum — said "yes" to continue into Phase 1 after Phase 0 completed
+
+## Changes Made
+
+### 1. Phase 0: Project Scaffolding (Steps 0.1–0.4)
+- Created pnpm workspace with root package.json, pnpm-workspace.yaml, tsconfig.base.json
+- Set up packages/shared with vitest, consumed as raw TS via exports field
+- Set up packages/client with Vite + PixiJS v8, renders proof-of-life rectangle
+- Set up packages/server with Express v5 + ws, health endpoint + WebSocket
+- Added .gitignore for node_modules, dist, tsbuildinfo, .vite
+
+### 2. Phase 1: Shared Game Types & Constants (Steps 1.1–1.4)
+- Ported all enums from empire.h: Direction, Owner, UnitType, UnitBehavior, TerrainType, TerrainFlag
+- Ported all constants: MAP_WIDTH/HEIGHT/SIZE, NUM_CITY (formula), DIR_OFFSET, MOVE_ORDER, sectors
+- Ported all 9 unit attributes from data.c with exact values (buildTime, strength, maxHits, speed, capacity, range)
+- Ported attack target lists: ARMY_ATTACK, FIGHTER_ATTACK, SHIP_ATTACK, TT_ATTACK
+- Created all game state interfaces: GameState, UnitState, CityState, MapCell, ViewMapCell, PlayerAction, TurnResult
+- Ported utility functions: locRow, locCol, rowColLoc, dist (Chebyshev), isOnBoard, getAdjacentLocs, moveInDirection, locSector, sectorCenter
+- Wrote 49 unit tests across 4 test files
+
+## Files Created
+- `package.json` (root monorepo config with dev/build/test scripts)
+- `pnpm-workspace.yaml` (workspace definition + esbuild build approval)
+- `tsconfig.base.json` (ES2022, bundler resolution, strict)
+- `.gitignore` (node_modules, dist, tsbuildinfo, .vite)
+- `packages/shared/package.json` (vitest, typescript)
+- `packages/shared/tsconfig.json` (extends base)
+- `packages/shared/src/index.ts` (re-exports all modules)
+- `packages/shared/src/constants.ts` (enums, constants, DIR_OFFSET, MOVE_ORDER)
+- `packages/shared/src/units.ts` (UnitAttributes, all 9 units, attack lists)
+- `packages/shared/src/types.ts` (GameState, UnitState, CityState, PlayerAction, etc.)
+- `packages/shared/src/utils.ts` (coordinate math, distance, adjacency, sectors)
+- `packages/shared/src/__tests__/index.test.ts` (3 tests)
+- `packages/shared/src/__tests__/constants.test.ts` (13 tests)
+- `packages/shared/src/__tests__/units.test.ts` (12 tests)
+- `packages/shared/src/__tests__/utils.test.ts` (21 tests)
+- `packages/client/package.json` (pixi.js v8, vite, typescript)
+- `packages/client/tsconfig.json` (extends base + DOM libs)
+- `packages/client/index.html` (full-screen canvas, dark background)
+- `packages/client/src/main.ts` (PixiJS init, rectangle, version label)
+- `packages/client/vite.config.ts` (port 5173, ES2022 target)
+- `packages/server/package.json` (express v5, ws, tsx, @types/node)
+- `packages/server/tsconfig.json` (extends base + node types)
+- `packages/server/src/index.ts` (Express + ws server on port 3001)
+
+## Files Modified
+- None (all new files this session)
+
+## Build Status
+- Shared: 0 errors, 0 warnings, 49 tests pass
+- Client: 0 errors, 0 warnings (tsc --noEmit)
+- Server: 0 errors, 0 warnings (tsc --noEmit)
+
+## Testing Done
+- `pnpm --filter @empire/shared test` — 49/49 tests pass
+- `curl localhost:3001/health` — returns {"status":"ok","version":"0.1.0"}
+- `pnpm --filter @empire/client exec tsc --noEmit` — clean
+- `pnpm --filter @empire/server exec tsc --noEmit` — clean
+- Client visual test (PixiJS rectangle) not verified in browser this session
+
+## Decisions & Rationale
+- Decision: Server port 3001 — Rationale: User's port 3000 is occupied by another application
+- Decision: No project references in tsconfig — Rationale: References require composite+build step, but shared is consumed as raw TS. Simpler to just import directly via workspace exports.
+- Decision: Express v5 — Rationale: Latest stable, already in package.json
+- Decision: esbuild approved in pnpm-workspace.yaml — Rationale: Vite depends on esbuild, needs postinstall to download platform binary
+- Decision: NUM_CITY uses original formula ((100*(W+H))/228) — Rationale: Matches original behavior, evaluates to 70 for 100x60 map
+
+## Open Questions
+- Client PixiJS rendering not visually verified in browser (should test next session)
+
+## Plan Progress
+- Phase 0: Steps 0.1, 0.2, 0.3, 0.4 — ALL COMPLETE
+- Phase 1: Steps 1.1, 1.2, 1.3, 1.4 — ALL COMPLETE
+- Next: Phase 2 (Map Generation, Steps 2.1–2.5)
+
+## Next Steps
+- Step 2.1: Height map generation (seedable RNG, double-buffer smoothing)
+- Step 2.2: Terrain assignment (waterline calculation, edge marking)
+- Step 2.3: City placement (random land cells with min distance)
+- Step 2.4: Starting city selection (continent scoring)
+- Step 2.5: Integrated map generator
+
+## Dependencies Added
+- pixi.js ^8.6.0 (client — WebGPU/WebGL2 renderer)
+- vite ^6.2.0 (client — dev server and bundler)
+- express ^5.0.0 (server — HTTP framework)
+- ws ^8.18.0 (server — WebSocket)
+- tsx ^4.19.0 (server — TypeScript execution)
+- vitest ^3.0.0 (shared — test runner)
+- typescript ^5.7.0 (all packages)
+- @types/express ^5.0.0, @types/ws ^8.5.0, @types/node ^25.3.5 (server)
+
+## Optimization Report
+- No optimization needed — all files under thresholds
+- CHANGELOG.md: 51 lines (threshold: 200)
+- STATE.md: 42 lines (threshold: 150)
+- MEMORY.md: 53 lines (threshold: 150)
+
+## Full Conversation Summary
+Session began with the standard protocol: loaded STATE.md, CHANGELOG.md, PLAN.md, ran drift check (latest commit 9d7edcc matched expectations), and archive check (all files under thresholds). Briefed the user that Phase 0 was next.
+
+User said "let's start, continue" — no discussion needed, they wanted to build. Read PLAN.md to get exact Phase 0 requirements, then checked Node (v20.20.1) and pnpm (v10.30.3) versions.
+
+Created all monorepo scaffolding files in parallel: root package.json, pnpm-workspace.yaml, tsconfig.base.json, and all three package directories with their configs, source files, and tests. The shared package exports raw TS via the exports field. The client renders a PixiJS proof-of-life rectangle with the game version. The server runs Express + ws.
+
+First `pnpm install` succeeded but warned about esbuild build scripts. Tried `pnpm approve-builds` but it's interactive. Used `pnpm config set --location project onlyBuiltDependencies` instead, which put a JSON string in pnpm-workspace.yaml. Fixed the YAML to use proper array syntax, re-ran install.
+
+Shared tests passed immediately (3 tests). Server test hit EADDRINUSE on port 3000. User interrupted to say port 3000 is used by another app. Changed to port 3001 — health check returned 200 OK.
+
+With Phase 0 verified, asked user whether to commit or continue. User said "yes" (interpreted as continue). Moved into Phase 1.
+
+Read all original C source files (empire.h, data.c, extern.h, math.c) to get exact values. Created constants.ts, units.ts, types.ts, and utils.ts with faithful ports of all enums, data, interfaces, and functions. Updated index.ts to re-export everything.
+
+Wrote comprehensive test files for constants (13 tests), units (12 tests), and utils (21 tests). All 49 tests passed on first run.
+
+Hit a tsconfig issue: project references require composite mode and building declarations, which conflicts with "no build step" for shared. Removed references — direct workspace imports work fine since Vite and tsx both resolve TypeScript natively. Added @types/node to server. Both client and server type-check cleanly.
+
+User then requested session end. Followed full session end protocol.

@@ -1,0 +1,12 @@
+{
+  "name": "empire-reborn",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:client": "pnpm --filter @empire/client dev",
+    "dev:server": "pnpm --filter @empire/server dev",
+    "build": "pnpm --filter @empire/client build",
+    "test": "pnpm --filter @empire/shared test",
+    "lint": "tsc --noEmit"
+  }
+}
