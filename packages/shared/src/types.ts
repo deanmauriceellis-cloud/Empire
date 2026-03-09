@@ -79,6 +79,9 @@ export interface GameState {
 
   // Per-player view maps
   viewMaps: Record<Owner, ViewMapCell[]>;
+
+  // Seedable PRNG state for game logic (combat, satellite directions)
+  rngState: number;
 }
 
 // ─── Player Actions ──────────────────────────────────────────────────────────

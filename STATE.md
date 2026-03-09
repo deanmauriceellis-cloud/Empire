@@ -1,16 +1,17 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Phase 3: Core Game Logic Engine** — Next up
+**Phase 3: Core Game Logic Engine** — Complete
 
 ## Status
 - Phase 0 (Project Scaffolding) complete
 - Phase 1 (Shared Game Types & Constants) complete
 - Phase 2 (Map Generation) complete
-- Monorepo operational, all packages type-check, 76 tests passing
+- Phase 3 (Core Game Logic Engine) complete
+- Monorepo operational, all packages type-check, 156 tests passing
 
 ## Latest commit
-`8a245ac` — session 003: Phase 2 map generation
+`5c0ce81` — update STATE.md with session 003 commit hash
 
 ## Completed
 - [x] Clone original VMS-Empire source (github.com/slacy/empire)
@@ -32,16 +33,21 @@
 - [x] Phase 2: City placement (adaptive min-distance, random land selection)
 - [x] Phase 2: Starting city selection (BFS continent detection, scoring, balanced pairs)
 - [x] Phase 2: Integrated map generator (generateMap orchestrating 2.1–2.4)
+- [x] Phase 3: Unit management (createUnit, killUnit, embark/disembark, objMoves, objCapacity)
+- [x] Phase 3: Fog of war / vision (scan, scanSatellite, updateViewCell, initViewMap)
+- [x] Phase 3: Movement system (moveUnit, goodLoc, moveSatellite, auto-embark/disembark)
+- [x] Phase 3: Combat system (attackCity 50% capture, attackUnit alternating rounds, cargo overflow)
+- [x] Phase 3: City production (tickCityProduction, setProduction 20% penalty, repairShips)
+- [x] Phase 3: Pathfinding engine (BFS perimeter-list, findObjective, markPath, findDirection)
+- [x] Phase 3: Continent analysis on view maps (mapContinent, scanContinent, isLake, findExploreLocs)
+- [x] Phase 3: Turn execution engine (executeTurn, processAction, checkEndGame, 3:1 resignation)
 
 ## In Progress
 _Nothing currently in progress_
 
 ## Next Steps
-1. **Step 3.1**: Unit management (create, kill, cargo)
-2. **Step 3.2**: Fog of war / vision (scan, getVisibleState)
-3. **Step 3.3**: Movement system (moveUnit, terrain validation)
-4. **Step 3.4**: Combat system (attackCity, attackUnit)
-5. **Step 3.5**: City production (tick, setProduction, repair)
+1. **Phase 4: AI System** — AI production strategy, army/transport/fighter/ship movement, turn orchestrator
+2. **Phase 5: Node.js Server** — WebSocket game manager, game lifecycle, state broadcast
 
 ## Blockers
 _None_
@@ -49,4 +55,5 @@ _None_
 ## Notes
 - Server runs on port 3001 (port 3000 used by another application)
 - Shared package consumed as raw TS via workspace `exports` field — no build step needed
-- 76 unit tests covering constants, unit attributes, coordinate math, adjacency, sectors, and map generation
+- 156 unit tests covering all Phase 0–3 functionality
+- GameState now includes `rngState` field for deterministic combat/satellite random rolls

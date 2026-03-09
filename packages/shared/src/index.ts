@@ -7,3 +7,6 @@ export * from "./units.js";
 export * from "./types.js";
 export * from "./utils.js";
 export * from "./mapgen.js";
+export * from "./game.js";
+export * from "./pathfinding.js";
+export * from "./continent.js";

@@ -1,5 +1,32 @@
 # Empire Reborn — Changelog
 
+## v0.3.0 — Session 004 (2026-03-09)
+
+### Added
+- **Phase 3: Core Game Logic Engine** — complete game engine ported from C source
+  - `game.ts` — full game engine with all core mechanics:
+    - **Unit management**: `createUnit`, `killUnit` (recursive cargo cascade), `embarkUnit`, `disembarkUnit`, `objMoves` (damage-scaled speed), `objCapacity` (damage-scaled capacity), unit lookup helpers
+    - **Seedable RNG**: `gameRandom`, `gameRandomInt` — deterministic mulberry32 for combat/satellite rolls, `rngState` added to `GameState`
+    - **Vision system**: `initViewMap`, `updateViewCell`, `scan` (9-cell), `scanSatellite` (2x range), owner-relative display (O/X/*; uppercase/lowercase units)
+    - **Movement**: `moveUnit` (moved/range tracking, auto-embark/disembark, cargo follows ship), `goodLoc` (terrain/transport/city validation), `moveSatellite` (diagonal movement with edge bouncing)
+    - **Combat**: `attackCity` (50% capture, attacker always dies, city transfer, ship capture), `attackUnit` (alternating 50/50 rounds, strength-based damage, cargo overflow handling)
+    - **Production**: `tickCityProduction` (work accumulation, unit spawning), `setProduction` (20% switch penalty), `repairShips` (+1 hit/turn for stationary ships in own port)
+    - **Turn execution**: `executeTurn` (process both players' actions, satellite movement, production ticks, ship repair, endgame check), `processAction` (8 action types), `checkEndGame` (elimination + 3:1 resignation)
+  - `pathfinding.ts` — BFS perimeter-list pathfinding engine:
+    - `createPathMap`, `findObjective` (weighted BFS), `markPath` (backtrack marking), `findDirection` (corner-first diagonal preference)
+    - `landMoveInfo`, `waterMoveInfo`, `airMoveInfo` factory helpers
+    - `viewCellToTerrain` terrain flag conversion
+  - `continent.ts` — view-map continent analysis:
+    - `mapContinent` (BFS flood-fill with terrain boundaries, unexplored inclusion)
+    - `scanContinent` (census: cities by owner, units by owner/type, unexplored, size)
+    - `isLake` (enclosed water with no strategic value)
+    - `findExploreLocs` (cells adjacent to unexplored territory)
+  - 80 new tests across 3 test files (game, pathfinding, continent)
+
+### Changed
+- `types.ts` — added `rngState: number` to `GameState` for deterministic randomness
+- `index.ts` — added exports for `game.js`, `pathfinding.js`, `continent.js`
+
 ## v0.2.0 — Session 003 (2026-03-09)
 
 ### Added

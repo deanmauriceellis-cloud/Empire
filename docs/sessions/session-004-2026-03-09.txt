@@ -1,0 +1,158 @@
+Session 004 — 2026-03-09
+========================
+
+## Summary
+Completed Phase 3: Core Game Logic Engine. Implemented the entire game engine in three modules
+(game.ts, pathfinding.ts, continent.ts) covering all 8 plan steps: unit management, fog of war,
+movement, combat, city production, pathfinding, continent analysis, and turn execution. All mechanics
+ported from the original VMS-Empire C source (object.c, attack.c, usermove.c, compmove.c, map.c).
+80 new tests written and passing, bringing the total to 156.
+
+## Conversation Context
+- User asked to "continue finishing phase 3" — a direct instruction to implement all remaining
+  Phase 3 steps from PLAN.md
+- No specific design discussions needed; the plan was already well-defined from prior sessions
+- Implementation followed the original C source closely, adapting linked-list patterns to
+  TypeScript arrays with ID-based lookups
+
+## Changes Made
+
+### 1. Core Game Engine (game.ts)
+- Comprehensive game engine module (~500 lines)
+- Seedable PRNG (mulberry32) integrated into GameState via `rngState` field
+- Unit management: create, kill (recursive cargo cascade), embark/disembark
+- Unit stats: objMoves (damage-scaled speed), objCapacity (damage-scaled capacity)
+- Vision: 9-cell scan, satellite 2x-range scan, owner-relative cell display
+- Movement: terrain validation (goodLoc), auto-embark/disembark, cargo follows ship,
+  satellite diagonal movement with edge bouncing
+- Combat: city attack (50% capture, attacker dies, ship transfer), unit-vs-unit
+  (alternating 50/50 rounds, strength damage, cargo overflow)
+- Production: work accumulation, unit spawning, 20% switch penalty, ship repair in port
+- Turn execution: processes both players' actions sequentially, satellites move,
+  production ticks, ship repair, endgame check (elimination + 3:1 resignation)
+
+### 2. Pathfinding Engine (pathfinding.ts)
+- BFS perimeter-list pathfinding with weighted objectives
+- Path map creation, objective finding, path marking (backtrack), direction finding
+- Terrain-specific move info factories (land, water, air)
+- viewCellToTerrain helper for interpreting view map contents
+
+### 3. Continent Analysis (continent.ts)
+- BFS flood-fill on view maps with terrain boundary stopping
+- Continent census: cities by owner, units by owner/type, unexplored cells, total size
+- Lake detection: enclosed water with no strategic objectives
+- Explore location finder: cells adjacent to unexplored territory
+
+### 4. Type Updates (types.ts)
+- Added `rngState: number` to GameState interface
+
+## Files Created
+- `packages/shared/src/game.ts` — core game engine (all Phase 3 mechanics)
+- `packages/shared/src/pathfinding.ts` — BFS pathfinding engine
+- `packages/shared/src/continent.ts` — view-map continent analysis
+- `packages/shared/src/__tests__/game.test.ts` — 54 tests for game engine
+- `packages/shared/src/__tests__/pathfinding.test.ts` — 12 tests for pathfinding
+- `packages/shared/src/__tests__/continent.test.ts` — 14 tests for continent analysis
+
+## Files Modified
+- `packages/shared/src/types.ts` — added rngState to GameState
+- `packages/shared/src/index.ts` — added exports for game, pathfinding, continent modules
+- `STATE.md` — updated to reflect Phase 3 completion
+- `CHANGELOG.md` — added v0.3.0 entry
+
+## Build Status
+- Client: 0 errors, 0 warnings
+- Server: 0 errors, 0 warnings
+- Shared: 0 errors, 0 warnings
+
+## Testing Done
+- 156 tests total (80 new + 76 existing), all passing
+- New tests cover:
+  - RNG determinism and range
+  - Unit creation, destruction, cargo cascading
+  - Embark/disembark mechanics
+  - Unit stats scaling with damage
+  - Vision scanning (normal + satellite)
+  - View map cell contents (own/enemy/unowned)
+  - Movement validation (terrain, transports, carriers, cities)
+  - Auto-embark/disembark on movement
+  - Fighter range decrement
+  - Cargo following ship movement
+  - City attack (50% capture statistics over 200 trials)
+  - Unit-vs-unit combat resolution
+  - Cargo overflow handling
+  - Production with 20% switch penalty
+  - City production spawning at buildTime
+  - Ship repair in own port
+  - Endgame detection (elimination, 3:1 resignation)
+  - Turn execution with move actions, resignation
+  - 5-turn simulation with scripted actions
+  - BFS pathfinding on land/water/air
+  - Path marking and direction finding
+  - Continent mapping and census
+  - Lake detection
+  - Explore location finding
+- NOT tested: satellite edge bouncing in detail (basic coverage only),
+  multi-turn combat simulations, full game playthrough
+
+## Decisions & Rationale
+- Decision: Single game.ts file for all core mechanics — Rationale: Functions are heavily
+  interdependent (killUnit calls scan, moveUnit calls embark, attackUnit calls killUnit+moveUnit).
+  Splitting would create circular dependencies.
+- Decision: Mutable GameState pattern — Rationale: Matches the original C code's mutation style.
+  Simpler than immutable updates for a game engine. State is always passed explicitly.
+- Decision: Added rngState to GameState — Rationale: Combat and satellite directions need
+  randomness. Storing the PRNG state in GameState ensures determinism and serializability.
+- Decision: City lookup by ID (find) rather than array index — Rationale: City IDs don't
+  necessarily match array indices, especially after game state changes.
+- Decision: Endgame check skips when both players have 0 total — Rationale: Prevents false
+  elimination triggers in early game or test scenarios before units are produced.
+
+## Open Questions
+- None — Phase 3 is complete as specified in PLAN.md
+
+## Plan Progress
+- Steps 3.1–3.8 all completed
+- Phase 3 is fully complete
+- Next: Phase 4 (AI System) or Phase 5 (Node.js Server)
+
+## Next Steps
+- Phase 4: AI System — production strategy, unit movement AI, turn orchestrator
+- Phase 5: Node.js Server — WebSocket game manager, game lifecycle, state broadcast
+- Either phase can be tackled next; Phase 4 builds on Phase 3 logic, Phase 5 builds on the
+  network layer
+
+## Dependencies Added
+- None — all Phase 3 code uses only existing dependencies
+
+## Optimization Report
+- No optimization needed — all .md files under thresholds:
+  - STATE.md: 53 lines (threshold: 150)
+  - CHANGELOG.md: 68 lines (threshold: 200)
+  - MEMORY.md: ~60 lines (threshold: 150)
+
+## Full Conversation Summary
+The session began with the standard protocol: reading STATE.md, CHANGELOG.md, PLAN.md, and
+session-protocol.md to establish context. The drift check showed STATE.md referenced commit
+8a245ac while the actual latest was 5c0ce81 (a minor STATE.md update commit), confirming no
+real drift.
+
+The user's instruction was simply "continue finishing phase 3" — a clear directive to implement
+all 8 steps of Phase 3 from the plan. Two Explore agents were launched in parallel: one to deeply
+analyze the original C source code (object.c, attack.c, usermove.c, compmove.c, map.c) and
+extract all game mechanics, and another to read all existing TypeScript shared package files to
+understand the types and utilities available.
+
+With both research results in hand, all four existing source files (types.ts, constants.ts,
+units.ts, utils.ts) were re-read for exact type definitions. Implementation proceeded
+systematically: types.ts was updated with rngState, then game.ts was written covering all core
+mechanics (RNG, unit management, vision, movement, combat, production, turn execution),
+pathfinding.ts for BFS-based pathfinding, and continent.ts for view-map analysis. index.ts was
+updated with new exports.
+
+Type-checking passed clean on the first attempt. Existing 76 tests continued to pass. Three
+comprehensive test files were written (game.test.ts with 54 tests, pathfinding.test.ts with 12,
+continent.test.ts with 14). Three test failures were encountered and fixed: (1) setProduction
+looked up city by array index instead of ID, (2) endgame check triggered incorrectly when neither
+player had anything, (3) a test was missing cities needed to prevent false elimination. After
+fixes, all 156 tests passed. Final type-check across all packages was clean.
