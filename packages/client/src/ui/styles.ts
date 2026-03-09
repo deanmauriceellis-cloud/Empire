@@ -49,6 +49,12 @@ const CSS = `
   margin-right: 4px;
 }
 
+#hud-top .unit-count {
+  color: #8af;
+  margin-right: 6px;
+  font-size: 12px;
+}
+
 /* ─── Bottom Bar ────────────────────────────────────────────────────────── */
 
 #hud-bottom {
@@ -156,6 +162,16 @@ const CSS = `
 
 .action-btn:active {
   background: rgba(68,136,255,0.5);
+}
+
+.action-btn.active {
+  background: rgba(68,200,100,0.25);
+  border-color: #4c8;
+  color: #4c8;
+}
+
+.action-btn.active:hover {
+  background: rgba(68,200,100,0.35);
 }
 
 .action-btn.disabled {
@@ -599,6 +615,60 @@ const CSS = `
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* ─── Debug Panel ──────────────────────────────────────────────────────── */
+
+#debug-panel {
+  padding: 8px;
+  border-top: 1px solid #333;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+#debug-panel .debug-title {
+  color: #f44;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 2px;
+}
+
+.debug-toggle {
+  pointer-events: auto;
+  background: rgba(255,50,50,0.08);
+  border: 1px solid #433;
+  color: #866;
+  padding: 3px 8px;
+  cursor: pointer;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  transition: background 0.1s;
+}
+
+.debug-toggle:hover {
+  background: rgba(255,50,50,0.2);
+  border-color: #f44;
+  color: #faa;
+}
+
+.debug-toggle.on {
+  background: rgba(255,50,50,0.25);
+  border-color: #f44;
+  color: #f88;
+}
+
+.debug-toggle .debug-state {
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.debug-toggle.on .debug-state {
+  color: #4f4;
 }
 
 /* ─── Scrollbar ─────────────────────────────────────────────────────────── */

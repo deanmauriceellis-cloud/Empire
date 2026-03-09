@@ -1,6 +1,6 @@
 // Empire Reborn — HUD (Top Bar + Bottom Bar)
 
-import { UNIT_ATTRIBUTES, GAME_VERSION, UnitBehavior, BEHAVIOR_NAMES, behaviorIndex } from "@empire/shared";
+import { UNIT_ATTRIBUTES, GAME_VERSION, UnitBehavior, BEHAVIOR_NAMES, behaviorIndex, NUM_UNIT_TYPES } from "@empire/shared";
 import type { UIState } from "../types.js";
 
 export interface HUD {
@@ -21,11 +21,21 @@ export function createHUD(): HUD {
     bottomBar,
 
     update(state: UIState): void {
-      // Top bar
+      // Top bar — unit counts by type
+      const unitParts: string[] = [];
+      for (let i = 0; i < NUM_UNIT_TYPES; i++) {
+        if (state.unitCountsByType[i] > 0) {
+          unitParts.push(`<span class="unit-count" title="${UNIT_ATTRIBUTES[i].name}">${UNIT_ATTRIBUTES[i].char}:${state.unitCountsByType[i]}</span>`);
+        }
+      }
+      const unitSummary = unitParts.length > 0
+        ? unitParts.join("")
+        : `<span class="stat">0</span>`;
+
       topBar.innerHTML = [
         `<span><span class="stat-label">Turn</span><span class="stat">${state.turn}</span></span>`,
         `<span><span class="stat-label">Cities</span><span class="stat">${state.playerCityCount}</span></span>`,
-        `<span><span class="stat-label">Units</span><span class="stat">${state.playerUnitCount}</span></span>`,
+        `<span><span class="stat-label">Units</span>${unitSummary}</span>`,
         `<span style="margin-left:auto;color:#555">Empire Reborn v${GAME_VERSION}</span>`,
       ].join("");
 

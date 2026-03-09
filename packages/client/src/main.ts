@@ -11,7 +11,11 @@ import {
   UnitBehavior,
   UnitType,
   DIR_OFFSET,
+  MAP_SIZE,
+  NUM_UNIT_TYPES,
   objMoves,
+  scan,
+  computeAITurn,
 } from "@empire/shared";
 import type { SinglePlayerGame, TurnEvent, VisibleGameState, GameConfig } from "@empire/shared";
 import type { GameSetupOptions } from "./ui/menuScreens.js";
@@ -293,7 +297,32 @@ async function init() {
     gameStarted = true;
     audio.playGameStart();
     audio.startAmbient();
+    // Apply initial debug flags (e.g. if toggled before game start)
+    applyDebugFlags();
+
     console.log(`Empire Reborn v${GAME_VERSION} — Single player started`);
+  }
+
+  // ─── Debug Helpers ──────────────────────────────────────────────────────
+
+  function revealMapForOwner(owner: Owner): void {
+    const mapSize = game.state.map.length;
+    for (let loc = 0; loc < mapSize; loc++) {
+      if (game.state.map[loc].onBoard) {
+        scan(game.state, owner, loc);
+      }
+    }
+  }
+
+  function applyDebugFlags(): void {
+    if (mode !== "singleplayer") return;
+    const flags = ui.debug.flags;
+    if (flags.revealMap) {
+      revealMapForOwner(Owner.Player1);
+    }
+    if (flags.aiOmniscient) {
+      revealMapForOwner(Owner.Player2);
+    }
   }
 
   // ─── Start Multiplayer Game ─────────────────────────────────────────────
@@ -355,6 +384,7 @@ async function init() {
     return {
       turn: 0, owner: Owner.Player1,
       playerCityCount: 0, playerUnitCount: 0, enemyCityCount: 0,
+      unitCountsByType: new Array(NUM_UNIT_TYPES).fill(0),
       selectedUnit: null, selectedCity: null,
       pendingActionCount: 0, events: [], isGameOver: false, winner: null,
     };
@@ -369,12 +399,17 @@ async function init() {
       ? state.cities.find((c) => c.id === selection.selectedCityId) ?? null
       : null;
 
+    const playerUnits = state.units.filter((u) => u.owner === Owner.Player1);
+    const unitCountsByType = new Array(NUM_UNIT_TYPES).fill(0);
+    for (const u of playerUnits) unitCountsByType[u.type]++;
+
     return {
       turn: state.turn,
       owner: Owner.Player1,
       playerCityCount: state.cities.filter((c) => c.owner === Owner.Player1).length,
-      playerUnitCount: state.units.filter((u) => u.owner === Owner.Player1).length,
+      playerUnitCount: playerUnits.length,
       enemyCityCount: state.cities.filter((c) => c.owner === Owner.Player2).length,
+      unitCountsByType,
       selectedUnit,
       selectedCity,
       pendingActionCount: collector.actions.length,
@@ -390,6 +425,7 @@ async function init() {
       return {
         turn: 0, owner: Owner.Player1,
         playerCityCount: 0, playerUnitCount: 0, enemyCityCount: 0,
+        unitCountsByType: new Array(NUM_UNIT_TYPES).fill(0),
         selectedUnit: null, selectedCity: null,
         pendingActionCount: 0, events: [], isGameOver: false, winner: null,
       };
@@ -413,12 +449,17 @@ async function init() {
       work: selectedVisCity.work ?? 0,
     } : null;
 
+    const mpPlayerUnits = vs.units.filter((u) => u.owner === playerOwner);
+    const mpUnitCounts = new Array(NUM_UNIT_TYPES).fill(0);
+    for (const u of mpPlayerUnits) mpUnitCounts[u.type]++;
+
     return {
       turn: vs.turn,
       owner: playerOwner,
       playerCityCount: vs.cities.filter((c) => c.owner === playerOwner).length,
-      playerUnitCount: vs.units.filter((u) => u.owner === playerOwner).length,
+      playerUnitCount: mpPlayerUnits.length,
       enemyCityCount: vs.cities.filter((c) => c.owner !== playerOwner && c.owner !== Owner.Unowned).length,
+      unitCountsByType: mpUnitCounts,
       selectedUnit,
       selectedCity: selectedCity as any, // CityState shape subset
       pendingActionCount: 0,
@@ -465,14 +506,30 @@ async function init() {
       return;
     }
 
-    // ─── Click on own unit → select ─────────────────────────────────
+    // ─── Click on own unit → select (re-click cycles to city) ─────
     const playerOwner = mode === "singleplayer" ? Owner.Player1 : mp.owner;
     const units = mode === "singleplayer" ? game.state.units : (mp.visibleState?.units ?? []);
     const playerUnit = units.find(
       (u) => u.loc === loc && u.owner === playerOwner && u.shipId === null,
     );
 
+    const cities = mode === "singleplayer"
+      ? game.state.cities
+      : (mp.visibleState?.cities ?? []);
+    const city = cities.find((c) => c.loc === loc && c.owner === playerOwner);
+
     if (playerUnit) {
+      // If this unit is already selected and there's a city here, cycle to city
+      if (selection.selectedUnitId === playerUnit.id && city) {
+        selection.selectedCityId = city.id;
+        selection.selectedUnitId = null;
+        currentHighlights = [];
+        audio.playSelect();
+        if (shiftKey) {
+          ui.cityPanel.open(city as any);
+        }
+        return;
+      }
       selection.selectedUnitId = playerUnit.id;
       selection.selectedCityId = null;
       audio.playSelect();
@@ -481,11 +538,6 @@ async function init() {
     }
 
     // ─── Click on own city → select ─────────────────────────────────
-    const cities = mode === "singleplayer"
-      ? game.state.cities
-      : (mp.visibleState?.cities ?? []);
-    const city = cities.find((c) => c.loc === loc && c.owner === playerOwner);
-
     if (city) {
       selection.selectedCityId = city.id;
       selection.selectedUnitId = null;
@@ -639,7 +691,21 @@ async function init() {
   }
 
   function handleSinglePlayerEndTurn(): void {
-    const result = collector.endTurn();
+    // Auto-play mode: compute AI actions for Player1 instead of using collected actions
+    let result;
+    if (ui.debug.flags.playerAI) {
+      // Apply debug vision BEFORE AI computes (so AI can see the full map if enabled)
+      applyDebugFlags();
+      const aiP1Actions = computeAITurn(game.state, Owner.Player1);
+      console.log(`[Auto-Play] Turn ${game.state.turn}: ${aiP1Actions.length} AI actions for P1`, aiP1Actions);
+      result = game.submitTurn(aiP1Actions);
+    } else {
+      result = collector.endTurn();
+    }
+
+    // Apply debug flags after turn (reveal map, AI omniscience)
+    applyDebugFlags();
+
     ui.eventLog.addEvents(result.events);
 
     for (const event of result.events) {

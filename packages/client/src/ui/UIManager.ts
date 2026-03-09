@@ -9,6 +9,7 @@ import { createCityPanel, type CityPanel } from "./cityPanel.js";
 import { createEventLog, type EventLog } from "./eventLog.js";
 import { createTurnFlow, type TurnFlow } from "./turnFlow.js";
 import { createMenuScreens, type MenuScreens } from "./menuScreens.js";
+import { createDebugPanel, type DebugPanel } from "./debugPanel.js";
 import type { Camera } from "../core/camera.js";
 
 export interface UIManager {
@@ -19,6 +20,7 @@ export interface UIManager {
   readonly eventLog: EventLog;
   readonly turnFlow: TurnFlow;
   readonly menus: MenuScreens;
+  readonly debug: DebugPanel;
 }
 
 export function createUIManager(camera: Camera): UIManager {
@@ -37,12 +39,14 @@ export function createUIManager(camera: Camera): UIManager {
   const eventLog = createEventLog(camera);
   const turnFlow = createTurnFlow();
   const menus = createMenuScreens();
+  const debug = createDebugPanel();
 
   // Build sidebar
   const sidebar = document.createElement("div");
   sidebar.id = "sidebar-right";
   sidebar.appendChild(minimap.wrapper);
   sidebar.appendChild(actionPanel.element);
+  sidebar.appendChild(debug.element);
 
   // Assemble DOM
   root.appendChild(hud.topBar);
@@ -60,5 +64,6 @@ export function createUIManager(camera: Camera): UIManager {
     eventLog,
     turnFlow,
     menus,
+    debug,
   };
 }

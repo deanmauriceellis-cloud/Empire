@@ -864,7 +864,8 @@ function getExploreMoveInfo(unitType: UnitType) {
   switch (unitType) {
     case UnitType.Army:
       // Armies explore + seek unowned cities (*) and enemy cities (X)
-      return landMoveInfo("*X ", new Map([["*", 2], ["X", 3], [" ", 5]]));
+      // Low weights = high priority: cities strongly preferred over raw exploration
+      return landMoveInfo("*X ", new Map([["*", 1], ["X", 1], [" ", 8]]));
     case UnitType.Fighter:
       return airMoveInfo(" ", defaultWeights);
     case UnitType.Patrol:
@@ -1057,22 +1058,42 @@ function exploreUnit(state: GameState, unit: UnitState, owner: Owner): TurnEvent
     if (fuelStatus === "stranded") break;
     if (fuelStatus === "return") continue;
 
-    // Non-fighter units: check for adjacent enemies and attack them
+    // Non-fighter units: check for adjacent enemies and capturable cities
     // Fighters skip this — they're too fragile (1 HP) to auto-engage
     if (!isAirUnit) {
       const adjacent = getAdjacentLocs(unit.loc);
-      let attacked = false;
-      for (const adj of adjacent) {
-        const enemy = state.units.find(
-          (u) => u.loc === adj && u.owner !== owner && u.shipId === null,
-        );
-        if (enemy) {
-          events.push(...attackUnit(state, unit, enemy));
-          attacked = true;
-          break;
+      let engaged = false;
+
+      // Armies: capture adjacent unowned/enemy cities immediately
+      if (unit.type === UnitType.Army) {
+        for (const adj of adjacent) {
+          const cell = state.map[adj];
+          if (cell.cityId !== null) {
+            const city = state.cities[cell.cityId];
+            if (city.owner !== owner) {
+              const r = behaviorMove(state, unit, adj, owner);
+              events.push(...r.events);
+              engaged = true;
+              break;
+            }
+          }
         }
       }
-      if (attacked) break;
+
+      // Check for adjacent enemy units
+      if (!engaged) {
+        for (const adj of adjacent) {
+          const enemy = state.units.find(
+            (u) => u.loc === adj && u.owner !== owner && u.shipId === null,
+          );
+          if (enemy) {
+            events.push(...attackUnit(state, unit, enemy));
+            engaged = true;
+            break;
+          }
+        }
+      }
+      if (engaged) break;
     }
 
     if (isAirUnit) {
@@ -1104,7 +1125,7 @@ function exploreUnit(state: GameState, unit: UnitState, owner: Owner): TurnEvent
         const moveInfo = airMoveInfo(" ", new Map([[" ", 1]]));
         const objective = findObjective(pathMap, viewMap, unit.loc, moveInfo);
         if (objective === null) {
-          unit.func = UnitBehavior.None;
+          // Nothing to explore — stay in explore mode, retry next turn
           break;
         }
         markPath(pathMap, objective);
@@ -1121,14 +1142,18 @@ function exploreUnit(state: GameState, unit: UnitState, owner: Owner): TurnEvent
         if (r.died) break;
       }
     } else {
-      // Ground/sea explore: BFS pathfind toward nearest unexplored
+      // Ground/sea explore: BFS pathfind toward nearest unexplored or city
       const moveInfo = getExploreMoveInfo(unit.type);
       if (!moveInfo) break;
 
       const pathMap = createPathMap();
       const objective = findObjective(pathMap, viewMap, unit.loc, moveInfo);
       if (objective === null) {
-        unit.func = UnitBehavior.None;
+        // Nothing reachable to explore — army auto-sentries on isolated landmass,
+        // other unit types stay in explore mode and retry next turn
+        if (unit.type === UnitType.Army) {
+          unit.func = UnitBehavior.Sentry;
+        }
         break;
       }
 

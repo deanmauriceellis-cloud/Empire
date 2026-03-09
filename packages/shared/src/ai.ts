@@ -336,8 +336,11 @@ function decideProduction(
   }
 
   // Priority 2: Ensure transport production (first non-lake coastal city)
+  // Skip if this is the ONLY city producing armies and armies are still needed
   if (!onLake && prodCounts[UnitType.Transport] === 0) {
-    return UnitType.Transport;
+    if (!(armiesNeeded > 0 && prodCounts[UnitType.Army] <= 1)) {
+      return UnitType.Transport;
+    }
   }
 
   // Priority 3: Follow ratio tables if current production is overproduced

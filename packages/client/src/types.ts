@@ -48,6 +48,8 @@ export interface UIState {
   playerCityCount: number;
   playerUnitCount: number;
   enemyCityCount: number;
+  /** Count of player units by UnitType index */
+  unitCountsByType: number[];
   selectedUnit: UnitState | null;
   selectedCity: CityState | null;
   pendingActionCount: number;

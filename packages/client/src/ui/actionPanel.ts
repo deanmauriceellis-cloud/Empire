@@ -25,8 +25,10 @@ export function createActionPanel(): ActionPanel {
 
   let pendingClick: string | null = null;
 
-  function btn(label: string, hotkey: string, action: string, disabled = false): string {
-    const cls = disabled ? "action-btn disabled" : "action-btn";
+  function btn(label: string, hotkey: string, action: string, disabled = false, active = false): string {
+    let cls = "action-btn";
+    if (disabled) cls += " disabled";
+    if (active) cls += " active";
     return `<button class="${cls}" data-action="${action}">` +
       `<span>${label}</span><span class="hotkey">${hotkey}</span></button>`;
   }
@@ -83,13 +85,13 @@ export function createActionPanel(): ActionPanel {
 
         parts.push(`<div class="section-label">Orders</div>`);
         parts.push(btn("Skip Unit", "Space", "skip"));
-        parts.push(btn("Sentry", "G", "sentry", !canMove));
-        parts.push(btn("Explore", "F", "explore", !canMove));
-        parts.push(btn("Aggressive", "A", "aggressive", !canMove));
-        parts.push(btn("Cautious", "D", "cautious", !canMove));
+        parts.push(btn("Sentry", "G", "sentry", !canMove, u.func === UnitBehavior.Sentry));
+        parts.push(btn("Explore", "F", "explore", !canMove, u.func === UnitBehavior.Explore));
+        parts.push(btn("Aggressive", "A", "aggressive", !canMove, u.func === UnitBehavior.Aggressive));
+        parts.push(btn("Cautious", "D", "cautious", !canMove, u.func === UnitBehavior.Cautious));
 
         if (u.type === UnitType.Army) {
-          parts.push(btn("Wait for Transport", "T", "wait-transport", !canMove));
+          parts.push(btn("Wait for Transport", "T", "wait-transport", !canMove, u.func === UnitBehavior.WaitForTransport));
         }
 
         if (u.shipId !== null) {
