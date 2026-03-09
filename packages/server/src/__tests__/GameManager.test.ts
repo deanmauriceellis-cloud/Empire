@@ -1,6 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { WebSocket } from "ws";
+import { join } from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { GameManager } from "../GameManager.js";
+import { GameDatabase } from "../database.js";
 import type { ClientMessage, ServerMessage } from "../protocol.js";
 import { Owner, UnitType } from "@empire/shared";
 
@@ -348,6 +352,121 @@ describe("GameManager", () => {
       ws._simulateClose();
 
       expect(manager.getActiveGames()).toHaveLength(0);
+    });
+  });
+
+  describe("persistence", () => {
+    let db: GameDatabase;
+    let tmpDir: string;
+    let pManager: GameManager;
+
+    beforeEach(() => {
+      tmpDir = mkdtempSync(join(tmpdir(), "empire-gm-test-"));
+      db = new GameDatabase(join(tmpDir, "test.db"));
+      pManager = new GameManager(db);
+    });
+
+    afterEach(() => {
+      db.close();
+      rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    function createStartedGameWithDb() {
+      const ws1 = createMockWs() as MockWs;
+      const ws2 = createMockWs() as MockWs;
+
+      pManager.handleConnection(ws1);
+      pManager.handleConnection(ws2);
+
+      ws1._simulateMessage({ type: "create_game" });
+      const gameId = ws1._messagesOfType("game_created")[0].gameId;
+
+      ws2._simulateMessage({ type: "join_game", gameId });
+
+      return { ws1, ws2, gameId };
+    }
+
+    it("autosaves game after turn execution", () => {
+      const { ws1, ws2, gameId } = createStartedGameWithDb();
+
+      ws1._simulateMessage({ type: "end_turn", gameId });
+      ws2._simulateMessage({ type: "end_turn", gameId });
+
+      // Game should now be saved in database
+      const saved = db.loadGame(gameId);
+      expect(saved).not.toBeNull();
+      expect(saved!.phase).toBe("playing");
+      expect(saved!.state.turn).toBe(1);
+    });
+
+    it("saves game on resignation (game over)", () => {
+      const { ws1, ws2, gameId } = createStartedGameWithDb();
+
+      ws1._simulateMessage({ type: "resign", gameId });
+
+      const saved = db.loadGame(gameId);
+      expect(saved).not.toBeNull();
+      expect(saved!.phase).toBe("game_over");
+    });
+
+    it("resumes a saved game from database", () => {
+      const { ws1, ws2, gameId } = createStartedGameWithDb();
+
+      // Play a turn so there's state to save
+      ws1._simulateMessage({ type: "end_turn", gameId });
+      ws2._simulateMessage({ type: "end_turn", gameId });
+
+      // Create a new manager with the same database (simulates server restart)
+      const manager2 = new GameManager(db);
+
+      // Resume the game
+      const ok = manager2.resumeGame(gameId);
+      expect(ok).toBe(true);
+
+      // Game should be in active games
+      const active = manager2.getActiveGames();
+      expect(active).toHaveLength(1);
+      expect(active[0].id).toBe(gameId);
+      expect(active[0].turn).toBe(1);
+
+      // Player can reconnect
+      const ws3 = createMockWs() as MockWs;
+      manager2.handleConnection(ws3);
+      ws3._simulateMessage({ type: "join_game", gameId });
+
+      const joined = ws3._messagesOfType("game_joined")[0];
+      expect(joined).toBeDefined();
+      expect(joined.owner).toBe(Owner.Player1);
+      expect(joined.phase).toBe("playing");
+
+      const stateUpdate = ws3._messagesOfType("state_update")[0];
+      expect(stateUpdate).toBeDefined();
+      expect(stateUpdate.state.turn).toBe(1);
+    });
+
+    it("returns false when resuming non-existent game", () => {
+      expect(pManager.resumeGame("nope")).toBe(false);
+    });
+
+    it("lists saved games from database", () => {
+      const { ws1, ws2, gameId } = createStartedGameWithDb();
+
+      ws1._simulateMessage({ type: "end_turn", gameId });
+      ws2._simulateMessage({ type: "end_turn", gameId });
+
+      const saved = pManager.getSavedGames();
+      expect(saved.length).toBeGreaterThanOrEqual(1);
+      expect(saved.some((g) => g.id === gameId)).toBe(true);
+    });
+
+    it("deletes a saved game", () => {
+      const { ws1, ws2, gameId } = createStartedGameWithDb();
+
+      ws1._simulateMessage({ type: "end_turn", gameId });
+      ws2._simulateMessage({ type: "end_turn", gameId });
+
+      expect(pManager.deleteSavedGame(gameId)).toBe(true);
+      expect(db.loadGame(gameId)).toBeNull();
     });
   });
 });

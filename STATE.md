@@ -1,7 +1,7 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Phase 5: Node.js Server** — Complete
+**Phase 6: Persistence** — Complete
 
 ## Status
 - Phase 0 (Project Scaffolding) complete
@@ -10,7 +10,8 @@
 - Phase 3 (Core Game Logic Engine) complete
 - Phase 4 (AI System) complete
 - Phase 5 (Node.js Server) complete
-- Monorepo operational, all packages type-check, 199 tests passing (184 shared + 15 server)
+- Phase 6 (Persistence) complete
+- Monorepo operational, all packages type-check, 212 tests passing (184 shared + 28 server)
 
 ## Latest commit
 `7a7a1bf` — session 006: Phase 5 Node.js server
@@ -53,13 +54,14 @@
 - [x] Phase 5: Game lifecycle (lobby → playing → game_over, reconnection with 5-min timeout)
 - [x] Phase 5: State broadcast (per-player visible state, fog-of-war event filtering, enemy info hiding)
 - [x] Phase 5: Single-player mode (client-side game loop with AI, no server needed)
+- [x] Phase 6: SQLite schema (games table, WAL mode, UPSERT save, JSON state)
+- [x] Phase 6: Game save/load API (autosave after turns, save on game over, resume endpoint, delete endpoint)
 
 ## In Progress
 _Nothing currently in progress_
 
 ## Next Steps
-1. **Phase 6: Persistence** — SQLite schema, game save/load API
-2. **Phase 7: Client Rendering** — PixiJS bootstrap, isometric coords, camera, tilemap
+1. **Phase 7: Client Rendering** — PixiJS bootstrap, isometric coords, camera, tilemap
 
 ## Blockers
 _None_
@@ -67,6 +69,8 @@ _None_
 ## Notes
 - Server runs on port 3001 (port 3000 used by another application)
 - Shared package consumed as raw TS via workspace `exports` field — no build step needed
-- 199 tests total: 184 shared (179 original + 5 singleplayer) + 15 server (GameManager)
+- 212 tests total: 184 shared + 28 server (21 GameManager + 7 database)
 - GameState now includes `rngState` field for deterministic combat/satellite random rolls
 - Server package now has vitest configured for testing
+- SQLite database stored at `data/empire.db` (WAL mode), `data/` directory auto-created
+- Games autosaved after each turn and on game over; persisted on disconnect timeout

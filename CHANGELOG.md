@@ -1,5 +1,37 @@
 # Empire Reborn — Changelog
 
+## v0.6.0 — Session 007 (2026-03-09)
+
+### Added
+- **Phase 6: Persistence** — SQLite database for game save/load
+  - `packages/server/src/database.ts` — GameDatabase class:
+    - SQLite via `better-sqlite3`, WAL journal mode
+    - `games` table: id, phase, turn, state (JSON), created_at, updated_at
+    - `saveGame()` — UPSERT (insert or update on conflict)
+    - `loadGame()` — deserialize JSON back to GameState
+    - `listGames()` — summary list sorted by updated_at DESC
+    - `deleteGame()` — remove saved game
+    - Auto-creates `data/` directory on startup
+  - GameManager persistence integration:
+    - Autosave after each turn execution
+    - Save on game over (resignation/elimination)
+    - Save on disconnect timeout (before removing from memory)
+    - `resumeGame(id)` — reload saved game into memory for reconnection
+    - `getSavedGames()` / `deleteSavedGame(id)` — public API for REST
+  - REST API endpoints:
+    - `GET /api/games` — returns `{ active, saved }` (both in-memory and database)
+    - `POST /api/games/:id/resume` — reload game from DB, rejoin via WebSocket
+    - `DELETE /api/games/:id` — remove saved game from DB
+  - 13 new tests:
+    - 7 database tests (round-trip, view maps, update, list, delete, empty DB)
+    - 6 GameManager persistence tests (autosave, game over save, resume, list, delete)
+
+### Changed
+- `packages/server/src/index.ts` — wired GameDatabase, added resume/delete endpoints, `GET /api/games` now returns active + saved
+- `packages/server/src/GameManager.ts` — constructor accepts optional GameDatabase, autosave hooks
+- `packages/server/package.json` — added `better-sqlite3` dependency + `@types/better-sqlite3`
+- `package.json` — added `pnpm.onlyBuiltDependencies` for `better-sqlite3`
+
 ## v0.5.0 — Session 006 (2026-03-09)
 
 ### Added

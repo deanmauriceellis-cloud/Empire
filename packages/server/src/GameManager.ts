@@ -27,6 +27,7 @@ import type {
   VisibleGameState,
   VisibleCity,
 } from "./protocol.js";
+import type { GameDatabase } from "./database.js";
 
 // ─── Player Connection ──────────────────────────────────────────────────────
 
@@ -68,6 +69,11 @@ const DISCONNECT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 export class GameManager {
   private games = new Map<string, ActiveGame>();
   private playerConnections = new Map<WebSocket, PlayerConnection>();
+  private db: GameDatabase | null;
+
+  constructor(db?: GameDatabase) {
+    this.db = db ?? null;
+  }
 
   handleConnection(ws: WebSocket): void {
     this.send(ws, { type: "welcome", version: "0.1.0" });
@@ -384,6 +390,8 @@ export class GameManager {
           });
         }
       }
+      // Persist completed game
+      this.persistGame(game);
       console.log(`Game ${game.id} over: Player ${result.winner} wins by ${result.winType}`);
       return;
     }
@@ -392,6 +400,9 @@ export class GameManager {
     game.pendingActions.set(Owner.Player1, []);
     game.pendingActions.set(Owner.Player2, []);
     game.turnEnded.clear();
+
+    // Autosave after each turn
+    this.persistGame(game);
 
     // Send updated visible state to each player
     for (const [owner] of game.players) {
@@ -475,11 +486,12 @@ export class GameManager {
 
     // Set reconnection timeout
     const timer = setTimeout(() => {
-      // If both players are gone, clean up
+      // If both players are gone, persist and clean up
       const allDisconnected = [...game.players.values()].every((ws) => ws === null);
       if (allDisconnected) {
+        this.persistGame(game);
         this.games.delete(game.id);
-        console.log(`Game ${game.id} removed (all players disconnected)`);
+        console.log(`Game ${game.id} saved and removed (all players disconnected)`);
       }
     }, DISCONNECT_TIMEOUT_MS);
 
@@ -517,5 +529,63 @@ export class GameManager {
 
   getGame(gameId: string): ActiveGame | undefined {
     return this.games.get(gameId);
+  }
+
+  // ─── Persistence ──────────────────────────────────────────────────────
+
+  private persistGame(game: ActiveGame): void {
+    if (!this.db) return;
+    try {
+      this.db.saveGame(game.id, game.phase, game.state);
+    } catch (err) {
+      console.error(`Failed to save game ${game.id}:`, err);
+    }
+  }
+
+  /** Resume a saved game from the database into memory (no players connected yet). */
+  resumeGame(gameId: string): boolean {
+    if (!this.db) return false;
+
+    // Already in memory?
+    if (this.games.has(gameId)) return true;
+
+    const saved = this.db.loadGame(gameId);
+    if (!saved) return false;
+
+    // Only resume games that were in progress (not completed lobby games)
+    if (saved.phase === "lobby") return false;
+
+    const game: ActiveGame = {
+      id: gameId,
+      phase: saved.phase,
+      state: saved.state,
+      players: new Map([
+        [Owner.Player1, null],
+        [Owner.Player2, null],
+      ]),
+      pendingActions: new Map([
+        [Owner.Player1, []],
+        [Owner.Player2, []],
+      ]),
+      turnEnded: new Set(),
+      disconnectTimers: new Map(),
+      createdAt: Date.now(),
+    };
+
+    this.games.set(gameId, game);
+    console.log(`Game ${gameId} resumed from database (turn ${saved.state.turn})`);
+    return true;
+  }
+
+  /** Get saved games from database (for REST API). */
+  getSavedGames() {
+    if (!this.db) return [];
+    return this.db.listGames();
+  }
+
+  /** Delete a saved game from the database. */
+  deleteSavedGame(gameId: string): boolean {
+    if (!this.db) return false;
+    return this.db.deleteGame(gameId);
   }
 }

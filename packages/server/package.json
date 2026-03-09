@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "@empire/shared": "workspace:*",
+    "better-sqlite3": "^12.6.2",
     "express": "^5.0.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.0",
     "@types/node": "^25.3.5",
     "@types/ws": "^8.5.0",

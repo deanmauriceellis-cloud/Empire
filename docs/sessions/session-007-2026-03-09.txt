@@ -1,0 +1,71 @@
+Session 007 — 2026-03-09
+Phase 6: Persistence (SQLite save/load)
+
+GOAL
+Implement Phase 6 from PLAN.md: SQLite schema for game persistence and REST API for save/load/resume.
+
+COMPLETED
+
+Step 6.1: SQLite Schema
+- Created packages/server/src/database.ts — GameDatabase class
+  - better-sqlite3 with WAL journal mode
+  - games table: id TEXT PK, phase TEXT, turn INTEGER, state TEXT (JSON), created_at, updated_at
+  - saveGame() uses UPSERT (INSERT ... ON CONFLICT DO UPDATE)
+  - loadGame() deserializes JSON back to full GameState
+  - listGames() returns summaries sorted by updated_at DESC
+  - deleteGame() removes saved game
+  - Auto-creates data/ directory via mkdirSync recursive
+  - Constructor accepts optional dbPath (defaults to data/empire.db)
+
+Step 6.2: Game Save/Load API
+- Updated GameManager to accept optional GameDatabase in constructor
+  - persistGame() private helper — saves game to DB (no-op if no DB)
+  - Autosave after each turn execution (in executeTurn)
+  - Save on game over (resignation/elimination)
+  - Save on disconnect timeout (before removing game from memory)
+  - resumeGame(id) — loads saved game into memory with both players as null (disconnected)
+  - getSavedGames() — delegates to db.listGames()
+  - deleteSavedGame(id) — delegates to db.deleteGame()
+- Updated server index.ts:
+  - Instantiates GameDatabase, passes to GameManager
+  - GET /api/games now returns { active, saved }
+  - POST /api/games/:id/resume — reload game from DB for WebSocket reconnection
+  - DELETE /api/games/:id — remove saved game
+
+TESTS
+- 7 new database tests (database.test.ts):
+  - Round-trip save/load preserving full GameState
+  - View map preservation across save/load
+  - Non-existent game returns null
+  - Update existing game on re-save
+  - List saved games
+  - Delete game
+  - Empty database handling
+- 6 new GameManager persistence tests:
+  - Autosave after turn execution
+  - Save on resignation (game over)
+  - Resume saved game from database (simulated server restart)
+  - Returns false for non-existent resume
+  - List saved games from database
+  - Delete saved game
+- Total: 212 tests passing (184 shared + 28 server)
+
+FILES CHANGED
+- NEW: packages/server/src/database.ts
+- NEW: packages/server/src/__tests__/database.test.ts
+- MODIFIED: packages/server/src/GameManager.ts (constructor, persistGame, resumeGame, getSavedGames, deleteSavedGame)
+- MODIFIED: packages/server/src/__tests__/GameManager.test.ts (6 persistence tests)
+- MODIFIED: packages/server/src/index.ts (GameDatabase wiring, 3 new REST endpoints)
+- MODIFIED: packages/server/package.json (better-sqlite3 + @types/better-sqlite3)
+- MODIFIED: package.json (pnpm.onlyBuiltDependencies for better-sqlite3)
+- MODIFIED: pnpm-lock.yaml
+- MODIFIED: CHANGELOG.md (v0.6.0 entry)
+- MODIFIED: STATE.md (Phase 6 complete)
+- NEW: .pnpm-approve-builds.json
+
+NOTES
+- GameState serialized as JSON blob — simple and sufficient for game state complexity
+- WAL mode chosen for better concurrent read/write (autosave during gameplay)
+- Resume flow: POST /api/games/:id/resume loads into memory, then players join_game via WebSocket
+- Pre-existing TS errors in test file (mock WebSocket pattern) — not introduced by this session
+- data/ directory should be added to .gitignore (contains runtime database)
