@@ -1,15 +1,15 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Post-Phase 12: Gameplay Features** — Configurable maps & fighter fixes
+**Post-Phase 12: Gameplay & Debug** — Explore fixes, debug tools, UI polish
 
 ## Status
-- All 12 phases complete + gameplay polish
+- All 12 phases complete + gameplay polish + debug tools
 - 265 unit/integration tests passing (237 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
 
 ## Latest commit
-`9802120` — session 016: Configurable maps, fighter fixes
+`8971098` — session 017: Explore fixes, debug panel, UI improvements
 
 ## Completed
 - [x] Phase 0: Project scaffolding (pnpm monorepo, shared/client/server)
@@ -29,17 +29,17 @@
 - [x] Phase 12.3: E2E tests — Playwright (singleplayer, multiplayer lobby, perf benchmarks)
 
 ## Completed (this session)
-- [x] Max-distance starting city selection (was random shore city pick)
-- [x] Configurable map dimensions — `configureMapDimensions(w, h)` with mutable constants
-- [x] Map size presets: Small (60x40), Standard (100x60), Large (150x90), Huge (200x120)
-- [x] Terrain presets: Continents, Pangaea, Archipelago, Islands
-- [x] Game setup UI screen with map size + terrain selectors
-- [x] Camera `reconfigure(w, h)` for different map sizes
-- [x] Fixed satellite bounce hardcoded values
-- [x] Fixed fighter auto-attack during explore (caused disappearing)
-- [x] Fixed fighter fuel margin (+2 → +speed for safe return)
-- [x] Fixed stranded fighters (range=0 now kills, like satellites)
-- [x] Centralized `fighterFuelCheck()` helper (replaces 4 duplicated blocks)
+- [x] Army explore: prioritize visible cities (weight 1) over exploration (weight 8)
+- [x] Army explore: auto-capture adjacent unowned/enemy cities
+- [x] Army explore: auto-sentry when stuck on island with nothing to explore
+- [x] Army explore: never permanently cancel explore mode (retry next turn)
+- [x] Fixed AI single-city production flip-flop (Army↔Transport loop preventing builds)
+- [x] Debug panel: Reveal Map toggle (full vision for player)
+- [x] Debug panel: AI Omniscient toggle (AI sees everything)
+- [x] Debug panel: Auto-Play toggle (AI controls player units, Enter to advance)
+- [x] Action buttons highlight green when active behavior matches selected unit
+- [x] Click-to-cycle: re-clicking tile with unit+city cycles selection between them
+- [x] Top bar shows unit counts by type (A:5 F:2 T:1)
 
 ## Next Steps
 1. **Hosting** — deploy to server (any host running Node/Docker)
