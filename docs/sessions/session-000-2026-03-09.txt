@@ -1,0 +1,107 @@
+Session 000 — 2026-03-09
+========================
+
+## Summary
+Inaugural session for Empire Reborn. Cloned the original VMS-Empire C source, performed deep analysis of all game mechanics, researched and selected a modern web tech stack, created a comprehensive 12-phase implementation plan, and established a session protocol with archive-first optimization.
+
+## Conversation Context
+- User wanted to import a game from github.com/slacy/empire and reimagine it as a modern web application
+- User's vision: "graphically stunning", "cutting edge", "insanely fun", playable by anyone on the web
+- User wants server-hosted with user accounts, save/continue from any device
+- User wants to build from the foundation of the original game logic and expand
+- User explicitly requested the session protocol from their WWWatcher project be adopted
+- User added requirement: every session end must optimize all .md files with zero data loss (archive, never delete)
+- User emphasized: "I don't want dataloss, any information should be archived"
+
+## Changes Made
+### 1. Repository Setup
+- Cloned github.com/slacy/empire to /home/witchdoctor/Development/Empire
+- Original C source contains: empire.h, extern.h, data.c, game.c, object.c, attack.c, compmove.c, usermove.c, map.c, display.c, term.c, math.c, util.c, edit.c, main.c, empire.c
+
+### 2. Game Analysis
+- Deep dive into all source files to understand mechanics
+- Documented: 9 unit types with full stats, combat system (50% city capture, alternating-round unit combat), AI with 4 production ratio tables, BFS pathfinding, fog of war, continent analysis, 12 automated unit behaviors
+
+### 3. Tech Stack Research
+- Evaluated rendering: PixiJS v8 vs Phaser vs Three.js vs raw WebGPU — chose PixiJS v8 for WebGPU support + 2D performance
+- Evaluated backend: Node.js vs Go vs Rust — chose Node.js + Colyseus for shared TypeScript + built-in game networking
+- Evaluated databases: PostgreSQL (JSONB) + Redis for state persistence and sessions
+- Evaluated auth: Better Auth for TypeScript-native OAuth support
+- Evaluated hosting: Cloudflare Pages (free CDN) + Fly.io (WebSocket server) + R2 (assets)
+
+### 4. Implementation Plan (PLAN.md)
+- 12 phases, 55 discrete steps
+- Each step is small enough for one coding session and independently verifiable
+- Phases: Scaffolding → Types → MapGen → Engine → AI → Server → DB/Auth → Rendering → UI → Integration → Polish → Deploy
+
+### 5. Session Protocol
+- Adapted from WWWatcher project's session-protocol.md
+- Added archive-first optimization (Step 5 in session end)
+- Added Archive Check to session start (Step 3)
+- Added Optimization Report to session audit log template
+- Zero data loss policy: archive, never delete
+- Line thresholds: CHANGELOG 200, STATE 150, MEMORY 150
+
+## Files Created
+- PLAN.md (comprehensive 12-phase implementation plan)
+- STATE.md (project state tracking)
+- CHANGELOG.md (session changelog)
+- docs/sessions/session-000-2026-03-09.txt (this file)
+- docs/archive/ (empty, ready for future archives)
+- ~/.claude/projects/.../memory/MEMORY.md (auto-loaded context)
+- ~/.claude/projects/.../memory/session-protocol.md (session procedures)
+
+## Files Modified
+- None (all new files this session)
+
+## Build Status
+- No build system yet (Phase 0 not started)
+- Original C code compiles with `make` (not modified)
+
+## Testing Done
+- Verified original repo clones successfully
+- No automated tests yet
+
+## Decisions & Rationale
+- Decision: PixiJS v8 over Phaser — Rationale: Phaser 4 still in RC, PixiJS is lighter and gives more control for a turn-based game that doesn't need physics
+- Decision: Colyseus over raw WebSockets — Rationale: built-in state sync, rooms, reconnection; shared TypeScript with client
+- Decision: PostgreSQL JSONB over MongoDB — Rationale: flexible schema + ACID + SQL queries in one DB
+- Decision: Archive-first optimization — Rationale: user explicitly requires zero data loss; .md files must stay concise but nothing gets deleted
+- Decision: Monorepo with shared package — Rationale: game rules written once, used by both client (prediction/single-player) and server (authoritative)
+- Decision: Session protocol adopted from WWWatcher — Rationale: user has established workflow and wants consistency across projects
+
+## Open Questions
+- Asset sourcing: will we create custom art, use asset packs, or start with procedural/placeholder graphics?
+- Domain name for hosting?
+- Will the game support more than 2 players in future? (original is 1v1)
+
+## Plan Progress
+- Phase 0 (Scaffolding): NOT STARTED — next session
+- All planning and analysis complete
+
+## Next Steps
+1. Begin Phase 0, Step 0.1: Initialize pnpm monorepo with Turborepo
+2. Continue through Steps 0.2-0.4: Configure shared, client, server packages
+3. Step 0.5: CI/CD skeleton
+
+## Dependencies Added
+- None yet (no code written)
+
+## Optimization Report
+- No optimization needed — all files newly created and under thresholds
+- CHANGELOG.md: 34 lines (threshold: 200)
+- STATE.md: 42 lines (threshold: 150)
+- MEMORY.md: 55 lines (threshold: 150)
+
+## Full Conversation Summary
+The session began with the user wanting to import a game from GitHub. After correcting the URL from "github/stacy/empire" to "github.com/slacy/empire", the repository was successfully cloned. It turned out to be VMS-Empire, a classic C-based terminal strategy game — the ancestor of Civilization and Master of Orion.
+
+The user expressed an ambitious vision: take this foundational game and rebuild it as a modern, graphically stunning web application with multiplayer support, user accounts, and save/continue capability. They wanted it "cutting edge" and "insanely fun" while building on the original game's proven mechanics.
+
+Two parallel research agents were launched: one to deeply analyze every source file of the original game (mechanics, units, combat, AI, map generation), and another to research the best modern web game tech stack. The game analysis revealed a surprisingly sophisticated system: 9 unit types with distinct roles, a multi-phase AI with evolving production strategies, BFS pathfinding, fog of war, and continent-based strategic analysis. The tech research evaluated rendering engines (PixiJS v8 won for WebGPU support), backends (Colyseus won for built-in game networking with shared TypeScript), databases (PostgreSQL JSONB for flexibility + SQL power), and deployment options.
+
+A comprehensive proposal was presented to the user covering what stays from the original, what gets better, and the recommended tech stack. The user loved it and asked for a detailed step-by-step execution plan. A planning agent produced a thorough 12-phase, 55-step plan reading every original C source file to ensure accurate porting.
+
+While the plan was being generated, the user asked about the WWWatcher project's session protocol. Research found a detailed session-protocol.md in the WWWatcher memory directory defining mandatory session start (context load, drift check, briefing) and session end (update docs, create audit log, verify, commit) procedures with 60 existing session logs.
+
+The user then requested this same protocol be adopted for Empire Reborn, with an addition: every session end must optimize all .md files with zero data loss — archive content rather than delete it. The session protocol was created with archive-first optimization built into both session start (Archive Check step) and session end (Step 5: Optimize All .md Files), including line thresholds, archive directory structure, and append-only archive file rules. All initial project tracking files (STATE.md, CHANGELOG.md, MEMORY.md) were created along with the directory structure for sessions and archives.
