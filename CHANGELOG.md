@@ -1,5 +1,13 @@
 # Empire Reborn — Changelog
 
+## v0.2.0 — Session 003 (2026-03-09)
+
+### Added
+- **Phase 2: Map Generation** — complete map generator ported from C source
+  - `mapgen.ts` — seedable PRNG (mulberry32), height map with 9-point smoothing, histogram-based waterline, terrain assignment, edge marking, adaptive city placement, BFS continent detection, continent scoring, balanced starting city selection, integrated `generateMap(config)` orchestrator
+  - 27 new tests covering RNG determinism, height map smoothing, water ratio, edge marking, city placement constraints, continent detection, starting city selection, and full integration
+  - Export added to `index.ts`
+
 ## v0.1.0 — Session 002 (2026-03-09)
 
 ### Added

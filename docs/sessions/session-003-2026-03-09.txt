@@ -1,0 +1,98 @@
+Session 003 — 2026-03-09
+========================
+
+## Summary
+Implemented Phase 2 (Map Generation) — the complete map generation pipeline ported from the original VMS-Empire C source code. Created `mapgen.ts` with seedable RNG, height map generation with smoothing, terrain assignment, city placement, continent detection, and starting city selection. All 27 new tests pass, bringing the total to 76.
+
+## Conversation Context
+- User said "continue" to proceed with Phase 2 as briefed
+- User asked "is this going to be a web-based application?" — confirmed yes, explained the tech stack (PixiJS in browser, Vite build, Node server serves static files + WebSocket)
+- User was satisfied with the confirmation, no changes to plan needed
+- Short, focused session — one phase implemented cleanly
+
+## Changes Made
+### 1. Map Generation Module (mapgen.ts)
+- Seedable PRNG using mulberry32 algorithm — fast, deterministic, good distribution
+- Height map generation: random heights 0-998, 9-point neighborhood averaging with configurable smoothing passes (default 5)
+- Waterline calculation: histogram-based threshold to achieve target water ratio (default 70%)
+- Terrain assignment: land/sea based on waterline, edge cells marked off-board
+- City placement: random land cell selection with adaptive minimum distance (sqrt(landArea/numCities)), distance decrements when candidates exhausted
+- Continent detection: BFS flood-fill finding all connected land regions
+- Continent scoring: (shore_cities*3 + inland_cities*2) * 1000 + area — matches original formula
+- Starting city selection: scores continents, creates balanced pairs, picks most balanced pair
+- Fallback for <2 viable continents: samples random distant city pairs
+- Integrated `generateMap(config)` orchestrating all steps
+
+### 2. Test Suite (mapgen.test.ts)
+- 27 tests covering all components:
+  - RNG: determinism, different seeds, value range
+  - Height map: correct size, determinism, non-negative values, smoothing reduces variance
+  - Terrain: water ratio within ±15% of target, edge cells off-board, interior cells on-board
+  - Cities: correct count, all on board, City terrain type, all unowned, no duplicates
+  - Continents: at least one found, every land cell in exactly one, every city assigned
+  - Starting cities: two distinct indices, on different continents when possible
+  - Integration: determinism, different seeds differ, correct city count, valid starting cities, valid terrain, consistent cityId references, works with various water ratios
+
+## Files Created
+- `packages/shared/src/mapgen.ts` — Complete map generation module (300 lines)
+- `packages/shared/src/__tests__/mapgen.test.ts` — 27 tests (280 lines)
+
+## Files Modified
+- `packages/shared/src/index.ts` — Added `export * from "./mapgen.js"`
+
+## Build Status
+- Client: 0 errors, 0 warnings (type-check clean)
+- Server: 0 errors, 0 warnings (type-check clean)
+- Shared: 0 errors, 0 warnings, 76 tests passing
+
+## Testing Done
+- All 76 unit tests pass (27 new mapgen + 49 existing)
+- Deterministic output verified across same seed
+- Different seeds produce different maps verified
+- Water ratios 30%, 50%, 70%, 90% all work
+- Client and server type-check clean
+
+## Decisions & Rationale
+- Decision: Used mulberry32 PRNG — Rationale: Simple, fast, excellent distribution, deterministic from seed, no external dependency
+- Decision: 9-point averaging for smoothing (not Perlin/simplex) — Rationale: Matches original C algorithm exactly, produces similar continent shapes
+- Decision: Histogram-based waterline — Rationale: Matches original, more predictable than percentile-based
+- Decision: Adaptive distance reduction for city placement — Rationale: Matches original, guarantees all NUM_CITY cities get placed even on cramped maps
+- Decision: BFS flood-fill for continents — Rationale: Matches original, simple and correct
+- Decision: Balanced pair selection for starting cities — Rationale: Provides fairest starting positions by default
+
+## Open Questions
+- None
+
+## Plan Progress
+- Step 2.1 (Height map generation) — DONE
+- Step 2.2 (Terrain assignment) — DONE
+- Step 2.3 (City placement) — DONE
+- Step 2.4 (Starting city selection) — DONE
+- Step 2.5 (Integrated map generator) — DONE
+- Phase 2 fully complete, moving to Phase 3
+
+## Next Steps
+- Phase 3: Core Game Logic Engine (Steps 3.1–3.8)
+- Start with Step 3.1: Unit management (createUnit, killUnit, cargo)
+
+## Dependencies Added
+- None
+
+## Optimization Report
+- STATE.md: 52 lines (under 150 threshold)
+- CHANGELOG.md: 49 lines (under 200 threshold)
+- MEMORY.md: 56 lines (under 150 threshold)
+- No optimization needed
+
+## Full Conversation Summary
+Session started with the standard protocol: loaded MEMORY.md, read STATE.md and CHANGELOG.md, ran drift check against git log. Everything aligned — latest commit adba9e6 matched expectations. Briefed the user on Phase 2 being next with the 5 map generation steps.
+
+User said "continue" and work began immediately. An Explore agent was dispatched to analyze the original C map generation code (game.c, math.c) while PLAN.md and existing shared package files were read in parallel. The agent returned a comprehensive analysis of the original algorithm: random heights with 9-point smoothing, histogram waterline, adaptive city placement, BFS continent detection with scoring formula.
+
+With full understanding of the original algorithm, implemented mapgen.ts with all 5 steps in a single file. The implementation faithfully ports the C logic to TypeScript while using modern patterns (typed arrays, seedable PRNG, clean function signatures). Wrote 27 comprehensive tests covering every component and integration scenarios.
+
+All 76 tests passed on first run. Client and server type-checked cleanly with no issues.
+
+The user then asked whether this project is building a web application. Confirmed yes — explained the PixiJS browser client, Vite build, and single Node server architecture. The user was satisfied.
+
+User requested session end. Updated STATE.md (Phase 2 complete, Phase 3 next), CHANGELOG.md (v0.2.0 entry), and created this session audit log. All files under archive thresholds.

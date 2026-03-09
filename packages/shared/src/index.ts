@@ -6,3 +6,4 @@ export * from "./constants.js";
 export * from "./units.js";
 export * from "./types.js";
 export * from "./utils.js";
+export * from "./mapgen.js";

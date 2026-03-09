@@ -1,12 +1,13 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Phase 2: Map Generation** — Next up
+**Phase 3: Core Game Logic Engine** — Next up
 
 ## Status
 - Phase 0 (Project Scaffolding) complete
 - Phase 1 (Shared Game Types & Constants) complete
-- Monorepo operational, all packages type-check, 49 tests passing
+- Phase 2 (Map Generation) complete
+- Monorepo operational, all packages type-check, 76 tests passing
 
 ## Latest commit
 `9122bb2` — session 002: Phase 0 + Phase 1
@@ -26,16 +27,21 @@
 - [x] Phase 1: Port unit attribute data (all 9 units with exact stats from data.c)
 - [x] Phase 1: Define core game state interfaces (GameState, UnitState, CityState, etc.)
 - [x] Phase 1: Port utility functions (locRow, locCol, dist, isOnBoard, getAdjacentLocs, locSector)
+- [x] Phase 2: Height map generation (seedable mulberry32 RNG, 9-point smoothing)
+- [x] Phase 2: Terrain assignment (histogram waterline, edge marking)
+- [x] Phase 2: City placement (adaptive min-distance, random land selection)
+- [x] Phase 2: Starting city selection (BFS continent detection, scoring, balanced pairs)
+- [x] Phase 2: Integrated map generator (generateMap orchestrating 2.1–2.4)
 
 ## In Progress
 _Nothing currently in progress_
 
 ## Next Steps
-1. **Step 2.1**: Height map generation (seedable RNG, smoothing)
-2. **Step 2.2**: Terrain assignment (waterline, edge marking)
-3. **Step 2.3**: City placement (distance constraints)
-4. **Step 2.4**: Starting city selection (continent scoring)
-5. **Step 2.5**: Integrated map generator
+1. **Step 3.1**: Unit management (create, kill, cargo)
+2. **Step 3.2**: Fog of war / vision (scan, getVisibleState)
+3. **Step 3.3**: Movement system (moveUnit, terrain validation)
+4. **Step 3.4**: Combat system (attackCity, attackUnit)
+5. **Step 3.5**: City production (tick, setProduction, repair)
 
 ## Blockers
 _None_
@@ -43,4 +49,4 @@ _None_
 ## Notes
 - Server runs on port 3001 (port 3000 used by another application)
 - Shared package consumed as raw TS via workspace `exports` field — no build step needed
-- 49 unit tests covering constants, unit attributes, coordinate math, adjacency, sectors
+- 76 unit tests covering constants, unit attributes, coordinate math, adjacency, sectors, and map generation
