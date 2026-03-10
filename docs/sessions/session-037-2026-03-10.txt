@@ -1,0 +1,119 @@
+Session 037 — 2026-03-10
+========================
+
+## Summary
+Completed Phase R5 (Server Hardening) and Phase R6 (Performance & Polish) from the
+6-phase refactoring plan established in session 035. Server now has proper security
+controls, graceful shutdown, and enhanced action validation. Client and AI code
+received memory leak fixes and performance optimizations.
+
+## Conversation Context
+- User requested "continue with the plan" — reviewed STATE.md and PLAN.md
+- Identified R5 and R6 as next targets (R3 deferred, R4 is last)
+- Used subagents to explore server package (all 4 source files) and client main.ts
+- Used subagent to analyze R6 optimization targets across 4 client/shared files
+- All 283 tests pass (255 shared + 28 server), client builds clean
+
+## Changes Made
+
+### 1. Server CORS Hardening (packages/server/src/index.ts)
+- **Before**: Wildcard `Access-Control-Allow-Origin: *` for all requests
+- **After**: Environment-based — wildcard in dev (`NODE_ENV !== "production"`),
+  whitelist via `CORS_ORIGINS` env var (comma-separated) in production
+- Added explicit `OPTIONS` preflight response (204 status)
+- Added `IS_DEV` constant derived from `NODE_ENV`
+
+### 2. Request Size Limits (packages/server/src/index.ts, GameManager.ts)
+- JSON body: `express.json({ limit: "1mb" })` (was: default 100KB)
+- WebSocket: `maxPayload: 256 * 1024` on WebSocketServer (was: unlimited)
+- Action queue: max 500 actions per player per turn in `handleAction()` (was: unlimited)
+
+### 3. WebSocket Rate Limiting (packages/server/src/GameManager.ts)
+- New `rateLimits` Map tracks message count per WebSocket per 1-second window
+- `isRateLimited()` method: 30 messages/sec threshold per connection
+- Rate limit entries cleaned up on WebSocket close
+- Constants: `RATE_LIMIT_WINDOW_MS = 1000`, `RATE_LIMIT_MAX_MSGS = 30`
+
+### 4. Diagnostic Logging Protection (packages/server/src/index.ts)
+- `/api/gamelog` POST and DELETE endpoints now only registered when `IS_DEV` is true
+- In production, these endpoints simply don't exist (404)
+
+### 5. Graceful Shutdown (packages/server/src/index.ts, GameManager.ts)
+- `shutdown()` function handles SIGTERM and SIGINT signals
+- Calls `gameManager.shutdown()` → persists all active games, clears disconnect timers
+- Closes all WebSocket connections with code 1001 ("Server shutting down")
+- Calls `server.close()` → `db.close()` → `process.exit(0)`
+- 5-second forced exit timeout (`.unref()`) as safety net
+- New `GameManager.shutdown()` method: iterates all games, clears timers, persists
+  non-lobby games, clears all Maps
+
+### 6. Immediate Disconnect Persistence (packages/server/src/GameManager.ts)
+- **Before**: Game only persisted after 5-minute disconnect timeout expired
+- **After**: `persistGame(game)` called immediately when player disconnects
+- Disconnect timer now only removes game from memory (data already safe in DB)
+- Prevents data loss if server crashes during the 5-minute window
+
+### 7. Enhanced Action Validation (packages/server/src/GameManager.ts)
+- **Before**: Only checked unit/city ownership (5 lines per case)
+- **After**: Full validation per action type:
+  - `move`: validates `loc` is number, in range [0, MAP_SIZE), and `isOnBoard()`
+  - `attack`: validates `targetLoc` same as move
+  - `setBehavior`: validates behavior is a valid `UnitBehavior` enum value
+  - `setTarget`: validates `targetLoc` bounds
+  - `embark`: validates both unit AND ship ownership (was: only unit)
+  - `setProduction`: validates `unitType` is a valid `UnitType` enum value
+- Added imports: `UnitType`, `UnitBehavior`, `isOnBoard` from `@empire/shared`
+
+### 8. fogAlphaMap Memory Leak Fix (packages/client/src/renderer/tilemap.ts)
+- **Line 131**: Changed `this.fogAlphaMap.set(loc, 0)` → `this.fogAlphaMap.delete(loc)`
+- **Impact**: Map entries for fully-visible tiles no longer accumulate forever
+- On long play sessions, this could grow to thousands of entries (one per revealed tile)
+
+### 9. Input Manager dispose() (packages/client/src/core/input.ts)
+- Refactored 8 anonymous event listener functions into named handlers:
+  `onKeyDown`, `onKeyUp`, `onBlur`, `onMouseMove`, `onMouseDown`, `onMouseUp`,
+  `onWheel`, `onContextMenu`
+- Consolidated 2 separate `mousemove` listeners into 1 (drag cursor update
+  moved into `onMouseMove`)
+- Added `dispose()` method to `InputState` interface that calls
+  `removeEventListener` for all 8 handlers
+- Enables clean teardown for hot-reloads or future multi-game support
+
+### 10. AI Transport ViewMap Caching (packages/shared/src/ai-transport.ts)
+- Added lazy-computed cached maps at top of `aiTransportMove()`:
+  - `cachedUnloadMap` / `getUnloadMap()` — was created up to 4× per transport
+  - `cachedLoadMap` / `getLoadMap()` — was created up to 2× per transport
+  - `cachedPortMap` / `getPortMap()` — was created up to 1× per transport
+- Each map involves `viewMap.map(cell => ({ ...cell }))` — cloning all ~6000 cells
+- With multiple transports, this saves potentially dozens of full-map clones per AI turn
+- Replaced 4 `createUnloadViewMap()` calls, 2 `createTTLoadViewMap()` calls,
+  1 `createPortViewMap()` call with lazy getter invocations
+
+## Files Modified (6 files, +230 / -72 lines)
+1. `packages/server/src/index.ts` — CORS, size limits, gamelog protection, graceful shutdown
+2. `packages/server/src/GameManager.ts` — rate limiting, action validation, disconnect persist, shutdown()
+3. `packages/client/src/core/input.ts` — named handlers, dispose(), consolidated mousemove
+4. `packages/client/src/renderer/tilemap.ts` — fogAlphaMap.delete() fix
+5. `packages/shared/src/ai-transport.ts` — lazy viewMap caching
+6. `STATE.md` — session 037 completion log
+
+## Important Decisions
+- Did NOT split GameManager into GameRouter/GameService/VisibilityFilter (R5 item) —
+  the current 600-line file is manageable and splitting would add complexity without
+  clear benefit at this scale
+- Did NOT cache `getVisibleTileBounds()` (R6 item) — the function is pure arithmetic
+  (4 screenToTile calls = 8 divisions), not worth caching overhead
+- Did NOT cache AI pre-computations (R6 item) — unit filtering patterns are simple
+  and spread across many functions; a cache would add complexity
+- Rate limit of 30 msg/s is generous — normal gameplay sends ~5-10 actions per turn
+- Action queue limit of 500 is generous — a turn rarely has more than ~50 actions
+
+## Test Results
+- Shared: 255 tests passed (11 test files)
+- Server: 28 tests passed (2 test files)
+- Client: builds clean (Vite, 5.86s)
+- No regressions
+
+## Commits
+- `b3020e3` — session 037: Phase R5 + R6 refactoring
+- `a893d50` — update STATE.md with session 037 commit hash

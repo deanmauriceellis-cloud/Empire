@@ -1,5 +1,27 @@
 # Empire Reborn — Changelog
 
+## v0.26.0 — Session 037 (2026-03-10)
+
+### Security (R5)
+- **CORS restriction** — environment-based origin control; wildcard in dev, whitelist via `CORS_ORIGINS` in production
+- **Request size limits** — 1MB JSON body, 256KB WebSocket max payload
+- **Rate limiting** — 30 messages/sec per WebSocket connection
+- **Action queue cap** — max 500 actions per player per turn
+- **Diagnostic endpoint** — `/api/gamelog` restricted to dev mode only
+- **Action validation** — bounds checking on coordinates, enum validation for behaviors/unit types, embark ship ownership check
+
+### Added
+- **Graceful shutdown** — SIGTERM/SIGINT saves all active games, closes WebSocket connections, closes database
+- **Input manager dispose()** — named event handlers with cleanup method for safe teardown
+
+### Fixed
+- **Disconnect persistence** — game state persisted immediately on player disconnect (was: only after 5-minute timeout)
+- **fogAlphaMap memory leak** — entries deleted when alpha reaches 0 (was: set to 0 and kept forever)
+- **Duplicate mousemove listeners** — consolidated from 2 to 1 handler
+
+### Performance (R6)
+- **AI viewMap caching** — `createUnloadViewMap`, `createTTLoadViewMap`, `createPortViewMap` lazily computed once per transport instead of up to 4x per step loop
+
 ## v0.24.0 — Session 031 (2026-03-10)
 
 ### Fixed
