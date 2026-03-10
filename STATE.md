@@ -1,7 +1,7 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Post-Phase 12: Playtesting & Bug Fixes** — gameplay balance + observability
+**Post-Phase 12: Playtesting & Bug Fixes** — AI improvements + diagnostic tooling
 
 ## Status
 - All 12 phases complete + gameplay polish + debug tools + AI overhaul
@@ -10,19 +10,20 @@
 - Phases A-D complete + playtest fixes + map gen fixes + transport fixes + balance fixes
 
 ## Latest commit
-`6cb9845` — session 031: gameplay balance fixes + console logging
+`pending` — session 032: AI fixes + diagnostic logging system
 
-## Completed (session 031)
-- [x] Fix explore auto-capture: armies stop at cities instead of auto-attacking (prevents self-playing games)
-- [x] Fix aggressive city attacks: wait for 2+ friendly armies before attacking enemy cities
-- [x] Fix resignation threshold: /3 → /5 (AI fights longer before surrendering)
-- [x] Fix starting city balance: penalize continent pairs with >2x city count disparity
-- [x] Add console event logging ([COMBAT], [CAPTURE], [DEATH], [PRODUCTION], [MOVE], [ATTACK])
-- [x] Add turn summary logging ([TURN N] with city/unit counts)
-- [x] Add AI turn perf timing ([PERF] AI=Xms exec=Yms)
-- [x] Add AI turn summary (action counts + transport cargo)
-- [x] Add verbose log toggle (separates per-transport detail from summary)
-- [x] Fix camera/animation latency (LERP_FACTOR 0.12→0.25, UNIT_MOVE_LERP 0.15→0.3)
+## Completed (session 032)
+- [x] Fix production flip-flopping: ratio rebalance threshold 50%→40%, same-type switch guard, progress guard on first transport
+- [x] Fix fighter production: first fighter switch up to 60% progress (was 25%), second fighter priority at 3+ cities
+- [x] Fix transport circling: tryUnloadArmies BFS 40→10 tiles, shouldUnload BFS 40→10 tiles
+- [x] Fix transport stuck with partial cargo: deliver after 3 turns stuck at same location
+- [x] Fix transport unload targets: unexplored continents as fallback targets, allow unload on unexplored land
+- [x] Diagnostic logging system: POST /api/gamelog endpoint, per-turn state snapshots to game-debug.log
+- [x] Diagnostic includes: player summary, city production, unit behaviors, transport/fighter detail, armies near capturable cities, AI decision log, ASCII map
+- [x] Consolidate debug panel: removed AI Log/Verbose toggles, single "Diag Log" toggle captures everything
+- [x] AI log capture buffer: aiLog/aiVLog write to buffer when diagnostic enabled, included in diagnostic output
+- [x] Auto-truncate log on new game (turn 1 clears old log)
+- [x] CORS middleware for dev mode (client 5174 → server 3001)
 
 ## Completed
 - [x] Phase 0: Project scaffolding (pnpm monorepo, shared/client/server)
@@ -42,9 +43,10 @@
 - [x] Phase 12.3: E2E tests — Playwright (singleplayer, multiplayer lobby, perf benchmarks)
 
 ## Next Steps
-1. Playtesting — verify balance fixes work in practice
-2. Hosting / deployment
-3. Art assets (replace placeholder textures)
+1. Playtesting with diagnostic logs — analyze AI behavior patterns
+2. Fix remaining AI issues (armies not capturing cities, transport coordination)
+3. Hosting / deployment
+4. Art assets (replace placeholder textures)
 
 ## Blockers
 _None_
@@ -57,4 +59,5 @@ _None_
 - 301 total tests: 255 shared + 28 server + 18 E2E (17 pass + 1 skip)
 - Map constants are now mutable `let` — call `configureMapDimensions()` before map generation
 - Original AI reference docs in `docs/original-ai-*.md`
-- Debug panel: AI Log = summary, Verbose = per-transport details
+- Debug panel: Diag Log = comprehensive file logging (game-debug.log)
+- Diagnostic log auto-clears on new game start

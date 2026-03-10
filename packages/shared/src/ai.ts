@@ -66,11 +66,14 @@ import {
 
 // ─── AI Debug Logging ─────────────────────────────────────────────────────────
 
-/** When true, AI logs production and movement decisions to console. */
+/** When true, AI logs production and movement decisions. */
 export let aiDebugLog = false;
 
-/** When true, logs verbose per-unit transport details. When false, only summary. */
+/** When true, logs verbose per-unit transport details. */
 export let aiVerboseLog = false;
+
+/** Buffer for capturing AI log messages (used by diagnostic system). */
+let aiLogBuffer: string[] | null = null;
 
 /** Toggle AI debug logging on/off. */
 export function setAIDebugLog(enabled: boolean): void {
@@ -82,13 +85,32 @@ export function setAIVerboseLog(enabled: boolean): void {
   aiVerboseLog = enabled;
 }
 
+/** Start capturing AI logs into a buffer. Returns the buffer. */
+export function startAILogCapture(): string[] {
+  aiLogBuffer = [];
+  return aiLogBuffer;
+}
+
+/** Stop capturing AI logs and return the captured lines. */
+export function stopAILogCapture(): string[] {
+  const buf = aiLogBuffer ?? [];
+  aiLogBuffer = null;
+  return buf;
+}
+
 function aiLog(...args: unknown[]): void {
-  if (aiDebugLog) console.log("[AI]", ...args);
+  if (!aiDebugLog) return;
+  const msg = "[AI] " + args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ");
+  if (aiLogBuffer) aiLogBuffer.push(msg);
+  else console.log(msg);
 }
 
 /** Verbose-only log — only emits when both aiDebugLog and aiVerboseLog are true. */
 function aiVLog(...args: unknown[]): void {
-  if (aiDebugLog && aiVerboseLog) console.log("[AI]", ...args);
+  if (!aiDebugLog || !aiVerboseLog) return;
+  const msg = "[AI] " + args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ");
+  if (aiLogBuffer) aiLogBuffer.push(msg);
+  else console.log(msg);
 }
 
 // ─── Production Ratio Tables ───────────────────────────────────────────────────
@@ -526,20 +548,30 @@ function decideProduction(
   }
 
   // Priority 1b: Ensure early fighter production (2+ cities)
-  // Fighters explore at 8 tiles/turn (vs army's 1) — essential for map awareness.
+  // Fighters explore at 8 tiles/turn (vs army's 1) — essential for early recon.
   // Allow switching from Army if we have at least 1 other army producer.
   // Never switch from Transport (needed for mobility).
+  // First fighter is highest priority (switch up to 60% done); second fighter at 40%.
   {
     const existingFighters = state.units.filter(
       u => u.owner === aiOwner && u.type === UnitType.Fighter,
     ).length;
     const buildingFighters = prodCounts[UnitType.Fighter];
-    if (existingFighters === 0 && buildingFighters === 0) {
+    const totalFighters = existingFighters + buildingFighters;
+    // First fighter: very aggressive — switch even if 60% done
+    // Second fighter: moderate — switch if < 40% done (with 3+ cities)
+    const wantFighter = totalFighters === 0 || (totalFighters === 1 && aiCityCount >= 3);
+    const maxProgress = totalFighters === 0 ? 0.6 : 0.4;
+    if (wantFighter) {
+      // Don't switch to fighter if no transports exist and none being built — transport is more urgent
+      const noTransports = prodCounts[UnitType.Transport] === 0
+        && state.units.filter(u => u.owner === aiOwner && u.type === UnitType.Transport).length === 0;
       const canSwitch = city.production !== UnitType.Transport
-        && (city.production !== UnitType.Army || prodCounts[UnitType.Army] > 1);
+        && (city.production !== UnitType.Army || prodCounts[UnitType.Army] > 1)
+        && !(canBuildShips && noTransports);
       if (canSwitch) {
-        if (progress < 0.25) {
-          aiLog(`City #${city.id}: switch to Fighter (first fighter, ${aiCityCount} cities, armyProducers=${prodCounts[UnitType.Army]})`);
+        if (progress < maxProgress) {
+          aiLog(`City #${city.id}: switch to Fighter (fighter #${totalFighters + 1}, ${aiCityCount} cities, armyProducers=${prodCounts[UnitType.Army]})`);
           return UnitType.Fighter;
         }
         aiLog(`City #${city.id}: want Fighter but ${Math.round(progress * 100)}% done with ${currentAttrs.name}, skipping`);
@@ -552,8 +584,15 @@ function decideProduction(
   // Only coastal non-lake cities can build transports/ships
   if (canBuildShips && prodCounts[UnitType.Transport] === 0) {
     if (!(armiesNeeded > 0 && prodCounts[UnitType.Army] <= 1)) {
-      aiLog(`City #${city.id}: switch to Transport (none being built)`);
-      return UnitType.Transport;
+      // If no transports exist yet, switch unconditionally (critical need)
+      const existingTransportCount = state.units.filter(
+        u => u.owner === aiOwner && u.type === UnitType.Transport,
+      ).length;
+      if (existingTransportCount === 0 || progress < 0.4) {
+        aiLog(`City #${city.id}: switch to Transport (none being built)`);
+        return UnitType.Transport;
+      }
+      aiLog(`City #${city.id}: want Transport but ${Math.round(progress * 100)}% done with ${currentAttrs.name}, finishing`);
     }
   }
 
@@ -585,12 +624,14 @@ function decideProduction(
   const ratioName = aiCityCount <= 3 ? "EARLY" : aiCityCount <= 10 ? "R1" : aiCityCount <= 20 ? "R2" : aiCityCount <= 30 ? "R3" : "R4";
 
   if (overproduced(prodCounts, ratio, city.production)) {
-    // Don't switch if >50% done
-    if (progress >= 0.5) {
+    // Don't switch if >40% done — prevents constant flip-flopping with work penalties
+    if (progress >= 0.4) {
       aiLog(`City #${city.id}: ${currentAttrs.name} overproduced but ${Math.round(progress * 100)}% done, finishing`);
       return null;
     }
     const needed = needMore(prodCounts, ratio, !canBuildShips);
+    // Don't switch if we'd switch to the same type we just switched FROM (work penalty wasted)
+    if (needed === city.production) return null;
     aiLog(`City #${city.id}: switch from ${currentAttrs.name} to ${UNIT_ATTRIBUTES[needed].name} (ratio rebalance, table=${ratioName}, cities=${aiCityCount})`);
     return needed;
   }
@@ -983,8 +1024,10 @@ function aiTransportMove(
           }
         } else if (projectedCargo > 0) {
           // Only deliver if we have meaningful cargo (>= 50% capacity) or no loadable armies exist
+          // But don't wait forever — if we've been sitting still (prevLocs shows same loc), just deliver
           const minDeliverCargo = Math.ceil(capacity / 2);
-          if (projectedCargo < minDeliverCargo) {
+          const stuckTurns = (unit.prevLocs ?? []).filter(l => l === currentLoc).length;
+          if (projectedCargo < minDeliverCargo && stuckTurns < 3) {
             const anyLoadableArmies = state.units.some(u =>
               u.owner === aiOwner && u.type === UnitType.Army && u.shipId === null
               && !claimedUnitIds.has(u.id)
@@ -1004,7 +1047,10 @@ function aiTransportMove(
               break;
             }
           }
-          // Partially loaded with no armies to find — head toward enemy territory
+          if (stuckTurns >= 3) {
+            aiVLog(`    Transport #${unit.id}: waited ${stuckTurns} turns with ${projectedCargo}/${capacity} cargo, delivering anyway`);
+          }
+          // Partially loaded with no armies to find (or waited too long) — head toward enemy territory
           aiVLog(`    Transport #${unit.id}: delivering ${projectedCargo}/${capacity} (no more armies available)`);
           deliveringMode = true;
           const unloadMap = createUnloadViewMap(viewMap, state, aiOwner);
@@ -1091,10 +1137,10 @@ function shouldUnload(
   }
 
   // BFS from ALL adjacent land tiles (not just one) to check for:
-  // 1. Own cities nearby → home territory, never unload
+  // 1. Own cities very nearby → home territory, never unload
   // 2. WaitForTransport armies → loading zone, never unload
   // 3. Enemy/unowned cities → worth unloading
-  // Uses distance-limited BFS (40 tiles) to detect own cities even on larger islands
+  // Uses small BFS radius (10 tiles) so transports can unload on far side of large continents
   let foundOwnCity = false;
   let foundEnemyCity = false;
   let foundLoadingArmy = false;
@@ -1113,7 +1159,7 @@ function shouldUnload(
   }
 
   let checked = 0;
-  while (queue.length > 0 && checked < 40) {
+  while (queue.length > 0 && checked < 10) {
     const cur = queue.shift()!;
     checked++;
     const c = viewMap[cur].contents;
@@ -1151,7 +1197,8 @@ function shouldUnload(
     aiVLog(`    Transport #${unit.id}: shouldUnload=false (loading army within ${checked} tiles)`);
     return false;
   }
-  return foundEnemyCity;
+  // Allow unloading if near enemy targets OR on non-home land (unexplored, far from own cities)
+  return true;
 }
 
 /**
@@ -1184,19 +1231,18 @@ function tryUnloadArmies(
       // Unowned city — high priority
       landTargets.push({ loc: adj, priority: 2 });
     } else if (contents === "+" || contents === " ") {
-      // Land or unexplored — BFS to check for own cities nearby (20 tile radius)
-      // and require enemy/unowned cities on the continent to be worth unloading
+      // Land or unexplored — quick BFS to check for own cities very nearby (10 tiles)
+      // If own city is close, this is home territory — don't unload here.
+      // Uses small radius so transports can unload on far side of large continents.
       let nearbyOwnCity = false;
-      let hasEnemyTargets = false;
       const bfsVisited = new Set<Loc>([adj]);
       const bfsQueue: Loc[] = [adj];
       let bfsChecked = 0;
-      while (bfsQueue.length > 0 && bfsChecked < 40) {
+      while (bfsQueue.length > 0 && bfsChecked < 10) {
         const cur = bfsQueue.shift()!;
         bfsChecked++;
         const c = viewMap[cur].contents;
         if (c === "O") { nearbyOwnCity = true; break; }
-        if (c === "X" || c === "*") hasEnemyTargets = true;
         for (const a of getAdjacentLocs(cur)) {
           if (bfsVisited.has(a)) continue;
           const ac = viewMap[a].contents;
@@ -1207,8 +1253,8 @@ function tryUnloadArmies(
           }
         }
       }
-      // Also check continent for WaitForTransport armies (loading zone)
-      if (!nearbyOwnCity && hasEnemyTargets) {
+      // Allow unloading on any non-home land (enemy territory, unexplored, or far from own cities)
+      if (!nearbyOwnCity) {
         const continent = mapContinent(viewMap, adj, ".");
         const isLoadingContinent = state.units.some(u =>
           u.owner === aiOwner && u.type === UnitType.Army
@@ -1396,7 +1442,7 @@ function createUnloadViewMap(
     const value = Math.min(targetCities, 9);
 
     // Skip our own continent when it has no targets (don't sail home)
-    if (value === 0 && hasOwnCity) {
+    if (value === 0 && hasOwnCity && unexplored === 0) {
       aiLog(`      unloadMap: skip own continent (${continent.size} tiles, own=${hasOwnCity})`);
       continue;
     }
@@ -1406,17 +1452,19 @@ function createUnloadViewMap(
       aiLog(`      unloadMap: skip loading continent (${continent.size} tiles, waitingArmies=${hasWaitingArmies}, targets=${targetCities})`);
       continue;
     }
-    // Skip continents with no city targets — only deliver armies to continents with capturable cities
-    if (value === 0) continue;
+    // Use unexplored non-own continents as low-value targets (value=1) when no city targets exist
+    // This prevents full transports from getting stuck when they can only see their own continent
+    const effectiveValue = value > 0 ? value : (unexplored > 0 && !hasOwnCity ? 1 : 0);
+    if (effectiveValue === 0) continue;
 
-    aiLog(`      unloadMap: continent ${continent.size} tiles, value=${value}, targets=${targetCities}, unexplored=${unexplored}, own=${hasOwnCity}, waiting=${hasWaitingArmies}`);
+    aiLog(`      unloadMap: continent ${continent.size} tiles, value=${effectiveValue}, targets=${targetCities}, unexplored=${unexplored}, own=${hasOwnCity}, waiting=${hasWaitingArmies}`);
     // Mark coastal water cells adjacent to this continent
     for (const cLoc of continent) {
       const adjacent = getAdjacentLocs(cLoc);
       for (const adj of adjacent) {
         if (viewMap[adj].contents === "." || viewMap[adj].contents === " ") {
           const currentMark = tempMap[adj].contents;
-          const newMark = String(value);
+          const newMark = String(effectiveValue);
           // Keep the higher value
           if (currentMark < "0" || currentMark > "9" || newMark > currentMark) {
             tempMap[adj] = { ...tempMap[adj], contents: newMark };

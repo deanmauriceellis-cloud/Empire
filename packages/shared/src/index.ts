@@ -13,3 +13,4 @@ export * from "./continent.js";
 export * from "./ai.js";
 export * from "./singleplayer.js";
 export * from "./protocol.js";
+export * from "./diagnostic.js";

@@ -1,4 +1,5 @@
 import path from "node:path";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import { createServer } from "node:http";
@@ -13,6 +14,14 @@ const PORT = Number(process.env.PORT) || 3001;
 
 const app = express();
 app.use(express.json());
+
+// CORS for dev mode (client on 5174, server on 3001)
+app.use((_req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type");
+  next();
+});
 
 const server = createServer(app);
 const db = new GameDatabase();
@@ -56,6 +65,25 @@ app.delete("/api/games/:id", (req, res) => {
     return;
   }
   res.json({ message: "Game deleted" });
+});
+
+// ─── Diagnostic Logging ──────────────────────────────────────────────────────
+
+const LOG_FILE = path.resolve(__dirname, "../../../game-debug.log");
+
+app.post("/api/gamelog", (req, res) => {
+  const { text } = req.body;
+  if (typeof text !== "string") {
+    res.status(400).json({ error: "Missing text field" });
+    return;
+  }
+  fs.appendFileSync(LOG_FILE, text + "\n");
+  res.json({ ok: true });
+});
+
+app.delete("/api/gamelog", (_req, res) => {
+  try { fs.writeFileSync(LOG_FILE, ""); } catch { /* ignore */ }
+  res.json({ ok: true });
 });
 
 // ─── Static File Serving (production) ───────────────────────────────────────

@@ -1,5 +1,5 @@
 // Empire Reborn — Debug Panel
-// Testing tools: reveal map, AI omniscience, player auto-play, AI logging.
+// Testing tools: reveal map, AI omniscience, player auto-play, diagnostic logging.
 
 import { setAIDebugLog, setAIVerboseLog } from "@empire/shared";
 
@@ -7,8 +7,7 @@ export interface DebugFlags {
   revealMap: boolean;
   aiOmniscient: boolean;
   playerAI: boolean;
-  aiLog: boolean;
-  aiVerbose: boolean;
+  diagLog: boolean;
 }
 
 export interface DebugPanel {
@@ -24,8 +23,7 @@ export function createDebugPanel(): DebugPanel {
     revealMap: false,
     aiOmniscient: false,
     playerAI: false,
-    aiLog: false,
-    aiVerbose: false,
+    diagLog: false,
   };
 
   function render(): void {
@@ -34,8 +32,7 @@ export function createDebugPanel(): DebugPanel {
       toggle("Reveal Map", "revealMap", flags.revealMap) +
       toggle("AI Omni", "aiOmniscient", flags.aiOmniscient) +
       toggle("Auto-Play", "playerAI", flags.playerAI) +
-      toggle("AI Log", "aiLog", flags.aiLog) +
-      toggle("Verbose", "aiVerbose", flags.aiVerbose);
+      toggle("Diag Log", "diagLog", flags.diagLog);
   }
 
   function toggle(label: string, key: string, on: boolean): string {
@@ -49,11 +46,10 @@ export function createDebugPanel(): DebugPanel {
     e.preventDefault();
     const key = target.dataset.debug as keyof DebugFlags;
     flags[key] = !flags[key];
-    if (key === "aiLog") {
-      setAIDebugLog(flags.aiLog);
-    }
-    if (key === "aiVerbose") {
-      setAIVerboseLog(flags.aiVerbose);
+    // Diag Log controls AI logging — when on, captures AI decisions into the diagnostic
+    if (key === "diagLog") {
+      setAIDebugLog(flags.diagLog);
+      setAIVerboseLog(flags.diagLog);
     }
     render();
   });

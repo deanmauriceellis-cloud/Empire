@@ -17,6 +17,9 @@ import {
   objMoves,
   scan,
   computeAITurn,
+  generateDiagnostic,
+  startAILogCapture,
+  stopAILogCapture,
 } from "@empire/shared";
 import type { SinglePlayerGame, TurnEvent, VisibleGameState, GameConfig } from "@empire/shared";
 import type { GameSetupOptions } from "./ui/menuScreens.js";
@@ -703,6 +706,27 @@ async function init() {
     refreshHighlights();
   }
 
+  // ─── Diagnostic Logging ────────────────────────────────────────────────
+
+  function getDiagUrl(): string {
+    const isDev = window.location.port === "5174";
+    return isDev
+      ? `http://${window.location.hostname}:3001/api/gamelog`
+      : `${window.location.origin}/api/gamelog`;
+  }
+
+  function sendDiagnostic(text: string): void {
+    fetch(getDiagUrl(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    }).catch(() => { /* ignore network errors */ });
+  }
+
+  function clearDiagnosticLog(): void {
+    fetch(getDiagUrl(), { method: "DELETE" }).catch(() => {});
+  }
+
   // ─── End Turn ─────────────────────────────────────────────────────────
 
   function handleEndTurn(): void {
@@ -716,6 +740,10 @@ async function init() {
   }
 
   function handleSinglePlayerEndTurn(): void {
+    // Start capturing AI logs if diagnostic logging is enabled
+    const capturing = ui.debug.flags.diagLog;
+    if (capturing) startAILogCapture();
+
     // Auto-play mode: compute AI actions for Player1 instead of using collected actions
     let result;
     if (ui.debug.flags.playerAI) {
@@ -727,6 +755,9 @@ async function init() {
       result = collector.endTurn();
     }
 
+    // Stop capturing and grab the AI logs
+    const aiLogs = capturing ? stopAILogCapture() : undefined;
+
     // Apply debug flags after turn (reveal map, AI omniscience)
     applyDebugFlags();
 
@@ -736,6 +767,14 @@ async function init() {
     const p1Cities = s.cities.filter(c => c.owner === Owner.Player1).length;
     const p2Cities = s.cities.filter(c => c.owner === Owner.Player2).length;
     console.log(`[TURN ${s.turn}] P1: ${p1Cities} cities, ${p1Units} units | P2: ${p2Cities} cities, ${p2Units} units | ${result.events.length} events`);
+
+    // Send diagnostic log to server if enabled
+    if (capturing) {
+      // Clear log file on first turn of a new game
+      if (s.turn === 1) clearDiagnosticLog();
+      const diagText = generateDiagnostic(s, result.events, aiLogs);
+      sendDiagnostic(diagText);
+    }
 
     ui.eventLog.addEvents(result.events);
 
