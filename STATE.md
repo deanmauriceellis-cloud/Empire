@@ -10,7 +10,7 @@
 - Phases A-D complete + playtest fixes + map gen fixes + transport fixes + balance fixes
 
 ## Latest commit
-`pending` — session 032: AI fixes + diagnostic logging system
+`b6d9dd4` — session 032: AI fixes + diagnostic logging system
 
 ## Completed (session 032)
 - [x] Fix production flip-flopping: ratio rebalance threshold 50%→40%, same-type switch guard, progress guard on first transport
