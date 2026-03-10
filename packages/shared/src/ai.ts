@@ -31,7 +31,6 @@ import type {
   UnitState,
   GameState,
   PlayerAction,
-  ScanCounts,
 } from "./types.js";
 import {
   isOnBoard,
@@ -62,7 +61,6 @@ import {
 } from "./pathfinding.js";
 import {
   mapContinent,
-  scanContinent,
   isLake,
 } from "./continent.js";
 
@@ -101,11 +99,12 @@ function getRatioTable(cityCount: number): number[] {
 
 // ─── AI Movement Weights (ported from compmove.c move_info structs) ────────────
 
-// Army fight objectives: O=own-city, *=unowned, X=enemy-city, a=enemy-army, ' '=explore
-// Weight 11 for exploration encourages armies to find things to do
+// Army fight objectives: *=unowned, X=enemy-city, a=enemy-army, ' '=explore
+// No '+' (explored land) or 'O' (own city) — idle armies on secure, explored
+// continents should head toward transports, not wander aimlessly.
 function armyFightMoveInfo(): MoveInfo {
-  return landMoveInfo("O*Xa +", new Map([
-    ["O", 1], ["*", 1], ["X", 1], ["a", 1], [" ", 11], ["+", 11],
+  return landMoveInfo("*Xa ", new Map([
+    ["*", 1], ["X", 1], ["a", 1], [" ", 11],
   ]));
 }
 
@@ -334,15 +333,24 @@ function decideProduction(
   // Can this city build ships? Only coastal, non-lake cities
   const canBuildShips = coastal && !onLake;
 
-  // Map the city's continent
+  // Map the city's continent and count threats directly from viewMap
+  // (scanContinent hardcodes O=P1/X=P2, which is wrong for P2's viewMap
+  //  where O=own and X=enemy regardless of player)
   const continent = mapContinent(viewMap, city.loc, ".");
-  const census = scanContinent(viewMap, continent);
-
-  const enemyOwner = aiOwner === Owner.Player1 ? Owner.Player2 : Owner.Player1;
-  const enemyCities = census.playerCities[enemyOwner];
-  const enemyArmies = census.playerUnits[enemyOwner][UnitType.Army];
-  const aiArmies = census.playerUnits[aiOwner][UnitType.Army];
-  const hasInterest = census.unexplored > 0 || enemyCities > 0 || census.unownedCities > 0;
+  let enemyCities = 0;
+  let enemyArmies = 0;
+  let aiArmies = 0;
+  let unownedCities = 0;
+  let unexplored = 0;
+  for (const cLoc of continent) {
+    const c = viewMap[cLoc].contents;
+    if (c === "X") enemyCities++;
+    else if (c === "*") unownedCities++;
+    else if (c === " ") unexplored++;
+    else if (c === "a") enemyArmies++;   // lowercase = enemy army on viewMap
+    else if (c === "A") aiArmies++;      // uppercase = own army on viewMap
+  }
+  const hasInterest = unexplored > 0 || enemyCities > 0 || unownedCities > 0;
 
   // How far along is current production? (0.0 to 1.0, can be negative during penalty)
   const progress = city.work / currentAttrs.buildTime;
@@ -478,12 +486,11 @@ function aiArmyMove(
 
     // Decide: fight on land or board transport?
     if (fightTarget !== null && loadTarget !== null) {
-      // Use cross-cost heuristic: prefer land fight unless water target is much closer
+      // Prefer land fight unless transport is closer
       const fightDist = dist(unit.loc, fightTarget);
       const loadDist = dist(unit.loc, loadTarget);
-      // Cross cost: boarding costs more unless there are good targets overseas
-      const crossCost = 30; // moderate bias toward staying on land
-      if (loadDist * 2 < fightDist - crossCost) {
+      // Small bias toward fighting — but armies readily head to transports
+      if (loadDist < fightDist) {
         actions.push({ type: "move", unitId: unit.id, loc: loadTarget });
       } else {
         actions.push({ type: "move", unitId: unit.id, loc: fightTarget });
@@ -625,6 +632,8 @@ function aiTransportMove(
   // Track projected cargo across steps (actions are batched, cargoIds doesn't update mid-turn)
   let projectedCargo = unit.cargoIds.length;
   let justUnloaded = false;
+  // Track position across steps (unit.loc doesn't update mid-turn)
+  let currentLoc = unit.loc;
 
   aiLog(`  Transport #${unit.id}: loc=${unit.loc} cargo=${projectedCargo}/${capacity} moves=${movesLeft}`);
 
@@ -636,10 +645,11 @@ function aiTransportMove(
 
     // After unloading, sail away (don't sit and reload)
     if (justUnloaded) {
-      const exploreTarget = findMoveToward(viewMap, unit.loc, ttExploreMoveInfo());
+      const exploreTarget = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
       if (exploreTarget !== null) {
         aiLog(`    Transport #${unit.id}: sailing away after unloading`);
         actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
+        currentLoc = exploreTarget;
       }
       break;
     }
@@ -647,7 +657,7 @@ function aiTransportMove(
     // UNLOAD MODE: full, or partially loaded near enemy territory
     if (isFull || (!isEmpty && shouldUnload(state, unit, aiOwner, viewMap))) {
       // Check for adjacent attack
-      const attack = findAdjacentAttack(viewMap, unit.loc, TT_ATTACK);
+      const attack = findAdjacentAttack(viewMap, currentLoc, TT_ATTACK);
       if (attack) {
         actions.push({ type: "attack", unitId: unit.id, targetLoc: attack.targetLoc });
         return actions;
@@ -665,11 +675,21 @@ function aiTransportMove(
 
       // Navigate toward enemy continent
       const unloadMap = createUnloadViewMap(viewMap, state, aiOwner);
-      const target = findMoveToward(unloadMap, unit.loc, ttUnloadMoveInfo());
+      const target = findMoveToward(unloadMap, currentLoc, ttUnloadMoveInfo());
       if (target !== null) {
+        aiLog(`    Transport #${unit.id}: full, navigating toward target at ${target}`);
         actions.push({ type: "move", unitId: unit.id, loc: target });
+        currentLoc = target;
       } else {
-        break;
+        // No unload targets found — explore to discover enemy territory
+        const exploreTarget = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
+        if (exploreTarget !== null) {
+          aiLog(`    Transport #${unit.id}: full, no targets found, exploring at ${exploreTarget}`);
+          actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
+          currentLoc = exploreTarget;
+        } else {
+          break;
+        }
       }
     } else {
       // LOADING MODE: seek armies to load
@@ -687,7 +707,7 @@ function aiTransportMove(
           }
           // If we loaded some but not full, check if more armies are nearby — wait for them
           if (projectedCargo > 0) {
-            const nearbyArmies = countNearbyArmies(state, unit.loc, aiOwner, claimedUnitIds);
+            const nearbyArmies = countNearbyArmies(state, currentLoc, aiOwner, claimedUnitIds);
             if (nearbyArmies > 0) {
               aiLog(`    Transport #${unit.id}: loaded ${willLoad}, waiting for ${nearbyArmies} more nearby armies`);
               break; // stay put and wait
@@ -698,21 +718,24 @@ function aiTransportMove(
 
       // Navigate toward waiting armies or targets
       const loadMap = createTTLoadViewMap(viewMap, state, aiOwner);
-      const target = findMoveToward(loadMap, unit.loc, ttLoadMoveInfo());
+      const target = findMoveToward(loadMap, currentLoc, ttLoadMoveInfo());
       if (target !== null) {
         aiLog(`    Transport #${unit.id}: loading mode, moving toward armies at ${target}`);
         actions.push({ type: "move", unitId: unit.id, loc: target });
+        currentLoc = target;
       } else if (projectedCargo > 0) {
         // Partially loaded with no armies to find — head toward enemy territory
         aiLog(`    Transport #${unit.id}: no more armies, sailing with ${projectedCargo}/${capacity} toward targets`);
         const unloadMap = createUnloadViewMap(viewMap, state, aiOwner);
-        const unloadTarget = findMoveToward(unloadMap, unit.loc, ttUnloadMoveInfo());
+        const unloadTarget = findMoveToward(unloadMap, currentLoc, ttUnloadMoveInfo());
         if (unloadTarget !== null) {
           actions.push({ type: "move", unitId: unit.id, loc: unloadTarget });
+          currentLoc = unloadTarget;
         } else {
-          const exploreTarget = findMoveToward(viewMap, unit.loc, ttExploreMoveInfo());
+          const exploreTarget = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
           if (exploreTarget !== null) {
             actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
+            currentLoc = exploreTarget;
           } else {
             break;
           }
@@ -720,9 +743,10 @@ function aiTransportMove(
       } else {
         // Empty with no targets — explore
         aiLog(`    Transport #${unit.id}: empty, no armies found, exploring`);
-        const exploreTarget = findMoveToward(viewMap, unit.loc, ttExploreMoveInfo());
+        const exploreTarget = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
         if (exploreTarget !== null) {
           actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
+          currentLoc = exploreTarget;
         } else {
           aiLog(`    Transport #${unit.id}: no explore target either, stuck`);
           break;
@@ -850,22 +874,32 @@ function tryLoadArmies(
   for (const u of state.units) {
     if (loadCount >= cap) break;
     if (u.owner === aiOwner && u.type === UnitType.Army && u.loc === unit.loc
-        && u.shipId === null && u.func === UnitBehavior.None) {
+        && u.shipId === null
+        && (u.func === UnitBehavior.None || u.func === UnitBehavior.Explore)) {
+      // Cancel explore behavior on embark — army is now dedicated to transport mission
+      if (u.func === UnitBehavior.Explore) {
+        actions.push({ type: "setBehavior", unitId: u.id, behavior: UnitBehavior.None });
+      }
       actions.push({ type: "embark", unitId: u.id, shipId: unit.id });
       claimedUnitIds.add(u.id);
       loadCount++;
     }
   }
 
-  // Second: move adjacent idle armies onto the transport (they auto-embark via moveUnit)
+  // Second: move adjacent idle/exploring armies onto the transport (they auto-embark via moveUnit)
   const adjacent = getAdjacentLocs(unit.loc);
   for (const adj of adjacent) {
     if (loadCount >= cap) break;
     for (const u of state.units) {
       if (loadCount >= cap) break;
       if (u.owner === aiOwner && u.type === UnitType.Army && u.loc === adj && u.shipId === null
-          && u.func === UnitBehavior.None && u.moved < objMoves(u) && !claimedUnitIds.has(u.id)) {
+          && (u.func === UnitBehavior.None || u.func === UnitBehavior.Explore)
+          && u.moved < objMoves(u) && !claimedUnitIds.has(u.id)) {
         aiLog(`    Loading army #${u.id} from adjacent tile ${adj} onto transport #${unit.id}`);
+        // Cancel explore behavior — army is now dedicated to transport mission
+        if (u.func === UnitBehavior.Explore) {
+          actions.push({ type: "setBehavior", unitId: u.id, behavior: UnitBehavior.None });
+        }
         actions.push({ type: "move", unitId: u.id, loc: unit.loc });
         claimedUnitIds.add(u.id);
         loadCount++;
@@ -886,10 +920,10 @@ function countNearbyArmies(
   claimedUnitIds: Set<number>,
 ): number {
   let count = 0;
-  // Check tiles within BFS distance 3 (a couple turns of army movement)
+  // Check tiles within BFS distance 1 (armies that can board next turn)
   const visited = new Set<Loc>([loc]);
   let frontier = getAdjacentLocs(loc);
-  for (let depth = 0; depth < 3; depth++) {
+  for (let depth = 0; depth < 1; depth++) {
     const nextFrontier: Loc[] = [];
     for (const adj of frontier) {
       if (visited.has(adj)) continue;
@@ -920,7 +954,6 @@ function createUnloadViewMap(
   aiOwner: Owner,
 ): ViewMapCell[] {
   const tempMap = viewMap.map(cell => ({ ...cell }));
-  const enemyOwner = aiOwner === Owner.Player1 ? Owner.Player2 : Owner.Player1;
 
   // Find coastal cells and mark them based on continent value
   const evaluated = new Set<Loc>();
@@ -933,18 +966,29 @@ function createUnloadViewMap(
     if (evaluated.has(loc)) continue;
 
     const continent = mapContinent(viewMap, loc, ".");
-    const census = scanContinent(viewMap, continent);
 
+    // Count targets directly from viewMap characters — NOT scanContinent
+    // (scanContinent hardcodes O=P1, X=P2, which is wrong for P2's viewMap
+    //  where O=own city and X=enemy city regardless of player)
+    let targetCities = 0;
+    let hasOwnCity = false;
+    let unexplored = 0;
     for (const cLoc of continent) {
       evaluated.add(cLoc);
+      const c = viewMap[cLoc].contents;
+      if (c === "X") targetCities++;       // enemy city (correct for any player's viewMap)
+      else if (c === "*") targetCities++;   // unowned city
+      else if (c === "O") hasOwnCity = true;
+      else if (c === " ") unexplored++;
     }
 
     // Calculate continent value (0-9)
-    const totalCities = census.playerCities[enemyOwner] + census.unownedCities;
-    const value = Math.min(totalCities, 9);
+    const value = Math.min(targetCities, 9);
 
-    // Only mark if there's something worth attacking
-    if (value === 0 && census.unexplored === 0) continue;
+    // Skip our own continent when it has no targets (don't sail home)
+    if (value === 0 && hasOwnCity) continue;
+    // Skip continents with nothing interesting
+    if (value === 0 && unexplored === 0) continue;
 
     // Mark coastal water cells adjacent to this continent
     for (const cLoc of continent) {
@@ -978,8 +1022,9 @@ function createTTLoadViewMap(
 
   for (const u of state.units) {
     if (u.owner !== aiOwner || u.type !== UnitType.Army || u.shipId !== null) continue;
-    // Only mark idle armies as pickup targets (not exploring/sentrying ones)
-    if (u.func !== UnitBehavior.None) continue;
+    // Mark idle and exploring armies as pickup targets
+    // (exploring armies on home island are more useful shipped to the front)
+    if (u.func !== UnitBehavior.None && u.func !== UnitBehavior.Explore) continue;
 
     // Mark ALL adjacent water cells (not just one) so BFS has consistent targets
     const adjacent = getAdjacentLocs(u.loc);
