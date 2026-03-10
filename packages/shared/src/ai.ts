@@ -720,8 +720,13 @@ function aiTransportMove(
   let deliveringMode = false;
   // Track position across steps (unit.loc doesn't update mid-turn)
   let currentLoc = unit.loc;
+  // Track whether loading happened this turn (unit.cargoIds is stale after batched loads)
+  let loadedThisTurn = false;
 
   aiLog(`  Transport #${unit.id}: loc=${unit.loc} cargo=${projectedCargo}/${capacity} moves=${movesLeft}`);
+
+  // Track previous position to detect oscillation (moving back to where we just were)
+  let prevLoc: Loc | null = null;
 
   for (let step = 0; step < movesLeft; step++) {
     if (findUnit(state, unit.id) === undefined) break;
@@ -729,73 +734,104 @@ function aiTransportMove(
     const isFull = projectedCargo >= capacity;
     const isEmpty = projectedCargo === 0;
 
+    aiLog(`    [step ${step}] at=${currentLoc} cargo=${projectedCargo}/${capacity} full=${isFull} delivering=${deliveringMode} loaded=${loadedThisTurn}`);
+
     // After unloading, sail away (don't sit and reload)
     if (justUnloaded) {
       const exploreTarget = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
       if (exploreTarget !== null) {
-        aiLog(`    Transport #${unit.id}: sailing away after unloading`);
+        aiLog(`    Transport #${unit.id}: sailing away after unloading toward ${exploreTarget}`);
         actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
         currentLoc = exploreTarget;
+      } else {
+        aiLog(`    Transport #${unit.id}: no sail-away target, staying put`);
       }
       break;
     }
 
     // UNLOAD MODE: full, or partially loaded near enemy territory
-    if (isFull || (!isEmpty && shouldUnload(state, unit, aiOwner, viewMap))) {
+    // Don't attempt unloading on the same turn we loaded (unit.cargoIds is stale)
+    if (!loadedThisTurn && (isFull || (!isEmpty && shouldUnload(state, unit, aiOwner, viewMap, currentLoc)))) {
+      aiLog(`    Transport #${unit.id}: UNLOAD MODE (full=${isFull}, shouldUnload=${!isFull})`);
       // Check for adjacent attack
       const attack = findAdjacentAttack(viewMap, currentLoc, TT_ATTACK);
       if (attack) {
+        aiLog(`    Transport #${unit.id}: attacking adjacent target at ${attack.targetLoc}`);
         actions.push({ type: "attack", unitId: unit.id, targetLoc: attack.targetLoc });
         return actions;
       }
 
       // Try to unload onto enemy/unowned land
-      const unloadAction = tryUnloadArmies(state, unit, aiOwner, viewMap);
+      const unloadAction = tryUnloadArmies(state, unit, aiOwner, viewMap, currentLoc);
       if (unloadAction.length > 0) {
         actions.push(...unloadAction);
         projectedCargo = 0;
         justUnloaded = true;
-        aiLog(`    Transport #${unit.id}: unloaded, will sail away`);
+        aiLog(`    Transport #${unit.id}: unloaded ${unit.cargoIds.length} armies, will sail away`);
         continue; // use remaining move to sail away
       }
 
+      aiLog(`    Transport #${unit.id}: no valid unload targets adjacent, navigating`);
       // Navigate toward enemy continent
       const unloadMap = createUnloadViewMap(viewMap, state, aiOwner);
       const target = findMoveToward(unloadMap, currentLoc, ttUnloadMoveInfo());
-      if (target !== null) {
+      if (target !== null && target !== prevLoc) {
         aiLog(`    Transport #${unit.id}: full, navigating toward target at ${target}`);
         actions.push({ type: "move", unitId: unit.id, loc: target });
+        prevLoc = currentLoc;
         currentLoc = target;
       } else {
-        // No unload targets found — explore to discover enemy territory
+        // No unload targets found or would oscillate — explore to discover enemy territory
         const exploreTarget = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
-        if (exploreTarget !== null) {
-          aiLog(`    Transport #${unit.id}: full, no targets found, exploring at ${exploreTarget}`);
+        if (exploreTarget !== null && exploreTarget !== prevLoc) {
+          aiLog(`    Transport #${unit.id}: full, exploring toward ${exploreTarget}`);
           actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
+          prevLoc = currentLoc;
           currentLoc = exploreTarget;
         } else {
+          aiLog(`    Transport #${unit.id}: full, no movement options, stuck`);
           break;
         }
       }
     } else {
       // LOADING MODE: seek armies to load
 
-      // If carrying cargo and already committed to delivery (step > 0), keep delivering
+      // If we loaded this turn and are full, just navigate toward delivery target
+      if (loadedThisTurn && isFull) {
+        const unloadMap = createUnloadViewMap(viewMap, state, aiOwner);
+        const target = findMoveToward(unloadMap, currentLoc, ttUnloadMoveInfo());
+        if (target !== null && target !== prevLoc) {
+          aiLog(`    Transport #${unit.id}: loaded & full, heading to deliver at ${target}`);
+          actions.push({ type: "move", unitId: unit.id, loc: target });
+          prevLoc = currentLoc;
+          currentLoc = target;
+        } else {
+          aiLog(`    Transport #${unit.id}: loaded & full, no delivery target found`);
+          break;
+        }
+        continue;
+      }
+
+      // If carrying cargo and already committed to delivery, keep delivering
       if (projectedCargo > 0 && deliveringMode) {
         const unloadMap = createUnloadViewMap(viewMap, state, aiOwner);
         const deliverTarget = findMoveToward(unloadMap, currentLoc, ttUnloadMoveInfo());
-        if (deliverTarget !== null) {
+        if (deliverTarget !== null && deliverTarget !== prevLoc) {
           aiLog(`    Transport #${unit.id}: continuing delivery toward ${deliverTarget}`);
           actions.push({ type: "move", unitId: unit.id, loc: deliverTarget });
+          prevLoc = currentLoc;
           currentLoc = deliverTarget;
           continue;
         }
         const exploreTarget = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
-        if (exploreTarget !== null) {
+        if (exploreTarget !== null && exploreTarget !== prevLoc) {
+          aiLog(`    Transport #${unit.id}: delivery path blocked, exploring toward ${exploreTarget}`);
           actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
+          prevLoc = currentLoc;
           currentLoc = exploreTarget;
           continue;
         }
+        aiLog(`    Transport #${unit.id}: delivery stuck, no movement options`);
         break;
       }
 
@@ -806,36 +842,46 @@ function aiTransportMove(
           actions.push(...loadActions);
           const willLoad = loadActions.filter(a => a.type === "move" || a.type === "embark").length;
           projectedCargo += willLoad;
+          loadedThisTurn = true;
+          aiLog(`    Transport #${unit.id}: loaded ${willLoad} armies (projected ${projectedCargo}/${capacity})`);
           if (projectedCargo >= capacity) {
-            aiLog(`    Transport #${unit.id}: will be full after loading ${willLoad}, switching to unload mode`);
-            continue; // switch to unload mode next iteration
+            aiLog(`    Transport #${unit.id}: will be full, switching to navigate toward target`);
+            continue; // next step: navigate toward delivery (loadedThisTurn + isFull path)
           }
           // If we loaded some but not full, check if more armies are nearby — wait for them
           if (projectedCargo > 0) {
             const nearbyArmies = countNearbyArmies(state, currentLoc, aiOwner, claimedUnitIds);
             if (nearbyArmies > 0) {
-              aiLog(`    Transport #${unit.id}: loaded ${willLoad}, waiting for ${nearbyArmies} more nearby armies`);
+              aiLog(`    Transport #${unit.id}: waiting for ${nearbyArmies} more nearby armies`);
               break; // stay put and wait
             }
+            // Not full and no nearby armies — navigate toward more armies
+            aiLog(`    Transport #${unit.id}: partially loaded, seeking more armies`);
           }
         } else if (projectedCargo > 0) {
           // Already carrying armies but couldn't load more — deliver what we have
-          aiLog(`    Transport #${unit.id}: cargo=${projectedCargo}/${capacity}, no more loadable armies, heading to deliver`);
+          aiLog(`    Transport #${unit.id}: cargo=${projectedCargo}/${capacity}, no loadable armies nearby, delivering`);
           deliveringMode = true;
+          // Navigate toward enemy territory (don't try unloading here — we might be at own coast)
           const unloadMap = createUnloadViewMap(viewMap, state, aiOwner);
           const deliverTarget = findMoveToward(unloadMap, currentLoc, ttUnloadMoveInfo());
           if (deliverTarget !== null) {
+            aiLog(`    Transport #${unit.id}: heading to deliver at ${deliverTarget}`);
             actions.push({ type: "move", unitId: unit.id, loc: deliverTarget });
+            prevLoc = currentLoc;
             currentLoc = deliverTarget;
             continue;
           }
           // No unload targets — explore to find enemy territory
           const exploreTarget2 = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
           if (exploreTarget2 !== null) {
+            aiLog(`    Transport #${unit.id}: no delivery target, exploring toward ${exploreTarget2}`);
             actions.push({ type: "move", unitId: unit.id, loc: exploreTarget2 });
+            prevLoc = currentLoc;
             currentLoc = exploreTarget2;
             continue;
           }
+          aiLog(`    Transport #${unit.id}: delivering, no targets or explore options`);
           break;
         }
       }
@@ -844,37 +890,44 @@ function aiTransportMove(
       if (!deliveringMode) {
         const loadMap = createTTLoadViewMap(viewMap, state, aiOwner);
         const target = findMoveToward(loadMap, currentLoc, ttLoadMoveInfo());
-        if (target !== null) {
-          aiLog(`    Transport #${unit.id}: loading mode, moving toward armies at ${target}`);
+        if (target !== null && target !== prevLoc) {
+          aiLog(`    Transport #${unit.id}: moving toward armies at ${target}`);
           actions.push({ type: "move", unitId: unit.id, loc: target });
+          prevLoc = currentLoc;
           currentLoc = target;
         } else if (projectedCargo > 0) {
           // Partially loaded with no armies to find — head toward enemy territory
-          aiLog(`    Transport #${unit.id}: no more armies, sailing with ${projectedCargo}/${capacity} toward targets`);
+          aiLog(`    Transport #${unit.id}: no more armies found, delivering ${projectedCargo}/${capacity}`);
           deliveringMode = true;
           const unloadMap = createUnloadViewMap(viewMap, state, aiOwner);
           const unloadTarget = findMoveToward(unloadMap, currentLoc, ttUnloadMoveInfo());
-          if (unloadTarget !== null) {
+          if (unloadTarget !== null && unloadTarget !== prevLoc) {
+            aiLog(`    Transport #${unit.id}: delivering toward ${unloadTarget}`);
             actions.push({ type: "move", unitId: unit.id, loc: unloadTarget });
+            prevLoc = currentLoc;
             currentLoc = unloadTarget;
           } else {
             const exploreTarget = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
-            if (exploreTarget !== null) {
+            if (exploreTarget !== null && exploreTarget !== prevLoc) {
+              aiLog(`    Transport #${unit.id}: exploring toward ${exploreTarget}`);
               actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
+              prevLoc = currentLoc;
               currentLoc = exploreTarget;
             } else {
+              aiLog(`    Transport #${unit.id}: stuck, no movement options`);
               break;
             }
           }
         } else {
           // Empty with no targets — explore
-          aiLog(`    Transport #${unit.id}: empty, no armies found, exploring`);
           const exploreTarget = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
-          if (exploreTarget !== null) {
+          if (exploreTarget !== null && exploreTarget !== prevLoc) {
+            aiLog(`    Transport #${unit.id}: empty, exploring toward ${exploreTarget}`);
             actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
+            prevLoc = currentLoc;
             currentLoc = exploreTarget;
           } else {
-            aiLog(`    Transport #${unit.id}: no explore target either, stuck`);
+            aiLog(`    Transport #${unit.id}: empty, no explore targets, stuck`);
             break;
           }
         }
@@ -882,6 +935,7 @@ function aiTransportMove(
     }
   }
 
+  aiLog(`    Transport #${unit.id}: turn done, ${actions.length} actions, final loc=${currentLoc}`);
   return actions;
 }
 
@@ -894,13 +948,11 @@ function shouldUnload(
   unit: UnitState,
   aiOwner: Owner,
   viewMap: ViewMapCell[],
+  atLoc?: Loc,
 ): boolean {
-  // Need at least a third full to start unloading early
-  const capacity = objCapacity(unit);
-  if (unit.cargoIds.length < capacity / 3) return false;
-
   // Check if near enemy or unowned territory
-  const adjacent = getAdjacentLocs(unit.loc);
+  const loc = atLoc ?? unit.loc;
+  const adjacent = getAdjacentLocs(loc);
   for (const adj of adjacent) {
     const contents = viewMap[adj].contents;
     // 'X' = enemy city, '*' = unowned city
@@ -930,9 +982,11 @@ function tryUnloadArmies(
   unit: UnitState,
   aiOwner: Owner,
   viewMap: ViewMapCell[],
+  atLoc?: Loc,
 ): PlayerAction[] {
   const actions: PlayerAction[] = [];
-  const adjacent = getAdjacentLocs(unit.loc);
+  const loc = atLoc ?? unit.loc;
+  const adjacent = getAdjacentLocs(loc);
 
   // Only unload onto land that is enemy, unowned, or near enemy/unowned cities
   // viewMap contents: 'X'=enemy city, 'O'=own city, '*'=unowned city, '+'=land
@@ -962,13 +1016,17 @@ function tryUnloadArmies(
     // Skip 'O' (own city) — never unload at home
   }
 
-  if (landTargets.length === 0) return actions;
+  if (landTargets.length === 0) {
+    aiLog(`    Transport #${unit.id}: tryUnload at ${loc} — no valid land targets (adj: ${adjacent.map(a => `${a}=${viewMap[a].contents}`).join(",")})`);
+    return actions;
+  }
 
   // Sort by priority (highest first)
   landTargets.sort((a, b) => b.priority - a.priority);
   const bestLand = landTargets[0].loc;
+  const priNames = ["", "land", "unowned city", "enemy city"];
 
-  aiLog(`    Transport #${unit.id}: unloading ${unit.cargoIds.length} armies at ${bestLand}`);
+  aiLog(`    Transport #${unit.id}: unloading ${unit.cargoIds.length} armies at ${bestLand} (${priNames[landTargets[0].priority]})`);
 
   for (const cargoId of [...unit.cargoIds]) {
     const cargo = findUnit(state, cargoId);
@@ -1126,12 +1184,19 @@ function createUnloadViewMap(
     const value = Math.min(targetCities, 9);
 
     // Skip our own continent when it has no targets (don't sail home)
-    if (value === 0 && hasOwnCity) continue;
+    if (value === 0 && hasOwnCity) {
+      aiLog(`      unloadMap: skip own continent (${continent.size} tiles, own=${hasOwnCity})`);
+      continue;
+    }
     // Skip continents where we have armies waiting for transport (don't unload back at pickup point)
-    if (hasWaitingArmies && targetCities === 0) continue;
+    if (hasWaitingArmies && targetCities === 0) {
+      aiLog(`      unloadMap: skip pickup continent (${continent.size} tiles, waitingArmies=${hasWaitingArmies})`);
+      continue;
+    }
     // Skip continents with nothing interesting
     if (value === 0 && unexplored === 0) continue;
 
+    aiLog(`      unloadMap: continent ${continent.size} tiles, value=${value}, targets=${targetCities}, unexplored=${unexplored}, own=${hasOwnCity}, waiting=${hasWaitingArmies}`);
     // Mark coastal water cells adjacent to this continent
     for (const cLoc of continent) {
       const adjacent = getAdjacentLocs(cLoc);

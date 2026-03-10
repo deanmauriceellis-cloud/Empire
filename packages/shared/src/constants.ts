@@ -137,6 +137,7 @@ export const BEHAVIOR_NAMES = [
   "explore", "load", "attack", "load", "repair",
   "wait:transport", "W", "E", "D", "C",
   "X", "Z", "A", "Q",
+  "goto", "aggressive", "cautious",
 ] as const;
 
 /** Convert behavior enum to index into BEHAVIOR_NAMES */
