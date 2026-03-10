@@ -219,6 +219,19 @@ function findMoveToward(
   from: Loc,
   moveInfo: MoveInfo,
 ): Loc | null {
+  const result = findMoveTowardWithObjective(viewMap, from, moveInfo);
+  return result ? result.nextStep : null;
+}
+
+/**
+ * Like findMoveToward but also returns the objective location.
+ * Used by transport coordination to claim the target zone.
+ */
+function findMoveTowardWithObjective(
+  viewMap: ViewMapCell[],
+  from: Loc,
+  moveInfo: MoveInfo,
+): { nextStep: Loc; objective: Loc } | null {
   const pathMap = createPathMap();
   const objective = findObjective(pathMap, viewMap, from, moveInfo);
   if (objective === null) return null;
@@ -229,7 +242,7 @@ function findMoveToward(
 
   const newLoc = from + DIR_OFFSET[dir];
   if (newLoc < 0 || newLoc >= MAP_SIZE || !isOnBoard(newLoc)) return null;
-  return newLoc;
+  return { nextStep: newLoc, objective };
 }
 
 // ─── Lake Detection ──────────────────────────────────────────────────────────────
@@ -392,24 +405,20 @@ function decideProduction(
   // How far along is current production? (0.0 to 1.0, can be negative during penalty)
   const progress = city.work / currentAttrs.buildTime;
 
-  // Guard: never switch away from Transport if this is the only transport producer
-  // AND there are armies that still need transport (or no transport exists yet).
-  // Exception: allow switching if we already have 2+ transports — they exist and
-  // will eventually load, more production won't help if transport logic is stuck.
+  // Guard: never switch away from Transport if no transport exists yet.
+  // Once a transport exists, allow switching back to armies (especially with few cities).
   if (city.production === UnitType.Transport && prodCounts[UnitType.Transport] <= 1) {
-    const waitingArmies = state.units.filter(
-      u => u.owner === aiOwner && u.type === UnitType.Army
-        && u.func === UnitBehavior.WaitForTransport && u.shipId === null,
-    ).length;
     const existingTransports = state.units.filter(
       u => u.owner === aiOwner && u.type === UnitType.Transport,
     ).length;
-    if ((waitingArmies > 0 || existingTransports === 0) && existingTransports < 2) {
-      aiLog(`City #${city.id}: keeping Transport (only transport producer, ${waitingArmies} waiting, ${existingTransports} existing)`);
+    if (existingTransports === 0) {
+      // No transport exists — must keep building
+      aiLog(`City #${city.id}: keeping Transport (no transport exists yet)`);
       return null;
     }
-    // Enough transports exist or no armies waiting — allow switching
-    aiLog(`City #${city.id}: allowing switch from Transport (${existingTransports} transports exist, ${waitingArmies} waiting)`);
+    // Transport exists — allow switching (especially critical for 1-city islands
+    // where the city needs to produce armies to feed the transport)
+    aiLog(`City #${city.id}: allowing switch from Transport (${existingTransports} transports exist)`);
   }
 
   // Guard: don't switch away from Transport via ratio rebalance if there's still army surplus.
@@ -460,16 +469,24 @@ function decideProduction(
     // we're stuck on an island — build a transport to escape
     if (canBuildShips) {
       const aiArmyUnits = state.units.filter(u => u.owner === aiOwner && u.type === UnitType.Army);
+      const existingTransports = state.units.filter(
+        u => u.owner === aiOwner && u.type === UnitType.Transport,
+      ).length;
       const allWaiting = aiArmyUnits.length > 0
         && aiArmyUnits.every(u => u.func === UnitBehavior.WaitForTransport);
-      if (allWaiting && city.production !== UnitType.Transport) {
-        aiLog(`City #${city.id}: switch to Transport (island escape — all ${aiArmyUnits.length} armies waiting)`);
-        return UnitType.Transport;
-      }
-      // Already building transport for island escape — keep going
-      if (allWaiting && city.production === UnitType.Transport) {
-        aiLog(`City #${city.id}: keeping Transport (island escape)`);
+      if (allWaiting && existingTransports === 0) {
+        // No transport yet — need to build one to escape
+        if (city.production !== UnitType.Transport) {
+          aiLog(`City #${city.id}: switch to Transport (island escape — all ${aiArmyUnits.length} armies waiting)`);
+          return UnitType.Transport;
+        }
+        aiLog(`City #${city.id}: keeping Transport (island escape, no transport yet)`);
         return null;
+      }
+      if (allWaiting && existingTransports > 0 && city.production !== UnitType.Army) {
+        // Transport exists but all armies are waiting — need more armies to shuttle
+        aiLog(`City #${city.id}: switch to Army (island escape — transport exists, need armies to shuttle)`);
+        return UnitType.Army;
       }
     }
     // Check if we're stuck: all armies waiting for transport but can't build ships
@@ -939,15 +956,17 @@ function aiTransportMove(
       // Navigate toward waiting armies or targets (only when empty or still loading)
       if (!deliveringMode) {
         const loadMap = createTTLoadViewMap(viewMap, state, aiOwner, claimedPickupLocs);
-        const target = findMoveToward(loadMap, currentLoc, ttLoadMoveInfo());
+        const loadResult = findMoveTowardWithObjective(loadMap, currentLoc, ttLoadMoveInfo());
+        const target = loadResult ? loadResult.nextStep : null;
         if (target !== null && !recentLocs.has(target)) {
-          aiLog(`    Transport #${unit.id}: moving toward armies at ${target}`);
+          aiLog(`    Transport #${unit.id}: loading mode, moving toward armies at ${target}`);
           actions.push({ type: "move", unitId: unit.id, loc: target });
           recentLocs.add(currentLoc);
           currentLoc = target;
-          // Claim pickup zone so other transports seek different clusters
-          if (claimedPickupLocs) {
-            claimPickupZone(loadMap, currentLoc, claimedPickupLocs);
+          // Claim pickup zone around the OBJECTIVE (not transport position)
+          // so other transports seek different army clusters
+          if (claimedPickupLocs && loadResult) {
+            claimPickupZone(loadMap, loadResult.objective, claimedPickupLocs);
           }
         } else if (projectedCargo > 0) {
           // Only deliver if we have meaningful cargo (>= 50% capacity) or no loadable armies exist
@@ -958,8 +977,17 @@ function aiTransportMove(
               && (u.func === UnitBehavior.None || u.func === UnitBehavior.Explore || u.func === UnitBehavior.WaitForTransport),
             );
             if (anyLoadableArmies) {
-              aiLog(`    Transport #${unit.id}: only ${projectedCargo}/${capacity} cargo, waiting for more (min ${minDeliverCargo})`);
-              break; // stay near loading zone and wait
+              // Armies exist but can't be found via loadMap — explore to find new routes
+              const exploreTarget = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
+              if (exploreTarget !== null && !recentLocs.has(exploreTarget)) {
+                aiLog(`    Transport #${unit.id}: ${projectedCargo}/${capacity} cargo, exploring to find ${minDeliverCargo - projectedCargo} more armies`);
+                actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
+                recentLocs.add(currentLoc);
+                currentLoc = exploreTarget;
+                continue;
+              }
+              aiLog(`    Transport #${unit.id}: ${projectedCargo}/${capacity} cargo, waiting for armies to reach coast`);
+              break;
             }
           }
           // Partially loaded with no armies to find — head toward enemy territory
@@ -1001,13 +1029,15 @@ function aiTransportMove(
     }
   }
 
-  // Save turn-end position for cross-turn oscillation detection (keep last 4)
-  const newPrevLocs = [currentLoc, ...prevLocs].slice(0, 4);
+  // Save ALL visited positions for cross-turn oscillation detection (keep last 8)
+  // Using recentLocs captures intermediate positions (not just final), preventing
+  // 2-tile ping-pong where the transport visits A→B→C one turn, C→B→A the next
+  const allVisited = [...recentLocs];
   // Clear history when transport loaded/unloaded cargo (mission changed — allow revisiting)
   if (loadedThisTurn || justUnloaded) {
     unit.prevLocs = [];
   } else {
-    unit.prevLocs = newPrevLocs;
+    unit.prevLocs = allVisited.slice(0, 8);
   }
 
   aiLog(`    Transport #${unit.id}: turn done, ${actions.length} actions, final loc=${currentLoc}`);

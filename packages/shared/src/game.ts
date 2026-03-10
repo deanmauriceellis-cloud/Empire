@@ -609,7 +609,9 @@ function handleCargoOverflow(state: GameState, unit: UnitState): TurnEvent[] {
 // ─── City Production ────────────────────────────────────────────────────────────
 
 /**
- * Set a city's production type. Applies 20% penalty if switching.
+ * Set a city's production type. Applies a retooling penalty if switching.
+ * Penalty is 20% of build time, capped at 3 turns max to prevent paralysis
+ * on long builds (e.g., Transport costs -3, not -6).
  */
 export function setProduction(
   state: GameState,
@@ -620,7 +622,7 @@ export function setProduction(
   if (!city) return;
   if (city.production !== unitType) {
     city.production = unitType;
-    city.work = -Math.floor(UNIT_ATTRIBUTES[unitType].buildTime / 5);
+    city.work = -Math.min(Math.floor(UNIT_ATTRIBUTES[unitType].buildTime / 5), 3);
   }
 }
 

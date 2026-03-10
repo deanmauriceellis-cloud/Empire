@@ -1005,4 +1005,138 @@ describe("AI System", () => {
       expect(transportMoves.length).toBeGreaterThan(0);
     });
   });
+
+  describe("transport coordination fixes", () => {
+    it("two transports target different army clusters via claimPickupZone", () => {
+      // Setup: island with two army clusters on opposite coasts, two transports in water
+      const state = createTestState();
+
+      // Make a water channel separating two land areas
+      setWater(state, 10, 1, 5, 98); // wide water band rows 10-14
+
+      // AI city on upper land
+      addCity(state, rowColLoc(5, 5), AI);
+      addCity(state, rowColLoc(25, 50), HUMAN);
+
+      // Army cluster 1: left coast (row 9, near water)
+      for (let i = 0; i < 4; i++) {
+        const a = createUnit(state, UnitType.Army, AI, rowColLoc(9, 10 + i));
+        a.func = UnitBehavior.WaitForTransport;
+      }
+
+      // Army cluster 2: right coast (row 9, near water, far from cluster 1)
+      for (let i = 0; i < 4; i++) {
+        const a = createUnit(state, UnitType.Army, AI, rowColLoc(9, 70 + i));
+        a.func = UnitBehavior.WaitForTransport;
+      }
+
+      // Two transports in the middle of the water band
+      const t1 = createUnit(state, UnitType.Transport, AI, rowColLoc(12, 40));
+      const t2 = createUnit(state, UnitType.Transport, AI, rowColLoc(12, 42));
+
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+
+      // Get move targets for each transport
+      const t1Moves = actions.filter(
+        a => a.type === "move" && (a as any).unitId === t1.id,
+      ).map(a => (a as any).loc);
+      const t2Moves = actions.filter(
+        a => a.type === "move" && (a as any).unitId === t2.id,
+      ).map(a => (a as any).loc);
+
+      // Both transports should have move actions
+      expect(t1Moves.length).toBeGreaterThan(0);
+      expect(t2Moves.length).toBeGreaterThan(0);
+
+      // They should head in different directions (toward different clusters)
+      // First transport's first move col should differ from second transport's
+      const t1Col = t1Moves[0] % MAP_WIDTH;
+      const t2Col = t2Moves[0] % MAP_WIDTH;
+      // They should NOT both head the same direction — at least 5 cols apart
+      // (one heads left toward col ~10, other heads right toward col ~70)
+      expect(Math.abs(t1Col - t2Col)).toBeGreaterThanOrEqual(2);
+    });
+
+    it("prevLocs stores all visited positions to prevent oscillation", () => {
+      // Setup: transport oscillating between two water tiles
+      const state = createTestState();
+
+      // Small island surrounded by water
+      setWater(state, 8, 1, 10, 98);
+
+      addCity(state, rowColLoc(5, 5), AI);
+      addCity(state, rowColLoc(25, 50), HUMAN);
+
+      // Transport in water with prevLocs simulating prior oscillation
+      const transport = createUnit(state, UnitType.Transport, AI, rowColLoc(10, 20));
+      // Simulate having visited these tiles in previous turns (all visited, not just final)
+      const prevA = rowColLoc(10, 19);
+      const prevB = rowColLoc(10, 21);
+      const prevC = rowColLoc(10, 20);
+      (transport as any).prevLocs = [prevA, prevB, prevC];
+
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+
+      // Transport should NOT move to any of its previous locations
+      const transportMoves = actions.filter(
+        a => a.type === "move" && (a as any).unitId === transport.id,
+      ).map(a => (a as any).loc);
+
+      for (const moveLoc of transportMoves) {
+        expect(moveLoc).not.toBe(prevA);
+        expect(moveLoc).not.toBe(prevB);
+      }
+    });
+  });
+
+  describe("island escape production fixes", () => {
+    it("switches to army after first transport is produced on 1-city island", () => {
+      // 1-city island, all armies WaitForTransport, transport already exists
+      const state = createTestState();
+
+      // Water surrounds a small island (rows 1-6 land, rows 7+ water)
+      setWater(state, 7, 1, 10, 98);
+
+      // City on coast (row 6, adjacent to water at row 7)
+      const city = addCity(state, rowColLoc(6, 5), AI, UnitType.Transport);
+      addCity(state, rowColLoc(25, 50), HUMAN);
+
+      // 3 armies waiting for transport on the island
+      for (let i = 0; i < 3; i++) {
+        const a = createUnit(state, UnitType.Army, AI, rowColLoc(5, 5 + i));
+        a.func = UnitBehavior.WaitForTransport;
+      }
+
+      // Transport already exists in water
+      createUnit(state, UnitType.Transport, AI, rowColLoc(8, 5));
+
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+
+      // City should switch from Transport to Army
+      const prodAction = actions.find(
+        a => a.type === "setProduction" && (a as any).cityId === city.id,
+      );
+      expect(prodAction).toBeDefined();
+      expect((prodAction as any).unitType).toBe(UnitType.Army);
+    });
+
+    it("production switch penalty is capped at 3 turns", () => {
+      const state = createTestState();
+      const city = addCity(state, rowColLoc(5, 5), AI, UnitType.Army);
+      city.work = 3;
+
+      // Switch to transport (buildTime=30, uncapped penalty would be -6)
+      setProduction(state, city.id, UnitType.Transport);
+
+      // Penalty should be -3 (capped), not -6
+      expect(city.work).toBe(-3);
+      expect(city.production).toBe(UnitType.Transport);
+    });
+  });
 });
