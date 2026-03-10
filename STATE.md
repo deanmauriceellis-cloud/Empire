@@ -1,16 +1,16 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Post-Phase 12: Playtesting & Bug Fixes** — E2E tests fixed + map gen hardened
+**Post-Phase 12: Playtesting & Bug Fixes** — AI transport + island escape fixes
 
 ## Status
 - All 12 phases complete + gameplay polish + debug tools + AI overhaul
-- 279 unit/integration tests passing (251 shared + 28 server)
+- 283 unit/integration tests passing (255 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
-- Phases A-D complete + playtest fixes + map gen fixes
+- Phases A-D complete + playtest fixes + map gen fixes + transport fixes
 
 ## Latest commit
-`a436d76` — session 028: fix E2E tests + ocean shore starting cities
+`1ef5f3a` — session 029: fix AI transport coordination, island escape, and oscillation
 
 ## Completed
 - [x] Phase 0: Project scaffolding (pnpm monorepo, shared/client/server)
@@ -30,13 +30,13 @@
 - [x] Phase 12.3: E2E tests — Playwright (singleplayer, multiplayer lobby, perf benchmarks)
 
 ## Completed (this session)
-- [x] Fix E2E tests for game setup screen (click through map size/terrain chooser)
-- [x] Fix unit count HUD selector (.stat → .unit-count) for by-type format
-- [x] Fix action panel test: handle city auto-Explore on new armies
-- [x] Add window.__empire debug exposure for E2E introspection
-- [x] Fix map gen: pickDistantCities fallback ensures ocean-shore starting cities
-- [x] Fix AI: landlocked island → build fighters instead of stranded armies
-- [x] New test: starting cities on ocean shore across 10 seeds
+- [x] Fix transport coordination: claim pathfinding objective zone, not transport position
+- [x] Fix transport oscillation: store all visited positions in prevLocs (not just final)
+- [x] Fix island escape: switch to Army after first transport produced (was building 2nd transport)
+- [x] Fix island escape: transport explores for remaining armies instead of delivering half-empty
+- [x] Cap production switch penalty at 3 turns (Transport: -3 instead of -6)
+- [x] Simplify "only transport producer" guard: allow switch once any transport exists
+- [x] 4 new tests: transport cluster coordination, oscillation, island production, penalty cap
 
 ## Known Issues
 _None known_
@@ -54,7 +54,7 @@ _None_
 - Client dev server on port 5174 (port 5173 used by another application)
 - Playwright E2E tests run via `pnpm test:e2e` (auto-starts Vite + server)
 - Two-player E2E join test skipped: lobby doesn't auto-refresh game list
-- 297 total tests: 251 shared + 28 server + 18 E2E (17 pass + 1 skip)
+- 301 total tests: 255 shared + 28 server + 18 E2E (17 pass + 1 skip)
 - Map constants are now mutable `let` — call `configureMapDimensions()` before map generation
 - Lake vs ocean threshold: 5% of map size (300 tiles on standard 100x60 map)
 - Full analysis document: `docs/sessions/session-025-ai-analysis.md`
