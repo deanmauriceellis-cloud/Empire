@@ -10,7 +10,7 @@
 - Phases A-D complete + playtest fixes + map gen fixes + transport fixes + balance fixes
 
 ## Latest commit
-`pending` — session 033: AI fighter & production fixes from diagnostic analysis
+`64d7ebb` — session 033: AI fighter & production fixes from diagnostic analysis
 
 ## Completed (session 033)
 - [x] Fix fighter production oscillation: ratio rebalance no longer undoes early fighter priority (was infinite army↔fighter loop, zero fighters ever built)
