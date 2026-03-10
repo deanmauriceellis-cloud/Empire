@@ -1,5 +1,18 @@
 # Empire Reborn — Changelog
 
+## v0.20.0 — Session 020 (2026-03-09)
+
+### Fixed
+- **CRITICAL: scanContinent P2 viewMap inversion** — `scanContinent()` hardcoded `'O'`=Player1, `'X'`=Player2, but viewMaps use `'O'`=own and `'X'`=enemy regardless of player. P2's transports navigated back to their own continent (value=3) instead of toward enemies (value=0). Replaced with direct viewMap character counting in both `createUnloadViewMap()` and `decideProduction()`
+- **Transport oscillation when full** — full transports bounced between two tiles because both move steps used stale `unit.loc`. Now tracks `currentLoc` across steps, using both moves per turn effectively
+- **Exploring armies invisible to transports** — `createTTLoadViewMap()` and `tryLoadArmies()` only considered `func=None` armies. After `assignIdleBehaviors()` gave them Explore, transports couldn't find them. Now loads Explore armies too, canceling their behavior on embark
+- **Armies wandering instead of staging** — `armyFightMoveInfo` included `'+'` (explored land) and `'O'` (own city) as objectives, so `fightTarget` was never null. Armies wandered aimlessly on explored continents instead of heading to transport-producing cities
+- **Transport waiting for distant armies** — `countNearbyArmies()` BFS depth 3 found 49+ armies inland, causing transports to wait forever. Reduced to depth 1 (adjacent armies arriving next turn)
+- **Army crossCost bias** — crossCost=30 made armies heavily prefer fighting even when transport was 4x closer. Changed to simple distance comparison
+
+### Changed
+- `packages/shared/src/ai.ts` — removed `scanContinent` usage (broken owner mapping), `currentLoc` tracking in `aiTransportMove`, army fight objectives `"*Xa "` (removed `+` and `O`), `tryLoadArmies` accepts Explore armies, `countNearbyArmies` BFS depth 1, full transport explore fallback + logging
+
 ## v0.18.0 — Session 018 (2026-03-09)
 
 ### Fixed

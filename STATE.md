@@ -1,7 +1,7 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Post-Phase 12: AI Transport/Army Overhaul** — Transport loading, unloading, army coordination
+**Post-Phase 12: AI Transport/Army Fixes** — ViewMap bug, army staging, transport throughput
 
 ## Status
 - All 12 phases complete + gameplay polish + debug tools + AI transport overhaul
@@ -9,7 +9,7 @@
 - 18 E2E tests (17 passing, 1 skipped)
 
 ## Latest commit
-`97173a5` — session 019: AI transport/army overhaul — loading, unloading, and coordination
+`005aef8` — session 020: fix AI transport navigation, army staging, and P2 viewMap bugs
 
 ## Completed
 - [x] Phase 0: Project scaffolding (pnpm monorepo, shared/client/server)
@@ -29,27 +29,26 @@
 - [x] Phase 12.3: E2E tests — Playwright (singleplayer, multiplayer lobby, perf benchmarks)
 
 ## Completed (this session)
-- [x] Fixed transport oscillation — tryLoadArmies moves adjacent armies onto transport
-- [x] Fixed action conflicts — claimedUnitIds prevents army/transport move conflicts
-- [x] Fixed home-island dump — tryUnloadArmies only unloads at enemy/unowned territory
-- [x] Fixed reload loop — transport sails away after unloading, armies get Explore
-- [x] Fixed double-loading — projectedCargo tracks cargo across steps
-- [x] Transport waits to fill — countNearbyArmies BFS checks nearby armies
-- [x] Partially loaded transports navigate toward enemy territory
-- [x] Transports excluded from assignIdleBehaviors (stay func=None)
-- [x] Idle armies move toward coast for pickup (findNearestCoast BFS)
-- [x] Cargo labels on transport sprites, debug logging toggle
-- [x] City panel/HUD display fixes (negative percentage, cargo display)
+- [x] Fixed scanContinent P2 viewMap inversion — O/X hardcoded as P1/P2 but viewMaps use own/enemy
+- [x] Fixed transport oscillation — P2 transports navigated home instead of toward enemies
+- [x] Fixed production decisions using wrong enemy counts for P2
+- [x] Track currentLoc across transport move steps — transports now use both moves per turn
+- [x] Exploring armies visible to transport loading (createTTLoadViewMap + tryLoadArmies)
+- [x] Idle armies pathfind toward transport-producing cities (removed '+' and 'O' from fight objectives)
+- [x] Reduced crossCost bias — armies readily head to transports when closer
+- [x] Reduced countNearbyArmies BFS depth 3→1 — transports don't wait for distant armies
+- [x] Added logging for full transport navigation decisions
 
 ## Known Issues (in testing)
-- Transport AI still being refined — unload/explore behavior needs further testing
-- P2 transport can get stuck exploring with no targets
+- User reports a map issue (details TBD)
+- Army surplus still large when transport capacity is limited (production ratio tuning)
 
 ## Next Steps
-1. **Continue transport AI testing** — verify unload→explore→return cycle works
-2. **Hosting** — deploy to server (any host running Node/Docker)
-3. **Art assets** — replace geometric placeholders with real sprites
-4. **Lobby polling** — refresh game list automatically for multiplayer
+1. **Investigate map issue** — user-reported
+2. **Production ratio tuning** — build more transports when army surplus is large
+3. **Hosting** — deploy to server (any host running Node/Docker)
+4. **Art assets** — replace geometric placeholders with real sprites
+5. **Lobby polling** — refresh game list automatically for multiplayer
 
 ## Blockers
 _None_
