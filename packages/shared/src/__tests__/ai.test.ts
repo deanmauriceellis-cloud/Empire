@@ -178,8 +178,9 @@ describe("AI System", () => {
       const city1 = addCity(state, rowColLoc(10, 10), AI, UnitType.Army);
       const city2 = addCity(state, rowColLoc(12, 10), AI, UnitType.Army);
       const city3 = addCity(state, rowColLoc(14, 10), AI, UnitType.Army);
-      // Make city1 coastal by adding water adjacent to it
-      setWater(state, 10, 11, 1, 1);
+      // Make city1 coastal by adding a large ocean body adjacent to it
+      // (must be >= 5% of map size to not be detected as a lake)
+      setWater(state, 5, 11, 20, 20);
       refreshVision(state, AI);
 
       const actions = computeAITurn(state, AI);

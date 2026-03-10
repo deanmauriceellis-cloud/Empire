@@ -256,6 +256,68 @@ function isShore(loc: Loc, map: MapCell[], width: number, height: number): boole
 }
 
 /**
+ * Check if a land cell is adjacent to OCEAN (large water body), not just a lake.
+ * Uses BFS flood-fill on water to measure the connected water body size.
+ * Ocean threshold: 5% of map size (e.g., 300 tiles on 100x60 map).
+ */
+function isOceanShore(loc: Loc, map: MapCell[], width: number, height: number): boolean {
+  const size = width * height;
+  const oceanThreshold = Math.floor(size * 0.05);
+  const row = Math.floor(loc / width);
+  const col = loc % width;
+
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
+      if (dr === 0 && dc === 0) continue;
+      const nr = row + dr;
+      const nc = col + dc;
+      if (nr < 0 || nr >= height || nc < 0 || nc >= width) continue;
+      const nloc = nr * width + nc;
+      if (map[nloc].terrain !== TerrainType.Sea) continue;
+
+      // BFS flood-fill water from this tile
+      const waterSize = floodWaterSize(nloc, map, width, height, oceanThreshold);
+      if (waterSize >= oceanThreshold) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * BFS flood-fill water tiles. Returns count, stopping early if >= limit.
+ */
+function floodWaterSize(start: Loc, map: MapCell[], width: number, height: number, limit: number): number {
+  const size = width * height;
+  const visited = new Uint8Array(size);
+  const queue: Loc[] = [start];
+  visited[start] = 1;
+  let count = 0;
+
+  while (queue.length > 0) {
+    const loc = queue.shift()!;
+    count++;
+    if (count >= limit) return count; // early exit
+
+    const r = Math.floor(loc / width);
+    const c = loc % width;
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dr === 0 && dc === 0) continue;
+        const nr = r + dr;
+        const nc = c + dc;
+        if (nr < 0 || nr >= height || nc < 0 || nc >= width) continue;
+        const nloc = nr * width + nc;
+        if (!visited[nloc] && map[nloc].terrain === TerrainType.Sea) {
+          visited[nloc] = 1;
+          queue.push(nloc);
+        }
+      }
+    }
+  }
+  return count;
+}
+
+/**
  * BFS flood-fill to find all connected land/city cells from a starting location.
  */
 function floodFill(
@@ -323,7 +385,7 @@ export function findContinents(
       const cityIdx = cityByLoc.get(loc);
       if (cityIdx !== undefined) {
         contCities.push(cityIdx);
-        if (isShore(loc, map, width, height)) {
+        if (isOceanShore(loc, map, width, height)) {
           shoreCities.push(cityIdx);
         }
       }

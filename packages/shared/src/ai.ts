@@ -243,8 +243,41 @@ function isCityCoastal(viewMap: ViewMapCell[], cityLoc: Loc): boolean {
   return false;
 }
 
-/** Check if a coastal city is on a lake (not open ocean). */
-function isCityOnLake(viewMap: ViewMapCell[], cityLoc: Loc): boolean {
+/**
+ * Check if a coastal city is on a lake (not open ocean).
+ * Uses actual terrain data (not viewMap) to avoid false negatives from unexplored cells.
+ * A water body < 5% of map size is considered a lake.
+ */
+function isCityOnLake(viewMap: ViewMapCell[], cityLoc: Loc, state?: GameState): boolean {
+  // If we have game state, use actual terrain for reliable detection
+  if (state) {
+    const oceanThreshold = Math.floor(MAP_SIZE * 0.05);
+    const adjacent = getAdjacentLocs(cityLoc);
+    for (const adj of adjacent) {
+      if (state.map[adj].terrain === TerrainType.Sea) {
+        // BFS flood-fill water using actual terrain
+        const visited = new Uint8Array(MAP_SIZE);
+        const queue: Loc[] = [adj];
+        visited[adj] = 1;
+        let count = 0;
+        while (queue.length > 0) {
+          const loc = queue.shift()!;
+          count++;
+          if (count >= oceanThreshold) return false; // large enough = ocean
+          for (const a of getAdjacentLocs(loc)) {
+            if (!visited[a] && state.map[a].terrain === TerrainType.Sea) {
+              visited[a] = 1;
+              queue.push(a);
+            }
+          }
+        }
+        // Small water body = lake
+        return true;
+      }
+    }
+    return false;
+  }
+  // Fallback: viewMap-based detection
   const adjacent = getAdjacentLocs(cityLoc);
   for (const adj of adjacent) {
     if (viewMap[adj].contents === ".") {
@@ -329,7 +362,7 @@ function decideProduction(
 ): UnitType | null {
   const currentAttrs = UNIT_ATTRIBUTES[city.production];
   const coastal = isCityCoastal(viewMap, city.loc);
-  const onLake = coastal && isCityOnLake(viewMap, city.loc);
+  const onLake = coastal && isCityOnLake(viewMap, city.loc, state);
   // Can this city build ships? Only coastal, non-lake cities
   const canBuildShips = coastal && !onLake;
 
@@ -381,6 +414,22 @@ function decideProduction(
   // the AI needs to build armies to capture more cities first.
   const aiCityCount = state.cities.filter(c => c.owner === aiOwner).length;
   if (aiCityCount <= 1) {
+    // Exception: if all our armies are WaitForTransport and city is coastal,
+    // we're stuck on an island — build a transport to escape
+    if (canBuildShips) {
+      const aiArmyUnits = state.units.filter(u => u.owner === aiOwner && u.type === UnitType.Army);
+      const allWaiting = aiArmyUnits.length > 0
+        && aiArmyUnits.every(u => u.func === UnitBehavior.WaitForTransport);
+      if (allWaiting && city.production !== UnitType.Transport) {
+        aiLog(`City #${city.id}: switch to Transport (island escape — all ${aiArmyUnits.length} armies waiting)`);
+        return UnitType.Transport;
+      }
+      // Already building transport for island escape — keep going
+      if (allWaiting && city.production === UnitType.Transport) {
+        aiLog(`City #${city.id}: keeping Transport (island escape)`);
+        return null;
+      }
+    }
     // With 1 city, always build armies — no transport or ratio switching
     if (city.production !== UnitType.Army) {
       aiLog(`City #${city.id}: switch to Army (only 1 city)`);
@@ -393,6 +442,23 @@ function decideProduction(
   if (canBuildShips && prodCounts[UnitType.Transport] === 0) {
     if (!(armiesNeeded > 0 && prodCounts[UnitType.Army] <= 1)) {
       aiLog(`City #${city.id}: switch to Transport (none being built)`);
+      return UnitType.Transport;
+    }
+  }
+
+  // Priority 2b: Build more transports when army surplus is overwhelming
+  // Each transport carries 6 armies; if wait:transport count far exceeds capacity, add more
+  if (canBuildShips && city.production !== UnitType.Transport) {
+    const waitingArmies = state.units.filter(
+      u => u.owner === aiOwner && u.type === UnitType.Army
+        && u.func === UnitBehavior.WaitForTransport && u.shipId === null
+    ).length;
+    const existingTransports = state.units.filter(
+      u => u.owner === aiOwner && u.type === UnitType.Transport
+    ).length;
+    const transportCapacity = (existingTransports + prodCounts[UnitType.Transport]) * 6;
+    if (waitingArmies > transportCapacity + 6 && progress < 0.5) {
+      aiLog(`City #${city.id}: switch to Transport (army surplus: ${waitingArmies} waiting, capacity=${transportCapacity})`);
       return UnitType.Transport;
     }
   }
@@ -713,6 +779,24 @@ function aiTransportMove(
               break; // stay put and wait
             }
           }
+        } else if (projectedCargo > 0) {
+          // Already carrying armies but couldn't load more — deliver what we have
+          aiLog(`    Transport #${unit.id}: cargo=${projectedCargo}/${capacity}, no more loadable armies, heading to deliver`);
+          const unloadMap = createUnloadViewMap(viewMap, state, aiOwner);
+          const deliverTarget = findMoveToward(unloadMap, currentLoc, ttUnloadMoveInfo());
+          if (deliverTarget !== null) {
+            actions.push({ type: "move", unitId: unit.id, loc: deliverTarget });
+            currentLoc = deliverTarget;
+            continue;
+          }
+          // No unload targets — explore to find enemy territory
+          const exploreTarget2 = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
+          if (exploreTarget2 !== null) {
+            actions.push({ type: "move", unitId: unit.id, loc: exploreTarget2 });
+            currentLoc = exploreTarget2;
+            continue;
+          }
+          break;
         }
       }
 
