@@ -81,7 +81,9 @@ function aiLog(...args: unknown[]): void {
 // ─── Production Ratio Tables ───────────────────────────────────────────────────
 // Index by UnitType: [Army, Fighter, Patrol, Destroyer, Submarine, Transport, Carrier, Battleship, Satellite]
 
-/** ≤10 cities */
+/** 2–3 cities: fighter-heavy early game */
+const RATIO_EARLY = [50, 20, 0, 0, 0, 15, 0, 0, 0];
+/** 4–10 cities */
 const RATIO_1 = [60, 10, 10, 0, 0, 20, 0, 0, 0];
 /** 11–20 cities */
 const RATIO_2 = [90, 15, 10, 10, 10, 40, 0, 0, 0];
@@ -91,6 +93,7 @@ const RATIO_3 = [120, 20, 20, 10, 10, 60, 10, 10, 0];
 const RATIO_4 = [150, 30, 30, 20, 20, 70, 10, 10, 0];
 
 function getRatioTable(cityCount: number): number[] {
+  if (cityCount <= 3) return RATIO_EARLY;
   if (cityCount <= 10) return RATIO_1;
   if (cityCount <= 20) return RATIO_2;
   if (cityCount <= 30) return RATIO_3;
@@ -390,6 +393,8 @@ function decideProduction(
 
   // Guard: never switch away from Transport if this is the only transport producer
   // AND there are armies that still need transport (or no transport exists yet).
+  // Exception: allow switching if we already have 2+ transports — they exist and
+  // will eventually load, more production won't help if transport logic is stuck.
   if (city.production === UnitType.Transport && prodCounts[UnitType.Transport] <= 1) {
     const waitingArmies = state.units.filter(
       u => u.owner === aiOwner && u.type === UnitType.Army
@@ -398,12 +403,12 @@ function decideProduction(
     const existingTransports = state.units.filter(
       u => u.owner === aiOwner && u.type === UnitType.Transport,
     ).length;
-    if (waitingArmies > 0 || existingTransports === 0) {
+    if ((waitingArmies > 0 || existingTransports === 0) && existingTransports < 2) {
       aiLog(`City #${city.id}: keeping Transport (only transport producer, ${waitingArmies} waiting, ${existingTransports} existing)`);
       return null;
     }
-    // No waiting armies and we already have a transport — allow switching
-    aiLog(`City #${city.id}: no armies waiting and transport exists, allowing switch`);
+    // Enough transports exist or no armies waiting — allow switching
+    aiLog(`City #${city.id}: allowing switch from Transport (${existingTransports} transports exist, ${waitingArmies} waiting)`);
   }
 
   // Guard: don't switch away from Transport via ratio rebalance if there's still army surplus.
@@ -467,6 +472,30 @@ function decideProduction(
     return null;
   }
 
+  // Priority 1b: Ensure early fighter production (2+ cities)
+  // Fighters explore at 8 tiles/turn (vs army's 1) — essential for map awareness.
+  // Allow switching from Army if we have at least 1 other army producer.
+  // Never switch from Transport (needed for mobility).
+  {
+    const existingFighters = state.units.filter(
+      u => u.owner === aiOwner && u.type === UnitType.Fighter,
+    ).length;
+    const buildingFighters = prodCounts[UnitType.Fighter];
+    if (existingFighters === 0 && buildingFighters === 0) {
+      const canSwitch = city.production !== UnitType.Transport
+        && (city.production !== UnitType.Army || prodCounts[UnitType.Army] > 1);
+      if (canSwitch) {
+        if (progress < 0.25) {
+          aiLog(`City #${city.id}: switch to Fighter (first fighter, ${aiCityCount} cities, armyProducers=${prodCounts[UnitType.Army]})`);
+          return UnitType.Fighter;
+        }
+        aiLog(`City #${city.id}: want Fighter but ${Math.round(progress * 100)}% done with ${currentAttrs.name}, skipping`);
+      } else {
+        aiLog(`City #${city.id}: want Fighter but won't switch from ${currentAttrs.name} (essential/only producer)`);
+      }
+    }
+  }
+
   // Only coastal non-lake cities can build transports/ships
   if (canBuildShips && prodCounts[UnitType.Transport] === 0) {
     if (!(armiesNeeded > 0 && prodCounts[UnitType.Army] <= 1)) {
@@ -476,24 +505,31 @@ function decideProduction(
   }
 
   // Priority 2b: Build more transports when army surplus is overwhelming
-  // Each transport carries 6 armies; if wait:transport count far exceeds capacity, add more
+  // Each transport carries 6 armies; if wait:transport count far exceeds capacity, add more.
+  // Cap: max ceil(cities/4) cities building transports to prevent overproduction.
   if (canBuildShips && city.production !== UnitType.Transport) {
-    const waitingArmies = state.units.filter(
-      u => u.owner === aiOwner && u.type === UnitType.Army
-        && u.func === UnitBehavior.WaitForTransport && u.shipId === null
-    ).length;
-    const existingTransports = state.units.filter(
-      u => u.owner === aiOwner && u.type === UnitType.Transport
-    ).length;
-    const transportCapacity = (existingTransports + prodCounts[UnitType.Transport]) * 6;
-    if (waitingArmies > transportCapacity + 6 && progress < 0.5) {
-      aiLog(`City #${city.id}: switch to Transport (army surplus: ${waitingArmies} waiting, capacity=${transportCapacity})`);
-      return UnitType.Transport;
+    const maxTransportCities = Math.max(1, Math.ceil(aiCityCount / 4));
+    if (prodCounts[UnitType.Transport] < maxTransportCities) {
+      const waitingArmies = state.units.filter(
+        u => u.owner === aiOwner && u.type === UnitType.Army
+          && u.func === UnitBehavior.WaitForTransport && u.shipId === null
+      ).length;
+      const existingTransports = state.units.filter(
+        u => u.owner === aiOwner && u.type === UnitType.Transport
+      ).length;
+      const transportCapacity = (existingTransports + prodCounts[UnitType.Transport]) * 6;
+      if (waitingArmies > transportCapacity + 6 && progress < 0.5) {
+        aiLog(`City #${city.id}: switch to Transport (army surplus: ${waitingArmies} waiting, capacity=${transportCapacity}, ${prodCounts[UnitType.Transport]}/${maxTransportCities} transport cities)`);
+        return UnitType.Transport;
+      }
+    } else {
+      aiLog(`City #${city.id}: transport cap reached (${prodCounts[UnitType.Transport]}/${maxTransportCities} cities building transports)`);
     }
   }
 
   // Priority 3: Follow ratio tables if current production is overproduced
   const ratio = getRatioTable(aiCityCount);
+  const ratioName = aiCityCount <= 3 ? "EARLY" : aiCityCount <= 10 ? "R1" : aiCityCount <= 20 ? "R2" : aiCityCount <= 30 ? "R3" : "R4";
 
   if (overproduced(prodCounts, ratio, city.production)) {
     // Don't switch if >50% done
@@ -502,7 +538,7 @@ function decideProduction(
       return null;
     }
     const needed = needMore(prodCounts, ratio, !canBuildShips);
-    aiLog(`City #${city.id}: switch from ${currentAttrs.name} to ${UNIT_ATTRIBUTES[needed].name} (ratio rebalance)`);
+    aiLog(`City #${city.id}: switch from ${currentAttrs.name} to ${UNIT_ATTRIBUTES[needed].name} (ratio rebalance, table=${ratioName}, cities=${aiCityCount})`);
     return needed;
   }
 
@@ -736,8 +772,8 @@ function aiTransportMove(
 
   aiLog(`  Transport #${unit.id}: loc=${unit.loc} cargo=${projectedCargo}/${capacity} moves=${movesLeft}`);
 
-  // Track previous position to detect oscillation (moving back to where we just were)
-  let prevLoc: Loc | null = null;
+  // Track all positions this turn to detect oscillation (prevents 2+ tile cycles)
+  const recentLocs = new Set<Loc>([currentLoc]);
 
   for (let step = 0; step < movesLeft; step++) {
     if (findUnit(state, unit.id) === undefined) break;
@@ -786,18 +822,18 @@ function aiTransportMove(
       // Navigate toward enemy continent
       const unloadMap = createUnloadViewMap(viewMap, state, aiOwner);
       const target = findMoveToward(unloadMap, currentLoc, ttUnloadMoveInfo());
-      if (target !== null && target !== prevLoc) {
+      if (target !== null && !recentLocs.has(target)) {
         aiLog(`    Transport #${unit.id}: full, navigating toward target at ${target}`);
         actions.push({ type: "move", unitId: unit.id, loc: target });
-        prevLoc = currentLoc;
+        recentLocs.add(currentLoc);
         currentLoc = target;
       } else {
         // No unload targets found or would oscillate — explore to discover enemy territory
         const exploreTarget = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
-        if (exploreTarget !== null && exploreTarget !== prevLoc) {
+        if (exploreTarget !== null && !recentLocs.has(exploreTarget)) {
           aiLog(`    Transport #${unit.id}: full, exploring toward ${exploreTarget}`);
           actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
-          prevLoc = currentLoc;
+          recentLocs.add(currentLoc);
           currentLoc = exploreTarget;
         } else {
           aiLog(`    Transport #${unit.id}: full, no movement options, stuck`);
@@ -811,10 +847,10 @@ function aiTransportMove(
       if (loadedThisTurn && isFull) {
         const unloadMap = createUnloadViewMap(viewMap, state, aiOwner);
         const target = findMoveToward(unloadMap, currentLoc, ttUnloadMoveInfo());
-        if (target !== null && target !== prevLoc) {
+        if (target !== null && !recentLocs.has(target)) {
           aiLog(`    Transport #${unit.id}: loaded & full, heading to deliver at ${target}`);
           actions.push({ type: "move", unitId: unit.id, loc: target });
-          prevLoc = currentLoc;
+          recentLocs.add(currentLoc);
           currentLoc = target;
         } else {
           aiLog(`    Transport #${unit.id}: loaded & full, no delivery target found`);
@@ -827,18 +863,18 @@ function aiTransportMove(
       if (projectedCargo > 0 && deliveringMode) {
         const unloadMap = createUnloadViewMap(viewMap, state, aiOwner);
         const deliverTarget = findMoveToward(unloadMap, currentLoc, ttUnloadMoveInfo());
-        if (deliverTarget !== null && deliverTarget !== prevLoc) {
+        if (deliverTarget !== null && !recentLocs.has(deliverTarget)) {
           aiLog(`    Transport #${unit.id}: continuing delivery toward ${deliverTarget}`);
           actions.push({ type: "move", unitId: unit.id, loc: deliverTarget });
-          prevLoc = currentLoc;
+          recentLocs.add(currentLoc);
           currentLoc = deliverTarget;
           continue;
         }
         const exploreTarget = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
-        if (exploreTarget !== null && exploreTarget !== prevLoc) {
+        if (exploreTarget !== null && !recentLocs.has(exploreTarget)) {
           aiLog(`    Transport #${unit.id}: delivery path blocked, exploring toward ${exploreTarget}`);
           actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
-          prevLoc = currentLoc;
+          recentLocs.add(currentLoc);
           currentLoc = exploreTarget;
           continue;
         }
@@ -878,28 +914,40 @@ function aiTransportMove(
       if (!deliveringMode) {
         const loadMap = createTTLoadViewMap(viewMap, state, aiOwner);
         const target = findMoveToward(loadMap, currentLoc, ttLoadMoveInfo());
-        if (target !== null && target !== prevLoc) {
+        if (target !== null && !recentLocs.has(target)) {
           aiLog(`    Transport #${unit.id}: moving toward armies at ${target}`);
           actions.push({ type: "move", unitId: unit.id, loc: target });
-          prevLoc = currentLoc;
+          recentLocs.add(currentLoc);
           currentLoc = target;
         } else if (projectedCargo > 0) {
+          // Only deliver if we have meaningful cargo (>= 50% capacity) or no loadable armies exist
+          const minDeliverCargo = Math.ceil(capacity / 2);
+          if (projectedCargo < minDeliverCargo) {
+            const anyLoadableArmies = state.units.some(u =>
+              u.owner === aiOwner && u.type === UnitType.Army && u.shipId === null
+              && (u.func === UnitBehavior.None || u.func === UnitBehavior.Explore || u.func === UnitBehavior.WaitForTransport),
+            );
+            if (anyLoadableArmies) {
+              aiLog(`    Transport #${unit.id}: only ${projectedCargo}/${capacity} cargo, waiting for more (min ${minDeliverCargo})`);
+              break; // stay near loading zone and wait
+            }
+          }
           // Partially loaded with no armies to find — head toward enemy territory
-          aiLog(`    Transport #${unit.id}: no more armies found, delivering ${projectedCargo}/${capacity}`);
+          aiLog(`    Transport #${unit.id}: delivering ${projectedCargo}/${capacity} (no more armies available)`);
           deliveringMode = true;
           const unloadMap = createUnloadViewMap(viewMap, state, aiOwner);
           const unloadTarget = findMoveToward(unloadMap, currentLoc, ttUnloadMoveInfo());
-          if (unloadTarget !== null && unloadTarget !== prevLoc) {
+          if (unloadTarget !== null && !recentLocs.has(unloadTarget)) {
             aiLog(`    Transport #${unit.id}: delivering toward ${unloadTarget}`);
             actions.push({ type: "move", unitId: unit.id, loc: unloadTarget });
-            prevLoc = currentLoc;
+            recentLocs.add(currentLoc);
             currentLoc = unloadTarget;
           } else {
             const exploreTarget = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
-            if (exploreTarget !== null && exploreTarget !== prevLoc) {
+            if (exploreTarget !== null && !recentLocs.has(exploreTarget)) {
               aiLog(`    Transport #${unit.id}: exploring toward ${exploreTarget}`);
               actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
-              prevLoc = currentLoc;
+              recentLocs.add(currentLoc);
               currentLoc = exploreTarget;
             } else {
               aiLog(`    Transport #${unit.id}: stuck, no movement options`);
@@ -909,10 +957,10 @@ function aiTransportMove(
         } else {
           // Empty with no targets — explore
           const exploreTarget = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
-          if (exploreTarget !== null && exploreTarget !== prevLoc) {
+          if (exploreTarget !== null && !recentLocs.has(exploreTarget)) {
             aiLog(`    Transport #${unit.id}: empty, exploring toward ${exploreTarget}`);
             actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
-            prevLoc = currentLoc;
+            recentLocs.add(currentLoc);
             currentLoc = exploreTarget;
           } else {
             aiLog(`    Transport #${unit.id}: empty, no explore targets, stuck`);
@@ -942,6 +990,26 @@ function shouldUnload(
   // Unloading on generic land caused premature dumping on home island.
   const loc = atLoc ?? unit.loc;
   const adjacent = getAdjacentLocs(loc);
+
+  // First: check if adjacent land is on a continent with WaitForTransport armies.
+  // If so, this is a loading continent — never unload here!
+  for (const adj of adjacent) {
+    const contents = viewMap[adj].contents;
+    if (contents !== "+" && contents !== " " && contents !== "X"
+        && contents !== "*" && contents !== "O" && contents !== "A" && contents !== "a") continue;
+    // This is a land cell — check its continent for waiting armies
+    const continent = mapContinent(viewMap, adj, ".");
+    for (const u of state.units) {
+      if (u.owner === aiOwner && u.type === UnitType.Army
+          && u.func === UnitBehavior.WaitForTransport && u.shipId === null
+          && continent.has(u.loc)) {
+        aiLog(`    Transport #${unit.id}: shouldUnload=false (adj ${adj} on loading continent with waiting armies)`);
+        return false;
+      }
+    }
+    break; // only check one adjacent land tile's continent
+  }
+
   for (const adj of adjacent) {
     const contents = viewMap[adj].contents;
     if (contents === "X" || contents === "*" || contents === "a") {
@@ -1014,7 +1082,18 @@ function tryUnloadArmies(
         return c.cityId !== null && state.cities[c.cityId].owner === aiOwner;
       });
       if (!isNearOwnCity) {
-        landTargets.push({ loc: adj, priority: 1 });
+        // Check if this land is on a continent with WaitForTransport armies (loading zone)
+        const continent = mapContinent(viewMap, adj, ".");
+        const isLoadingContinent = state.units.some(u =>
+          u.owner === aiOwner && u.type === UnitType.Army
+          && u.func === UnitBehavior.WaitForTransport && u.shipId === null
+          && continent.has(u.loc),
+        );
+        if (!isLoadingContinent) {
+          landTargets.push({ loc: adj, priority: 1 });
+        } else {
+          aiLog(`    Transport #${unit.id}: skip unload at ${adj} (loading continent)`);
+        }
       }
     }
     // Skip 'O' (own city) — never unload at home
@@ -1110,10 +1189,10 @@ function countNearbyArmies(
   claimedUnitIds: Set<number>,
 ): number {
   let count = 0;
-  // Check tiles within BFS distance 1 (armies that can board next turn)
+  // Check tiles within BFS distance 3 (armies approaching within a few turns)
   const visited = new Set<Loc>([loc]);
   let frontier = getAdjacentLocs(loc);
-  for (let depth = 0; depth < 1; depth++) {
+  for (let depth = 0; depth < 3; depth++) {
     const nextFrontier: Loc[] = [];
     for (const adj of frontier) {
       if (visited.has(adj)) continue;
@@ -1192,9 +1271,10 @@ function createUnloadViewMap(
       aiLog(`      unloadMap: skip own continent (${continent.size} tiles, own=${hasOwnCity})`);
       continue;
     }
-    // Skip continents where we have armies waiting for transport (don't unload back at pickup point)
-    if (hasWaitingArmies && targetCities === 0) {
-      aiLog(`      unloadMap: skip pickup continent (${continent.size} tiles, waitingArmies=${hasWaitingArmies})`);
+    // Skip continents where we have armies waiting for transport — this is a loading continent,
+    // never unload here even if there are target cities (armies are already there to capture them)
+    if (hasWaitingArmies) {
+      aiLog(`      unloadMap: skip loading continent (${continent.size} tiles, waitingArmies=${hasWaitingArmies}, targets=${targetCities})`);
       continue;
     }
     // Skip continents with nothing interesting

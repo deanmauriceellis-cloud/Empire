@@ -203,6 +203,79 @@ describe("AI System", () => {
       // May or may not switch — just ensure no crash
       expect(actions).toBeDefined();
     });
+
+    it("should produce fighter via early ratio rebalance with 2+ cities", () => {
+      // 2 cities both building army — early ratio table (RATIO_EARLY) has 20% fighter weight,
+      // so ratio rebalance should switch one to fighter
+      const city1 = addCity(state, rowColLoc(10, 10), AI, UnitType.Army);
+      const city2 = addCity(state, rowColLoc(12, 10), AI, UnitType.Army);
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      const fighterProd = actions.find(
+        a => a.type === "setProduction" && a.unitType === UnitType.Fighter,
+      );
+      // Early ratio table ensures fighters get produced
+      expect(fighterProd).toBeDefined();
+    });
+
+    it("should use early ratio table favoring fighters with 2-3 cities", () => {
+      // With 2-3 cities, RATIO_EARLY has 20% fighter weight vs 10% in RATIO_1
+      // This ensures fighters get produced earlier in the game
+      const city1 = addCity(state, rowColLoc(10, 10), AI, UnitType.Army);
+      const city2 = addCity(state, rowColLoc(12, 10), AI, UnitType.Army);
+      const city3 = addCity(state, rowColLoc(14, 10), AI, UnitType.Army);
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      // At least one city should switch to fighter via ratio rebalance
+      const fighterProd = actions.find(
+        a => a.type === "setProduction" && a.unitType === UnitType.Fighter,
+      );
+      expect(fighterProd).toBeDefined();
+    });
+
+    it("should cap transport production at ceil(cities/4)", () => {
+      // 8 cities, set up water for coastal detection
+      setWater(state, 5, 21, 20, 20);
+      const cities = [];
+      for (let i = 0; i < 8; i++) {
+        // Place cities near water so they're coastal
+        cities.push(addCity(state, rowColLoc(10 + i * 2, 20), AI, UnitType.Army));
+      }
+      // Create 30 WaitForTransport armies to trigger surplus
+      for (let i = 0; i < 30; i++) {
+        const u = createUnit(state, UnitType.Army, AI, rowColLoc(20, 10 + (i % 10)));
+        u.func = UnitBehavior.WaitForTransport;
+      }
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      const ttProd = actions.filter(
+        a => a.type === "setProduction" && a.unitType === UnitType.Transport,
+      );
+      // Max ceil(8/4) = 2 cities should switch to transport
+      expect(ttProd.length).toBeLessThanOrEqual(2);
+    });
+
+    it("should allow switching from transport when 2+ transports exist", () => {
+      // City building transport, but 2 transports already exist and no armies waiting
+      const city1 = addCity(state, rowColLoc(10, 10), AI, UnitType.Transport);
+      const city2 = addCity(state, rowColLoc(12, 10), AI, UnitType.Army);
+      setWater(state, 5, 11, 20, 20);
+      // Create 2 existing transports
+      createUnit(state, UnitType.Transport, AI, rowColLoc(6, 12));
+      createUnit(state, UnitType.Transport, AI, rowColLoc(7, 12));
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      // City1 should be allowed to switch away from transport
+      const switchAction = actions.find(
+        a => a.type === "setProduction" && a.cityId === city1.id,
+      );
+      // With 2 transports and no waiting armies, the guard should let it switch
+      expect(switchAction).toBeDefined();
+    });
   });
 
   describe("Step 4.2: AI Army Movement", () => {
