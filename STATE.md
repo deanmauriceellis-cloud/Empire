@@ -9,7 +9,7 @@
 - 18 E2E tests (17 passing, 1 skipped)
 
 ## Latest commit
-`TBD` — session 021: fix small island starts and smart army WaitForTransport behavior
+`29a6738` — session 021: fix small island starts and smart army WaitForTransport behavior
 
 ## Completed
 - [x] Phase 0: Project scaffolding (pnpm monorepo, shared/client/server)
