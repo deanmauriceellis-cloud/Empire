@@ -458,7 +458,7 @@ export function selectStartingCities(
 
   if (scored.length < 2) {
     // Fallback: if fewer than 2 viable continents, pick 2 distant ocean-shore cities
-    return pickDistantCities(cities, rng, map, mapWidth, mapHeight);
+    return pickDistantCities(cities, rng, map, mapWidth, mapHeight, continents);
   }
 
   // Create pairs ranked by balance (smallest diff first = fairest)
@@ -504,16 +504,38 @@ export function selectStartingCities(
   return [bestC1, bestC2];
 }
 
-/** Fallback: pick two cities that are maximally far apart, preferring ocean shore. */
+/** Fallback: pick two cities that are maximally far apart, preferring ocean shore.
+ *  Ensures each city's continent has at least 1 other neutral city reachable by land. */
 function pickDistantCities(
   cities: CityState[],
   rng: () => number,
   map?: MapCell[],
   mapWidth?: number,
   mapHeight?: number,
+  continents?: Continent[],
 ): [number, number] {
-  // Filter to ocean-shore cities when map data is available
+  // Build lookup: city index → continent
+  const cityContinent = new Map<number, Continent>();
+  if (continents) {
+    for (const cont of continents) {
+      for (const cIdx of cont.cities) {
+        cityContinent.set(cIdx, cont);
+      }
+    }
+  }
+
+  // Filter to cities whose continent has at least 2 cities (1 neutral + the start)
+  // and that are on ocean shore
   let candidates = cities.map((_, i) => i);
+  if (continents) {
+    const viableCandidates = candidates.filter(i => {
+      const cont = cityContinent.get(i);
+      return cont !== undefined && cont.cities.length >= 2;
+    });
+    if (viableCandidates.length >= 2) {
+      candidates = viableCandidates;
+    }
+  }
   if (map && mapWidth && mapHeight) {
     const shoreCandidates = candidates.filter(i =>
       isOceanShore(cities[i].loc, map, mapWidth, mapHeight),

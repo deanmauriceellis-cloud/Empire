@@ -37,6 +37,8 @@ import {
   getAdjacentLocs,
   dist,
   locCol,
+  locRow,
+  rowColLoc,
 } from "./utils.js";
 import {
   findUnit,
@@ -463,8 +465,13 @@ function decideProduction(
     const ownCityCount = state.cities.filter(c => c.owner === aiOwner).length;
     const maxTransportCities = Math.max(1, Math.ceil(ownCityCount / 4));
     if (prodCounts[UnitType.Transport] > maxTransportCities) {
-      // Over the cap — allow switching away from transport
-      aiLog(`City #${city.id}: over transport cap (${prodCounts[UnitType.Transport]}/${maxTransportCities}), allowing switch`);
+      // Over the cap — force switch away from transport immediately
+      const capRatio = getRatioTable(ownCityCount);
+      const capNeeded = needMore(prodCounts, capRatio, !canBuildShips);
+      if (capNeeded !== UnitType.Transport) {
+        aiLog(`City #${city.id}: over transport cap (${prodCounts[UnitType.Transport]}/${maxTransportCities}), forcing switch to ${UNIT_ATTRIBUTES[capNeeded].name}`);
+        return capNeeded;
+      }
     } else {
       const waitingArmies = state.units.filter(
         u => u.owner === aiOwner && u.type === UnitType.Army
@@ -577,9 +584,13 @@ function decideProduction(
     ).length;
     const buildingFighters = prodCounts[UnitType.Fighter];
     const totalFighters = existingFighters + buildingFighters;
+    // Cap fighter production: max 2 fighters early, max 3 with 10+ cities.
+    // Fighters explore fast (speed 8) but are fragile (1 HP) — more than a few is wasteful.
+    const maxFighters = aiCityCount >= 10 ? 3 : 2;
     // First fighter: very aggressive — switch even if 60% done
     // Second fighter: moderate — switch if < 40% done (with 3+ cities)
-    const wantFighter = totalFighters === 0 || (totalFighters === 1 && aiCityCount >= 3);
+    const wantFighter = totalFighters < maxFighters
+      && (totalFighters === 0 || (totalFighters === 1 && aiCityCount >= 3));
     const maxProgress = totalFighters === 0 ? 0.6 : 0.4;
     if (wantFighter) {
       // Don't switch to fighter if no transports exist and none being built — transport is more urgent
@@ -655,12 +666,26 @@ function decideProduction(
         return null;
       }
     }
-    // Don't switch if >40% done — prevents constant flip-flopping with work penalties
-    if (progress >= 0.4) {
-      aiLog(`City #${city.id}: ${currentAttrs.name} overproduced but ${Math.round(progress * 100)}% done, finishing`);
+    // Commit to current production until at least 25% done.
+    // This prevents pathological oscillation where ratio rebalance flips production
+    // every few turns (e.g., transport↔fighter) and nothing ever finishes.
+    // Minimum commitment: max(5 turns, 25% of build time) from work=0.
+    // Note: work can be negative (retool penalty), so use absolute threshold.
+    const minCommitWork = Math.max(5, Math.ceil(currentAttrs.buildTime * 0.25));
+    if (city.work < minCommitWork) {
+      aiLog(`City #${city.id}: ${currentAttrs.name} overproduced but work=${city.work}/${currentAttrs.buildTime} (need ${minCommitWork} to consider switch), committed`);
       return null;
     }
-    const needed = needMore(prodCounts, ratio, !canBuildShips);
+    // Don't let ratio rebalance pick Fighter when we already have enough
+    const maxFighters2 = aiCityCount >= 10 ? 3 : 2;
+    const existingFighters2 = state.units.filter(
+      u => u.owner === aiOwner && u.type === UnitType.Fighter,
+    ).length + prodCounts[UnitType.Fighter];
+    const adjustedRatio = [...ratio];
+    if (existingFighters2 >= maxFighters2) {
+      adjustedRatio[UnitType.Fighter] = 0; // suppress fighter production
+    }
+    const needed = needMore(prodCounts, adjustedRatio, !canBuildShips);
     // Don't switch if we'd switch to the same type we just switched FROM (work penalty wasted)
     if (needed === city.production) return null;
     aiLog(`City #${city.id}: switch from ${currentAttrs.name} to ${UNIT_ATTRIBUTES[needed].name} (ratio rebalance, table=${ratioName}, cities=${aiCityCount})`);
@@ -1054,34 +1079,11 @@ function aiTransportMove(
             claimPickupZone(loadMap, loadResult.objective, claimedPickupLocs);
           }
         } else if (projectedCargo > 0) {
-          // Only deliver if we have meaningful cargo (>= 50% capacity) or no loadable armies exist
-          // But don't wait forever — if we've been sitting still (prevLocs shows same loc), just deliver
-          const minDeliverCargo = Math.ceil(capacity / 2);
-          const stuckTurns = (unit.prevLocs ?? []).filter(l => l === currentLoc).length;
-          if (projectedCargo < minDeliverCargo && stuckTurns < 3) {
-            const anyLoadableArmies = state.units.some(u =>
-              u.owner === aiOwner && u.type === UnitType.Army && u.shipId === null
-              && !claimedUnitIds.has(u.id)
-              && (u.func === UnitBehavior.None || u.func === UnitBehavior.Explore || u.func === UnitBehavior.WaitForTransport),
-            );
-            if (anyLoadableArmies) {
-              // Armies exist but can't be found via loadMap — explore to find new routes
-              const exploreTarget = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
-              if (exploreTarget !== null && !recentLocs.has(exploreTarget)) {
-                aiVLog(`    Transport #${unit.id}: ${projectedCargo}/${capacity} cargo, exploring to find ${minDeliverCargo - projectedCargo} more armies`);
-                actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
-                recentLocs.add(currentLoc);
-                currentLoc = exploreTarget;
-                continue;
-              }
-              aiVLog(`    Transport #${unit.id}: ${projectedCargo}/${capacity} cargo, waiting for armies to reach coast`);
-              break;
-            }
-          }
-          if (stuckTurns >= 3) {
-            aiVLog(`    Transport #${unit.id}: waited ${stuckTurns} turns with ${projectedCargo}/${capacity} cargo, delivering anyway`);
-          }
-          // Partially loaded with no armies to find (or waited too long) — head toward enemy territory
+          // Have some cargo but can't find more armies via loadMap.
+          // Deliver what we have rather than circling forever.
+          // The transport already tried loading (lines above) and navigating toward armies —
+          // if we're here, there are no reachable loadable armies.
+          // Partially loaded with no armies to find — head toward enemy territory
           aiVLog(`    Transport #${unit.id}: delivering ${projectedCargo}/${capacity} (no more armies available)`);
           deliveringMode = true;
           const unloadMap = createUnloadViewMap(viewMap, state, aiOwner);
@@ -1104,7 +1106,7 @@ function aiTransportMove(
             }
           }
         } else {
-          // Empty with no targets — explore
+          // Empty with no targets — explore, or return to pickup zone
           const exploreTarget = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
           if (exploreTarget !== null && !recentLocs.has(exploreTarget)) {
             aiVLog(`    Transport #${unit.id}: empty, exploring toward ${exploreTarget}`);
@@ -1112,8 +1114,30 @@ function aiTransportMove(
             recentLocs.add(currentLoc);
             currentLoc = exploreTarget;
           } else {
-            aiVLog(`    Transport #${unit.id}: empty, no explore targets, stuck`);
-            break;
+            // No unexplored water — try to return toward waiting armies
+            const returnLoadMap = createTTLoadViewMap(viewMap, state, aiOwner, claimedPickupLocs, claimedUnitIds);
+            const returnTarget = findMoveToward(returnLoadMap, currentLoc, ttLoadMoveInfo());
+            if (returnTarget !== null && !recentLocs.has(returnTarget)) {
+              aiVLog(`    Transport #${unit.id}: empty, returning toward waiting armies at ${returnTarget}`);
+              actions.push({ type: "move", unitId: unit.id, loc: returnTarget });
+              recentLocs.add(currentLoc);
+              currentLoc = returnTarget;
+            } else {
+              // No armies either — navigate toward own coastal cities (army production).
+              // Can't use waterMoveInfo("O") because cities are on land and water BFS can't reach them.
+              // Instead, mark water tiles adjacent to own cities as targets.
+              const portMap = createPortViewMap(viewMap, state, aiOwner);
+              const homeTarget = findMoveToward(portMap, currentLoc, waterMoveInfo("H", new Map([["H", 1]])));
+              if (homeTarget !== null && !recentLocs.has(homeTarget)) {
+                aiVLog(`    Transport #${unit.id}: empty, returning to own port at ${homeTarget}`);
+                actions.push({ type: "move", unitId: unit.id, loc: homeTarget });
+                recentLocs.add(currentLoc);
+                currentLoc = homeTarget;
+              } else {
+                aiVLog(`    Transport #${unit.id}: empty, no explore/army/port targets, stuck`);
+                break;
+              }
+            }
           }
         }
       }
@@ -1150,16 +1174,10 @@ function shouldUnload(
   const loc = atLoc ?? unit.loc;
   const capacity = objCapacity(unit);
 
-  // Don't trigger partial unload with less than 50% cargo — prevents tiny wasteful deliveries.
-  // Full transports bypass shouldUnload entirely (handled by isFull check in caller).
-  if (unit.cargoIds.length < Math.ceil(capacity / 2)) {
-    aiVLog(`    Transport #${unit.id}: shouldUnload=false (cargo ${unit.cargoIds.length}/${capacity} below 50% threshold)`);
-    return false;
-  }
-
   const adjacent = getAdjacentLocs(loc);
 
-  // Direct adjacency to enemy/unowned city or enemy army — always unload
+  // Direct adjacency to enemy/unowned city or enemy army — always unload with ANY cargo.
+  // These are high-value targets worth unloading even 1 army for.
   for (const adj of adjacent) {
     const contents = viewMap[adj].contents;
     if (contents === "X" || contents === "*" || contents === "a") {
@@ -1167,68 +1185,22 @@ function shouldUnload(
     }
   }
 
-  // BFS from ALL adjacent land tiles (not just one) to check for:
-  // 1. Own cities very nearby → home territory, never unload
-  // 2. WaitForTransport armies → loading zone, never unload
-  // 3. Enemy/unowned cities → worth unloading
-  // Uses small BFS radius (10 tiles) so transports can unload on far side of large continents
-  let foundOwnCity = false;
-  let foundEnemyCity = false;
-  let foundLoadingArmy = false;
-  const visited = new Set<Loc>();
-  const queue: Loc[] = [];
+  // For BFS-based proximity checks, require at least 25% cargo to avoid
+  // tiny wasteful deliveries on random neutral coastline.
+  if (unit.cargoIds.length < Math.max(1, Math.ceil(capacity / 4))) {
+    aiVLog(`    Transport #${unit.id}: shouldUnload=false (cargo ${unit.cargoIds.length}/${capacity} below 25% threshold, no adjacent targets)`);
+    return false;
+  }
 
-  // Seed BFS from all adjacent land tiles
+  // Check if immediately adjacent to own city — don't unload right at home
   for (const adj of adjacent) {
-    const contents = viewMap[adj].contents;
-    if (contents === "+" || contents === " " || contents === "O" || contents === "A" || contents === "a") {
-      if (!visited.has(adj)) {
-        visited.add(adj);
-        queue.push(adj);
-      }
+    if (viewMap[adj].contents === "O") {
+      aiVLog(`    Transport #${unit.id}: shouldUnload=false (adjacent to own city)`);
+      return false;
     }
   }
-
-  let checked = 0;
-  while (queue.length > 0 && checked < 10) {
-    const cur = queue.shift()!;
-    checked++;
-    const c = viewMap[cur].contents;
-    if (c === "O") { foundOwnCity = true; break; }
-    if (c === "X" || c === "*") foundEnemyCity = true;
-
-    // Check for WaitForTransport armies at this tile
-    if (!foundLoadingArmy) {
-      for (const u of state.units) {
-        if (u.owner === aiOwner && u.type === UnitType.Army
-            && u.func === UnitBehavior.WaitForTransport && u.shipId === null
-            && u.loc === cur) {
-          foundLoadingArmy = true;
-          break;
-        }
-      }
-    }
-
-    for (const a of getAdjacentLocs(cur)) {
-      if (visited.has(a)) continue;
-      const ac = viewMap[a].contents;
-      if (ac === "+" || ac === " " || ac === "X" || ac === "*" || ac === "O"
-          || ac === "A" || ac === "a") {
-        visited.add(a);
-        queue.push(a);
-      }
-    }
-  }
-
-  if (foundOwnCity) {
-    aiVLog(`    Transport #${unit.id}: shouldUnload=false (own city within ${checked} tiles)`);
-    return false;
-  }
-  if (foundLoadingArmy) {
-    aiVLog(`    Transport #${unit.id}: shouldUnload=false (loading army within ${checked} tiles)`);
-    return false;
-  }
-  // Allow unloading if near enemy targets OR on non-home land (unexplored, far from own cities)
+  // Not adjacent to own city — allow unloading. The transport loaded these armies
+  // for a reason, and tryUnloadArmies will still skip tiles very close to own cities.
   return true;
 }
 
@@ -1262,14 +1234,14 @@ function tryUnloadArmies(
       // Unowned city — high priority
       landTargets.push({ loc: adj, priority: 2 });
     } else if (contents === "+" || contents === " ") {
-      // Land or unexplored — quick BFS to check for own cities very nearby (10 tiles)
-      // If own city is close, this is home territory — don't unload here.
-      // Uses small radius so transports can unload on far side of large continents.
+      // Land or unexplored — check distance to nearest own city.
+      // Only skip unloading if an own city is very close (within 3 BFS steps).
+      // On large continents, armies can be useful far from home cities.
       let nearbyOwnCity = false;
       const bfsVisited = new Set<Loc>([adj]);
       const bfsQueue: Loc[] = [adj];
       let bfsChecked = 0;
-      while (bfsQueue.length > 0 && bfsChecked < 10) {
+      while (bfsQueue.length > 0 && bfsChecked < 3) {
         const cur = bfsQueue.shift()!;
         bfsChecked++;
         const c = viewMap[cur].contents;
@@ -1284,20 +1256,10 @@ function tryUnloadArmies(
           }
         }
       }
-      // Allow unloading on any non-home land (enemy territory, unexplored, or far from own cities)
       if (!nearbyOwnCity) {
-        const continent = mapContinent(viewMap, adj, ".");
-        const isLoadingContinent = state.units.some(u =>
-          u.owner === aiOwner && u.type === UnitType.Army
-          && u.func === UnitBehavior.WaitForTransport && u.shipId === null
-          && continent.has(u.loc),
-        );
-        if (!isLoadingContinent) {
-          landTargets.push({ loc: adj, priority: 1 });
-        } else {
-          aiVLog(`    Transport #${unit.id}: skip unload at ${adj} (loading continent)`);
-        }
-      } else if (nearbyOwnCity) {
+        // Far enough from own cities — allow unloading (lower priority than cities)
+        landTargets.push({ loc: adj, priority: 1 });
+      } else {
         aiVLog(`    Transport #${unit.id}: skip unload at ${adj} (own city nearby)`);
       }
     }
@@ -1505,6 +1467,46 @@ function createUnloadViewMap(
     }
   }
 
+  // Also mark water tiles adjacent to unexplored tiles as low-priority targets (value "0").
+  // This gives transports a destination when they can't see any foreign continents yet —
+  // they'll navigate toward unexplored coastline to discover new land.
+  for (let loc = 0; loc < MAP_SIZE; loc++) {
+    if (!isOnBoard(loc)) continue;
+    if (viewMap[loc].contents !== " ") continue; // only unexplored tiles
+    // Check if this unexplored tile is adjacent to explored water
+    const adjacent = getAdjacentLocs(loc);
+    for (const adj of adjacent) {
+      if (viewMap[adj].contents === "." || viewMap[adj].contents === " ") {
+        const currentMark = tempMap[adj].contents;
+        // Only mark if not already a higher-value target
+        if (currentMark < "0" || currentMark > "9") {
+          tempMap[adj] = { ...tempMap[adj], contents: "0" };
+        }
+      }
+    }
+  }
+
+  return tempMap;
+}
+
+/**
+ * Create a view map with water tiles adjacent to own cities marked as 'H' (home port).
+ * Used for transport return-to-port navigation since waterMoveInfo can't reach land-based city tiles.
+ */
+function createPortViewMap(
+  viewMap: ViewMapCell[],
+  state: GameState,
+  aiOwner: Owner,
+): ViewMapCell[] {
+  const tempMap = viewMap.map(cell => ({ ...cell }));
+  for (const city of state.cities) {
+    if (city.owner !== aiOwner) continue;
+    for (const adj of getAdjacentLocs(city.loc)) {
+      if (viewMap[adj].contents === ".") {
+        tempMap[adj] = { ...tempMap[adj], contents: "H" };
+      }
+    }
+  }
   return tempMap;
 }
 
@@ -1631,6 +1633,33 @@ function aiFighterMove(
     if (fightTarget !== null) {
       actions.push({ type: "move", unitId: unit.id, loc: fightTarget });
     } else {
+      // No BFS targets — fly toward farthest own city to reposition (base-hopping).
+      // This breaks the "stuck at home city" pattern by sending fighters across the map
+      // toward cities that may have unexplored territory nearby.
+      let farthestCityLoc: Loc = -1 as Loc;
+      let farthestDist = 0;
+      for (const city of state.cities) {
+        if (city.owner === aiOwner) {
+          const d = dist(unit.loc, city.loc);
+          if (d > farthestDist) {
+            farthestDist = d;
+            farthestCityLoc = city.loc;
+          }
+        }
+      }
+      if (farthestCityLoc >= 0 && farthestDist > 0) {
+        const unitRow = locRow(unit.loc);
+        const unitCol = locCol(unit.loc);
+        const cityRow = locRow(farthestCityLoc);
+        const cityCol = locCol(farthestCityLoc);
+        const dr = Math.sign(cityRow - unitRow);
+        const dc = Math.sign(cityCol - unitCol);
+        const flyTarget = rowColLoc(unitRow + dr, unitCol + dc) as Loc;
+        if (flyTarget >= 0 && flyTarget < MAP_SIZE && isOnBoard(flyTarget)) {
+          actions.push({ type: "move", unitId: unit.id, loc: flyTarget });
+          continue;
+        }
+      }
       break;
     }
   }
@@ -1665,6 +1694,7 @@ function aiShipMove(
   if (movesLeft <= 0) return actions;
 
   const attrs = getUnitAttributes(unit.type);
+  aiVLog(`  Ship #${unit.id} (${attrs.name}): loc=${unit.loc} hits=${unit.hits}/${attrs.maxHits} moves=${movesLeft}`);
 
   for (let step = 0; step < movesLeft; step++) {
     if (findUnit(state, unit.id) === undefined) break;
@@ -1676,7 +1706,7 @@ function aiShipMove(
       if (cell.cityId !== null) {
         const city = state.cities[cell.cityId];
         if (city.owner === aiOwner) {
-          // Stay in port for repair
+          aiVLog(`    Ship #${unit.id}: repairing in port at ${unit.loc}`);
           return actions;
         }
       }
@@ -1684,6 +1714,7 @@ function aiShipMove(
       // Navigate to nearest port
       const portTarget = findMoveToward(viewMap, unit.loc, shipRepairMoveInfo());
       if (portTarget !== null) {
+        aiVLog(`    Ship #${unit.id}: damaged, heading to port via ${portTarget}`);
         actions.push({ type: "move", unitId: unit.id, loc: portTarget });
         continue;
       }
@@ -1692,6 +1723,7 @@ function aiShipMove(
     // 2. Check for adjacent attack targets
     const attack = findAdjacentAttack(viewMap, unit.loc, SHIP_ATTACK);
     if (attack) {
+      aiVLog(`    Ship #${unit.id}: attacking target at ${attack.targetLoc} (${attack.contents})`);
       actions.push({ type: "attack", unitId: unit.id, targetLoc: attack.targetLoc });
       return actions; // combat resolves, done for this ship
     }
@@ -1699,8 +1731,10 @@ function aiShipMove(
     // 3. Seek objectives — enemy ships and exploration
     const fightTarget = findMoveToward(viewMap, unit.loc, shipFightMoveInfo());
     if (fightTarget !== null) {
+      aiVLog(`    Ship #${unit.id}: moving toward objective at ${fightTarget}`);
       actions.push({ type: "move", unitId: unit.id, loc: fightTarget });
     } else {
+      aiVLog(`    Ship #${unit.id}: no objectives found, idle`);
       break;
     }
   }
