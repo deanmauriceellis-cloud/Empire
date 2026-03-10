@@ -1,7 +1,7 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Post-Phase 12: AI Transport/Army Fixes** — ViewMap bug, army staging, transport throughput
+**Post-Phase 12: Map & Army Intelligence** — Small island fix, smart army coast-seeking
 
 ## Status
 - All 12 phases complete + gameplay polish + debug tools + AI transport overhaul
@@ -9,7 +9,7 @@
 - 18 E2E tests (17 passing, 1 skipped)
 
 ## Latest commit
-`005aef8` — session 020: fix AI transport navigation, army staging, and P2 viewMap bugs
+`TBD` — session 021: fix small island starts and smart army WaitForTransport behavior
 
 ## Completed
 - [x] Phase 0: Project scaffolding (pnpm monorepo, shared/client/server)
@@ -29,22 +29,19 @@
 - [x] Phase 12.3: E2E tests — Playwright (singleplayer, multiplayer lobby, perf benchmarks)
 
 ## Completed (this session)
-- [x] Fixed scanContinent P2 viewMap inversion — O/X hardcoded as P1/P2 but viewMaps use own/enemy
-- [x] Fixed transport oscillation — P2 transports navigated home instead of toward enemies
-- [x] Fixed production decisions using wrong enemy counts for P2
-- [x] Track currentLoc across transport move steps — transports now use both moves per turn
-- [x] Exploring armies visible to transport loading (createTTLoadViewMap + tryLoadArmies)
-- [x] Idle armies pathfind toward transport-producing cities (removed '+' and 'O' from fight objectives)
-- [x] Reduced crossCost bias — armies readily head to transports when closer
-- [x] Reduced countNearbyArmies BFS depth 3→1 — transports don't wait for distant armies
-- [x] Added logging for full transport navigation decisions
+- [x] Map gen: minimum continent area for starting cities (2% of map size) — prevents tiny island starts
+- [x] Smart army WaitForTransport behavior — armies auto-seek coast when island fully explored
+- [x] moveArmyTowardCoast() BFS helper — shared game logic for coast pathfinding
+- [x] WaitForTransport re-checks for new explore objectives each turn (auto-resumes explore)
+- [x] Transport loading recognizes WaitForTransport armies (3 places in ai.ts)
+- [x] UI label: "wait:transport" behavior name for clarity
 
 ## Known Issues (in testing)
-- User reports a map issue (details TBD)
 - Army surplus still large when transport capacity is limited (production ratio tuning)
+- Needs continued playtesting with new map gen + army behavior changes
 
 ## Next Steps
-1. **Investigate map issue** — user-reported
+1. **Continue playtesting** — verify map gen fix and army behavior in real games
 2. **Production ratio tuning** — build more transports when army surplus is large
 3. **Hosting** — deploy to server (any host running Node/Docker)
 4. **Art assets** — replace geometric placeholders with real sprites

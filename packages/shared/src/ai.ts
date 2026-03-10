@@ -875,9 +875,9 @@ function tryLoadArmies(
     if (loadCount >= cap) break;
     if (u.owner === aiOwner && u.type === UnitType.Army && u.loc === unit.loc
         && u.shipId === null
-        && (u.func === UnitBehavior.None || u.func === UnitBehavior.Explore)) {
-      // Cancel explore behavior on embark — army is now dedicated to transport mission
-      if (u.func === UnitBehavior.Explore) {
+        && (u.func === UnitBehavior.None || u.func === UnitBehavior.Explore || u.func === UnitBehavior.WaitForTransport)) {
+      // Cancel behavior on embark — army is now dedicated to transport mission
+      if (u.func !== UnitBehavior.None) {
         actions.push({ type: "setBehavior", unitId: u.id, behavior: UnitBehavior.None });
       }
       actions.push({ type: "embark", unitId: u.id, shipId: unit.id });
@@ -893,11 +893,11 @@ function tryLoadArmies(
     for (const u of state.units) {
       if (loadCount >= cap) break;
       if (u.owner === aiOwner && u.type === UnitType.Army && u.loc === adj && u.shipId === null
-          && (u.func === UnitBehavior.None || u.func === UnitBehavior.Explore)
+          && (u.func === UnitBehavior.None || u.func === UnitBehavior.Explore || u.func === UnitBehavior.WaitForTransport)
           && u.moved < objMoves(u) && !claimedUnitIds.has(u.id)) {
         aiLog(`    Loading army #${u.id} from adjacent tile ${adj} onto transport #${unit.id}`);
-        // Cancel explore behavior — army is now dedicated to transport mission
-        if (u.func === UnitBehavior.Explore) {
+        // Cancel behavior — army is now dedicated to transport mission
+        if (u.func !== UnitBehavior.None) {
           actions.push({ type: "setBehavior", unitId: u.id, behavior: UnitBehavior.None });
         }
         actions.push({ type: "move", unitId: u.id, loc: unit.loc });
@@ -1022,9 +1022,8 @@ function createTTLoadViewMap(
 
   for (const u of state.units) {
     if (u.owner !== aiOwner || u.type !== UnitType.Army || u.shipId !== null) continue;
-    // Mark idle and exploring armies as pickup targets
-    // (exploring armies on home island are more useful shipped to the front)
-    if (u.func !== UnitBehavior.None && u.func !== UnitBehavior.Explore) continue;
+    // Mark idle, exploring, and waiting-for-transport armies as pickup targets
+    if (u.func !== UnitBehavior.None && u.func !== UnitBehavior.Explore && u.func !== UnitBehavior.WaitForTransport) continue;
 
     // Mark ALL adjacent water cells (not just one) so BFS has consistent targets
     const adjacent = getAdjacentLocs(u.loc);

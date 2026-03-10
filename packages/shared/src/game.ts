@@ -1044,6 +1044,55 @@ function countNewTilesRevealed(viewMap: ViewMapCell[], loc: Loc): number {
 }
 
 /**
+ * Move an army toward the nearest coastal land tile for transport pickup.
+ * Uses BFS over land/city tiles to find a tile adjacent to water,
+ * then moves the army one step along the path.
+ */
+function moveArmyTowardCoast(state: GameState, unit: UnitState): TurnEvent[] {
+  const events: TurnEvent[] = [];
+  const adjacent = getAdjacentLocs(unit.loc);
+  const isAtCoast = adjacent.some(a => state.map[a].terrain === TerrainType.Sea);
+  if (isAtCoast) return events; // already at coast, just wait
+
+  // BFS to find nearest coastal land tile
+  const visited = new Uint8Array(MAP_SIZE);
+  const parent = new Int32Array(MAP_SIZE).fill(-1);
+  const queue: Loc[] = [unit.loc];
+  visited[unit.loc] = 1;
+
+  let coastLoc: Loc = -1;
+  while (queue.length > 0) {
+    const loc = queue.shift()!;
+    if (loc !== unit.loc) {
+      const adj = getAdjacentLocs(loc);
+      const isCoastal = adj.some(a => state.map[a].terrain === TerrainType.Sea);
+      if (isCoastal && (state.map[loc].terrain === TerrainType.Land || state.map[loc].terrain === TerrainType.City)) {
+        coastLoc = loc;
+        break;
+      }
+    }
+    for (const a of getAdjacentLocs(loc)) {
+      if (!visited[a] && (state.map[a].terrain === TerrainType.Land || state.map[a].terrain === TerrainType.City)) {
+        visited[a] = 1;
+        parent[a] = loc;
+        queue.push(a);
+      }
+    }
+  }
+
+  if (coastLoc === -1) return events; // no coast reachable (shouldn't happen)
+
+  // Trace back to first step from unit's location
+  let cur = coastLoc;
+  while (parent[cur] !== unit.loc && parent[cur] !== -1) {
+    cur = parent[cur];
+  }
+  const r = behaviorMove(state, unit, cur, unit.owner);
+  events.push(...r.events);
+  return events;
+}
+
+/**
  * Auto-move a unit in explore mode.
  * Air units: greedy — each step picks the adjacent tile that reveals the most unseen tiles.
  * Ground/sea units: BFS pathfind toward nearest unexplored territory.
@@ -1153,9 +1202,14 @@ function exploreUnit(state: GameState, unit: UnitState, owner: Owner): TurnEvent
       const pathMap = createPathMap();
       const objective = findObjective(pathMap, viewMap, unit.loc, moveInfo);
       if (objective === null) {
-        // Nothing reachable to explore — reset to None so the AI can
-        // try alternative strategies (e.g., seeking transports) next turn.
-        unit.func = UnitBehavior.None;
+        // Nothing reachable to explore
+        if (unit.type === UnitType.Army) {
+          // Army stuck on fully-explored island — wait for transport pickup
+          unit.func = UnitBehavior.WaitForTransport;
+          events.push(...moveArmyTowardCoast(state, unit));
+        } else {
+          unit.func = UnitBehavior.None;
+        }
         break;
       }
 
@@ -1458,6 +1512,23 @@ export function processUnitBehaviors(
       case UnitBehavior.Cautious:
         events.push(...cautiousUnit(state, unit, owner));
         break;
+
+      case UnitBehavior.WaitForTransport: {
+        // Check if new territory has been revealed — switch back to explore
+        const exploreInfo = getExploreMoveInfo(unit.type);
+        if (exploreInfo) {
+          const pm = createPathMap();
+          const obj = findObjective(pm, state.viewMaps[owner], unit.loc, exploreInfo);
+          if (obj !== null) {
+            unit.func = UnitBehavior.Explore;
+            events.push(...exploreUnit(state, unit, owner));
+            break;
+          }
+        }
+        // Keep moving toward coast if not there yet; otherwise just wait
+        events.push(...moveArmyTowardCoast(state, unit));
+        break;
+      }
     }
   }
 

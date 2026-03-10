@@ -135,7 +135,7 @@ export enum UnitBehavior {
 export const BEHAVIOR_NAMES = [
   "none", "random", "sentry", "fill", "land",
   "explore", "load", "attack", "load", "repair",
-  "transport", "W", "E", "D", "C",
+  "wait:transport", "W", "E", "D", "C",
   "X", "Z", "A", "Q",
 ] as const;
 

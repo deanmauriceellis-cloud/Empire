@@ -344,12 +344,13 @@ export function findContinents(
 /**
  * Score a continent for starting city selection.
  * Matches original: (shore_cities*3 + inland_cities*2) * 1000 + area
+ * @param minArea - minimum land area to be viable as a starting continent
  */
-function scoreContinentValue(cont: Continent): number {
+function scoreContinentValue(cont: Continent, minArea: number): number {
   const nshore = cont.shoreCities.length;
   const ncity = cont.cities.length;
 
-  if (ncity < 2 || nshore === 0) return -1; // not viable
+  if (ncity < 2 || nshore === 0 || cont.landArea < minArea) return -1; // not viable
 
   let value: number;
   if (ncity === nshore) {
@@ -378,10 +379,15 @@ export function selectStartingCities(
   continents: Continent[],
   cities: CityState[],
   rng: () => number,
+  mapSize?: number,
 ): [number, number] {
+  // Minimum continent area: 2% of map size ensures enough room to explore
+  // while waiting for transports (e.g., 120 tiles on a 100x60 map)
+  const minArea = mapSize ? Math.floor(mapSize * 0.02) : 100;
+
   // Score and filter viable continents
   const scored = continents
-    .map((cont) => ({ cont, value: scoreContinentValue(cont) }))
+    .map((cont) => ({ cont, value: scoreContinentValue(cont, minArea) }))
     .filter((s) => s.value >= 0)
     .sort((a, b) => b.value - a.value);
 
@@ -478,7 +484,7 @@ export function generateMap(config: GameConfig): MapGenerationResult {
 
   // Step 2.4: Continent detection & starting cities
   const continents = findContinents(map, cities, mapWidth, mapHeight);
-  const startingCities = selectStartingCities(continents, cities, rng);
+  const startingCities = selectStartingCities(continents, cities, rng, mapWidth * mapHeight);
 
   return { map, cities, startingCities, continents };
 }
