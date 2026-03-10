@@ -298,6 +298,8 @@ async function init() {
     gameStarted = true;
     audio.playGameStart();
     audio.startAmbient();
+    // Expose game state for E2E testing
+    (window as any).__empire = { game, selection, ui };
     // Apply initial debug flags (e.g. if toggled before game start)
     applyDebugFlags();
 

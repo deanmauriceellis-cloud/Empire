@@ -343,6 +343,36 @@ describe("generateMap", () => {
     expect(result.map[result.cities[c2].loc].terrain).toBe(TerrainType.City);
   });
 
+  it("starting cities are on ocean shore across multiple seeds", { timeout: 30_000 }, () => {
+    // Test 10 different seeds to catch edge cases
+    for (let seed = 1; seed <= 10; seed++) {
+      const config = { ...DEFAULT_CONFIG, seed };
+      const result = generateMap(config);
+      const [c1, c2] = result.startingCities;
+      const city1 = result.cities[c1];
+      const city2 = result.cities[c2];
+
+      // Each starting city should have at least one adjacent sea tile
+      const hasAdjacentSea = (loc: number): boolean => {
+        const row = Math.floor(loc / config.mapWidth);
+        const col = loc % config.mapWidth;
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            if (dr === 0 && dc === 0) continue;
+            const nr = row + dr;
+            const nc = col + dc;
+            if (nr < 0 || nr >= config.mapHeight || nc < 0 || nc >= config.mapWidth) continue;
+            if (result.map[nr * config.mapWidth + nc].terrain === TerrainType.Sea) return true;
+          }
+        }
+        return false;
+      };
+
+      expect(hasAdjacentSea(city1.loc)).toBe(true);
+      expect(hasAdjacentSea(city2.loc)).toBe(true);
+    }
+  });
+
   it("all map cells have valid terrain", () => {
     const result = generateMap(DEFAULT_CONFIG);
     const validTerrains = new Set([TerrainType.Land, TerrainType.Sea, TerrainType.City]);

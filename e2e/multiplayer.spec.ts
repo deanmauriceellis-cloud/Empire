@@ -27,6 +27,9 @@ test.describe("Multiplayer Lobby", () => {
     await goToMainMenu(page);
     await page.click('[data-menu="multiplayer"]');
     await page.click('[data-menu="create-online"]');
+    // Click through game setup screen
+    await expect(page.locator('[data-menu="start-game"]')).toBeVisible({ timeout: 5_000 });
+    await page.click('[data-menu="start-game"]');
 
     await expect(page.locator("#menu-screen h2")).toHaveText("WAITING FOR OPPONENT", {
       timeout: 10_000,
@@ -41,6 +44,9 @@ test.describe("Multiplayer Lobby", () => {
     await goToMainMenu(page);
     await page.click('[data-menu="multiplayer"]');
     await page.click('[data-menu="create-online"]');
+    // Click through game setup screen
+    await expect(page.locator('[data-menu="start-game"]')).toBeVisible({ timeout: 5_000 });
+    await page.click('[data-menu="start-game"]');
     await expect(page.locator("#menu-screen h2")).toHaveText("WAITING FOR OPPONENT", {
       timeout: 10_000,
     });

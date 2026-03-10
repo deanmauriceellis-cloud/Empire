@@ -472,6 +472,21 @@ function decideProduction(
         return null;
       }
     }
+    // Check if we're stuck: all armies waiting for transport but can't build ships
+    if (!canBuildShips) {
+      const aiArmyUnits = state.units.filter(u => u.owner === aiOwner && u.type === UnitType.Army);
+      const allWaiting = aiArmyUnits.length > 0
+        && aiArmyUnits.every(u => u.func === UnitBehavior.WaitForTransport);
+      if (allWaiting) {
+        // Landlocked island — build a fighter to scout (armies are useless)
+        if (city.production !== UnitType.Fighter) {
+          aiLog(`City #${city.id}: switch to Fighter (landlocked island — ${aiArmyUnits.length} armies stuck)`);
+          return UnitType.Fighter;
+        }
+        return null;
+      }
+    }
+
     // With 1 city, always build armies — no transport or ratio switching
     if (city.production !== UnitType.Army) {
       aiLog(`City #${city.id}: switch to Army (only 1 city)`);

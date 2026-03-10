@@ -12,6 +12,9 @@ export async function goToMainMenu(page: Page): Promise<void> {
 export async function startSinglePlayer(page: Page): Promise<void> {
   await goToMainMenu(page);
   await page.click('[data-menu="new-game"]');
+  // Click through game setup screen (map size/terrain chooser)
+  await expect(page.locator('[data-menu="start-game"]')).toBeVisible({ timeout: 5_000 });
+  await page.click('[data-menu="start-game"]');
   // Wait for menu to hide and HUD to show
   await expect(page.locator("#menu-screen")).toHaveClass(/hidden/, { timeout: 10_000 });
   await expect(page.locator("#hud-top")).toBeVisible({ timeout: 10_000 });

@@ -442,6 +442,9 @@ export function selectStartingCities(
   cities: CityState[],
   rng: () => number,
   mapSize?: number,
+  map?: MapCell[],
+  mapWidth?: number,
+  mapHeight?: number,
 ): [number, number] {
   // Minimum continent area: 2% of map size ensures enough room to explore
   // while waiting for transports (e.g., 120 tiles on a 100x60 map)
@@ -454,9 +457,8 @@ export function selectStartingCities(
     .sort((a, b) => b.value - a.value);
 
   if (scored.length < 2) {
-    // Fallback: if fewer than 2 viable continents, pick 2 random cities
-    // that are far apart
-    return pickDistantCities(cities, rng);
+    // Fallback: if fewer than 2 viable continents, pick 2 distant ocean-shore cities
+    return pickDistantCities(cities, rng, map, mapWidth, mapHeight);
   }
 
   // Create pairs ranked by balance (smallest diff first = easiest)
@@ -493,21 +495,38 @@ export function selectStartingCities(
   return [bestC1, bestC2];
 }
 
-/** Fallback: pick two cities that are maximally far apart. */
+/** Fallback: pick two cities that are maximally far apart, preferring ocean shore. */
 function pickDistantCities(
   cities: CityState[],
   rng: () => number,
+  map?: MapCell[],
+  mapWidth?: number,
+  mapHeight?: number,
 ): [number, number] {
+  // Filter to ocean-shore cities when map data is available
+  let candidates = cities.map((_, i) => i);
+  if (map && mapWidth && mapHeight) {
+    const shoreCandidates = candidates.filter(i =>
+      isOceanShore(cities[i].loc, map, mapWidth, mapHeight),
+    );
+    // Only use shore filter if we have at least 2 candidates
+    if (shoreCandidates.length >= 2) {
+      candidates = shoreCandidates;
+    }
+  }
+
   let bestDist = 0;
-  let bestPair: [number, number] = [0, 1];
+  let bestPair: [number, number] = [candidates[0], candidates[Math.min(1, candidates.length - 1)]];
 
   // Sample up to 200 random pairs to find a distant pair
-  const n = cities.length;
+  const n = candidates.length;
   const samples = Math.min(200, (n * (n - 1)) / 2);
   for (let s = 0; s < samples; s++) {
-    const i = irand(rng, n);
-    let j = irand(rng, n - 1);
-    if (j >= i) j++;
+    const ii = irand(rng, n);
+    let jj = irand(rng, n - 1);
+    if (jj >= ii) jj++;
+    const i = candidates[ii];
+    const j = candidates[jj];
     const d = dist(cities[i].loc, cities[j].loc);
     if (d > bestDist) {
       bestDist = d;
@@ -546,7 +565,7 @@ export function generateMap(config: GameConfig): MapGenerationResult {
 
   // Step 2.4: Continent detection & starting cities
   const continents = findContinents(map, cities, mapWidth, mapHeight);
-  const startingCities = selectStartingCities(continents, cities, rng, mapWidth * mapHeight);
+  const startingCities = selectStartingCities(continents, cities, rng, mapWidth * mapHeight, map, mapWidth, mapHeight);
 
   return { map, cities, startingCities, continents };
 }
