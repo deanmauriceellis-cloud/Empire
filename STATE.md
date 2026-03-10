@@ -1,15 +1,15 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Post-Phase 12: Gameplay & Debug** — Explore fixes, debug tools, UI polish
+**Post-Phase 12: AI & Gameplay Refinement** — Production fixes, smart behaviors, inland city guard
 
 ## Status
-- All 12 phases complete + gameplay polish + debug tools
-- 265 unit/integration tests passing (237 shared + 28 server)
+- All 12 phases complete + gameplay polish + debug tools + AI refinement
+- 268 unit/integration tests passing (240 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
 
 ## Latest commit
-`8971098` — session 017: Explore fixes, debug panel, UI improvements
+`eac21f7` — session 018: AI production fixes, default behaviors, inland city guard
 
 ## Completed
 - [x] Phase 0: Project scaffolding (pnpm monorepo, shared/client/server)
@@ -29,17 +29,13 @@
 - [x] Phase 12.3: E2E tests — Playwright (singleplayer, multiplayer lobby, perf benchmarks)
 
 ## Completed (this session)
-- [x] Army explore: prioritize visible cities (weight 1) over exploration (weight 8)
-- [x] Army explore: auto-capture adjacent unowned/enemy cities
-- [x] Army explore: auto-sentry when stuck on island with nothing to explore
-- [x] Army explore: never permanently cancel explore mode (retry next turn)
-- [x] Fixed AI single-city production flip-flop (Army↔Transport loop preventing builds)
-- [x] Debug panel: Reveal Map toggle (full vision for player)
-- [x] Debug panel: AI Omniscient toggle (AI sees everything)
-- [x] Debug panel: Auto-Play toggle (AI controls player units, Enter to advance)
-- [x] Action buttons highlight green when active behavior matches selected unit
-- [x] Click-to-cycle: re-clicking tile with unit+city cycles selection between them
-- [x] Top bar shows unit counts by type (A:5 F:2 T:1)
+- [x] Fixed AI 1-city production flip-flop (Army↔Transport every turn, work never accumulated)
+- [x] Fixed inland cities trying to build ships (added isCityCoastal check)
+- [x] AI respects existing unit behaviors (skips units with Explore/Sentry/etc.)
+- [x] AI sets stuck armies to Explore instead of oscillating with moveAway
+- [x] Smart idle behavior assignment: max 1 sentry per city, rest explore
+- [x] Default unit behaviors on production (armies/fighters/ships explore, transports await orders)
+- [x] New tests: multi-turn production, bridge visibility, single-city stability, coastal transport
 
 ## Next Steps
 1. **Hosting** — deploy to server (any host running Node/Docker)
@@ -54,5 +50,5 @@ _None_
 - Client dev server on port 5174 (port 5173 used by another application)
 - Playwright E2E tests run via `pnpm test:e2e` (auto-starts Vite + server)
 - Two-player E2E join test skipped: lobby doesn't auto-refresh game list
-- 283 total tests: 237 shared + 28 server + 18 E2E (17 pass + 1 skip)
+- 286 total tests: 240 shared + 28 server + 18 E2E (17 pass + 1 skip)
 - Map constants are now mutable `let` — call `configureMapDimensions()` before map generation

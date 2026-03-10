@@ -1,5 +1,24 @@
 # Empire Reborn — Changelog
 
+## v0.18.0 — Session 018 (2026-03-09)
+
+### Fixed
+- **AI 1-city production flip-flop** — with only 1 city, AI alternated Army↔Transport every turn; 20% work penalty on each switch meant units never built. Fix: single-city AI always builds armies
+- **Inland cities building ships** — `isCityOnLake()` returned false for inland cities (no water = not a lake), so AI scheduled ship production. Added `isCityCoastal()` check: only coastal non-lake cities can build ships
+- **AI overriding unit behaviors** — `computeAITurn()` generated move actions for units already assigned Explore/Sentry/etc. Fix: skip units with `func !== UnitBehavior.None`
+- **Army oscillation** — AI `aiArmyMove` found no objectives, used `moveAway` picking adjacent tiles causing back-and-forth bouncing. Fix: set Explore behavior instead
+
+### Added
+- **Smart idle behavior assignment** — `assignIdleBehaviors()` at end of AI turn: max 1 sentry per city, rest explore; skips embarked units and satellites
+- **Default unit behaviors on production** — city `func[]` array defaults: armies/fighters/ships → Explore, transports → None (await orders), satellites → None (random diagonal)
+- **`isCityCoastal()`** — checks if city has adjacent water tiles (distinct from `isCityOnLake`)
+- New tests: multi-turn production accumulation, bridge visibility filter, single-city AI stability, coastal transport requirement
+
+### Changed
+- `packages/shared/src/ai.ts` — single-city guard, skip-behavior-units, explore-not-oscillate, `assignIdleBehaviors()`, `isCityCoastal()` in production
+- `packages/shared/src/game.ts` — `tickCityProduction()` applies city's per-unit-type default behavior to new units
+- `packages/shared/src/mapgen.ts` — city `func[]` defaults: Explore for combat units, None for transports/satellites
+
 ## v0.15.0 — Session 016 (2026-03-09)
 
 ### Fixed
