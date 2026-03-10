@@ -10,7 +10,7 @@
 - Full code review completed (session 035) — 6-phase refactor plan below
 
 ## Latest commit
-`pending` — session 037: Phase R5 + R6 refactoring — server hardening, performance optimization
+`b3020e3` — session 037: Phase R5 + R6 refactoring — server hardening, performance optimization
 
 ## Completed (session 037)
 - [x] Phase R5: CORS — environment-based origin restriction (wildcard in dev, whitelist in production)
