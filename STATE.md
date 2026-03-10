@@ -10,7 +10,7 @@
 - Full code review completed (session 035) — 6-phase refactor plan below
 
 ## Latest commit
-`b808e6e` — session 035: transport AI fixes + 6-phase refactoring plan from code design review
+`7612808` — session 036: Phase R1 + R2 refactoring — viewmap constants, CSS tokens, AI module split
 
 ## Completed (session 036)
 - [x] Phase R1a: Create `shared/src/viewmap-chars.ts` — VM_WATER, VM_LAND, VM_UNEXPLORED, VM_OWN_CITY, VM_ENEMY_CITY, VM_UNOWNED_CITY, VM_HOME_PORT, VM_PICKUP_SINGLE, VM_PICKUP_CLUSTER constants + isEnemyUnit(), isCity(), isTargetCity(), isTraversableLand(), isPickupMarker() helpers
