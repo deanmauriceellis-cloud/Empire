@@ -192,9 +192,10 @@ function shipRepairMoveInfo(): MoveInfo {
 }
 
 // Ship fight objectives: enemy units and exploration
+// Exploration weight lowered from 21→7 so ships actively seek unknown waters
 function shipFightMoveInfo(): MoveInfo {
   return waterMoveInfo("tcbsdp ", new Map([
-    ["t", 1], ["c", 1], ["b", 3], ["s", 3], ["d", 3], ["p", 3], [" ", 21],
+    ["t", 1], ["c", 1], ["b", 3], ["s", 3], ["d", 3], ["p", 3], [" ", 7],
   ]));
 }
 
@@ -1049,11 +1050,19 @@ function aiTransportMove(
             continue; // next step: navigate toward delivery (loadedThisTurn + isFull path)
           }
           // If we loaded some but not full, check if more armies are nearby — wait for them
+          // Patience: wait up to 6 turns at a coastline. Each new army loaded resets the timer
+          // (prevLocs is cleared on load, so stuckTurns resets to 0 when cargo changes).
           if (projectedCargo > 0) {
             const nearbyArmies = countNearbyArmies(state, currentLoc, aiOwner, claimedUnitIds);
-            if (nearbyArmies > 0) {
-              aiVLog(`    Transport #${unit.id}: waiting for ${nearbyArmies} more nearby armies`);
+            const pLocs = unit.prevLocs || [];
+            const stuckTurns = pLocs.filter(l => l === currentLoc).length;
+            if (nearbyArmies > 0 && stuckTurns < 6) {
+              aiVLog(`    Transport #${unit.id}: waiting for ${nearbyArmies} more nearby armies (patience=${6 - stuckTurns} turns left)`);
               break; // stay put and wait
+            }
+            if (stuckTurns >= 6) {
+              aiVLog(`    Transport #${unit.id}: patience exhausted after ${stuckTurns} turns, delivering ${projectedCargo}/${capacity}`);
+              deliveringMode = true;
             }
             // Not full and no nearby armies — fall through to navigate toward distant armies
             aiVLog(`    Transport #${unit.id}: partially loaded, seeking more armies`);
@@ -1134,8 +1143,26 @@ function aiTransportMove(
                 recentLocs.add(currentLoc);
                 currentLoc = homeTarget;
               } else {
-                aiVLog(`    Transport #${unit.id}: empty, no explore/army/port targets, stuck`);
-                break;
+                // Last resort: move to ANY adjacent water tile to break deadlock
+                // (transport may be in an enclosed sea or all BFS objectives blocked by recentLocs)
+                const adjCells = getAdjacentLocs(currentLoc);
+                let escaped = false;
+                for (const adj of adjCells) {
+                  if (recentLocs.has(adj)) continue;
+                  const c = viewMap[adj].contents;
+                  if (c === "." || c === " ") {
+                    aiVLog(`    Transport #${unit.id}: empty, escaping deadlock toward ${adj}`);
+                    actions.push({ type: "move", unitId: unit.id, loc: adj });
+                    recentLocs.add(currentLoc);
+                    currentLoc = adj;
+                    escaped = true;
+                    break;
+                  }
+                }
+                if (!escaped) {
+                  aiVLog(`    Transport #${unit.id}: empty, truly stuck (enclosed water or lake)`);
+                  break;
+                }
               }
             }
           }
@@ -1144,15 +1171,16 @@ function aiTransportMove(
     }
   }
 
-  // Save ALL visited positions for cross-turn oscillation detection (keep last 8)
+  // Save ALL visited positions for cross-turn oscillation detection (keep last 12)
   // Using recentLocs captures intermediate positions (not just final), preventing
   // 2-tile ping-pong where the transport visits A→B→C one turn, C→B→A the next
+  // Size 12 accommodates the 6-turn patience window for waiting transports
   const allVisited = [...recentLocs];
   // Clear history when transport loaded/unloaded cargo (mission changed — allow revisiting)
   if (loadedThisTurn || justUnloaded) {
     unit.prevLocs = [];
   } else {
-    unit.prevLocs = allVisited.slice(0, 8);
+    unit.prevLocs = allVisited.slice(0, 12);
   }
 
   aiVLog(`    Transport #${unit.id}: turn done, ${actions.length} actions, final loc=${currentLoc}`);
@@ -1431,10 +1459,16 @@ function createUnloadViewMap(
       }
     }
 
-    // Calculate continent value (0-9)
-    const value = Math.min(targetCities, 9);
+    // Calculate continent value (0-9) based on cities AND unexplored territory
+    // Completely unknown areas are high-priority targets — discovering new continents is critical
+    let value = Math.min(targetCities, 6); // cities: up to 6
+    const unexploredRatio = continent.size > 0 ? unexplored / continent.size : 0;
+    if (unexploredRatio > 0.7) value += 4;       // mostly unknown — very high priority
+    else if (unexploredRatio > 0.3) value += 2;  // partially explored
+    else if (unexplored > 0) value += 1;          // some unexplored tiles
+    value = Math.min(value, 9);
 
-    // Skip our own continent when it has no targets (don't sail home)
+    // Skip our own continent when it has no targets and is fully explored (don't sail home)
     if (value === 0 && hasOwnCity && unexplored === 0) {
       aiLog(`      unloadMap: skip own continent (${continent.size} tiles, own=${hasOwnCity})`);
       continue;
@@ -1445,8 +1479,6 @@ function createUnloadViewMap(
       aiLog(`      unloadMap: skip loading continent (${continent.size} tiles, waitingArmies=${hasWaitingArmies}, targets=${targetCities})`);
       continue;
     }
-    // Use unexplored non-own continents as low-value targets (value=1) when no city targets exist
-    // This prevents full transports from getting stuck when they can only see their own continent
     const effectiveValue = value > 0 ? value : (unexplored > 0 && !hasOwnCity ? 1 : 0);
     if (effectiveValue === 0) continue;
 

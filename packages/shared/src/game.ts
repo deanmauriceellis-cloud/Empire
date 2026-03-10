@@ -1058,26 +1058,37 @@ function countNewTilesRevealed(viewMap: ViewMapCell[], loc: Loc): number {
  */
 function moveArmyTowardCoast(state: GameState, unit: UnitState): TurnEvent[] {
   const events: TurnEvent[] = [];
-  const adjacent = getAdjacentLocs(unit.loc);
-  const isAtCoast = adjacent.some(a => state.map[a].terrain === TerrainType.Sea);
-  if (isAtCoast) return events; // already at coast, just wait
 
-  // BFS to find nearest coastal land tile
+  // BFS over land to find the best coastal destination:
+  // Priority 1: land tile adjacent to a non-full own transport (walk TO the transport)
+  // Priority 2: any coastal land tile (general coast)
   const visited = new Uint8Array(MAP_SIZE);
   const parent = new Int32Array(MAP_SIZE).fill(-1);
   const queue: Loc[] = [unit.loc];
   visited[unit.loc] = 1;
 
-  let coastLoc: Loc = -1;
-  while (queue.length > 0) {
+  let transportCoastLoc: Loc = -1; // best: adjacent to an actual transport
+  let anyCoastLoc: Loc = -1;       // fallback: any coast
+
+  while (queue.length > 0 && transportCoastLoc === -1) {
     const loc = queue.shift()!;
-    if (loc !== unit.loc) {
+    if (loc !== unit.loc && (state.map[loc].terrain === TerrainType.Land || state.map[loc].terrain === TerrainType.City)) {
       const adj = getAdjacentLocs(loc);
-      const isCoastal = adj.some(a => state.map[a].terrain === TerrainType.Sea);
-      if (isCoastal && (state.map[loc].terrain === TerrainType.Land || state.map[loc].terrain === TerrainType.City)) {
-        coastLoc = loc;
-        break;
+      for (const a of adj) {
+        if (state.map[a].terrain === TerrainType.Sea) {
+          // Check for a non-full own transport at this water tile
+          const hasTransport = state.units.some(u =>
+            u.owner === unit.owner && u.type === UnitType.Transport
+            && u.loc === a && u.cargoIds.length < UNIT_ATTRIBUTES[u.type].capacity,
+          );
+          if (hasTransport) {
+            transportCoastLoc = loc;
+            break;
+          }
+          if (anyCoastLoc === -1) anyCoastLoc = loc;
+        }
       }
+      if (transportCoastLoc !== -1) break;
     }
     for (const a of getAdjacentLocs(loc)) {
       if (!visited[a] && (state.map[a].terrain === TerrainType.Land || state.map[a].terrain === TerrainType.City)) {
@@ -1088,10 +1099,12 @@ function moveArmyTowardCoast(state: GameState, unit: UnitState): TurnEvent[] {
     }
   }
 
-  if (coastLoc === -1) return events; // no coast reachable (shouldn't happen)
+  const target = transportCoastLoc !== -1 ? transportCoastLoc : anyCoastLoc;
+  if (target === -1) return events; // no coast reachable
+  if (target === unit.loc) return events; // already there
 
   // Trace back to first step from unit's location
-  let cur = coastLoc;
+  let cur = target;
   while (parent[cur] !== unit.loc && parent[cur] !== -1) {
     cur = parent[cur];
   }
