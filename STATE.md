@@ -1,7 +1,7 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Post-Phase 12: Playtesting & Bug Fixes** — AI transport + island escape fixes
+**Post-Phase 12: Playtesting & Bug Fixes** — AI transport logistics overhaul
 
 ## Status
 - All 12 phases complete + gameplay polish + debug tools + AI overhaul
@@ -29,22 +29,25 @@
 - [x] Phase 12.2: Integration tests — AI vs AI, save/load, determinism
 - [x] Phase 12.3: E2E tests — Playwright (singleplayer, multiplayer lobby, perf benchmarks)
 
-## Completed (this session)
-- [x] Fix transport coordination: claim pathfinding objective zone, not transport position
-- [x] Fix transport oscillation: store all visited positions in prevLocs (not just final)
-- [x] Fix island escape: switch to Army after first transport produced (was building 2nd transport)
-- [x] Fix island escape: transport explores for remaining armies instead of delivering half-empty
-- [x] Cap production switch penalty at 3 turns (Transport: -3 instead of -6)
-- [x] Simplify "only transport producer" guard: allow switch once any transport exists
-- [x] 4 new tests: transport cluster coordination, oscillation, island production, penalty cap
+## Completed (session 030)
+- [x] Analyze x.log: identify circular ferry, oscillation, mini-ferry, single-army delivery bugs
+- [x] Fix createTTLoadViewMap: filter armies already claimed by other transports (claimedUnitIds)
+- [x] Fix shouldUnload: BFS all adjacent land (not just first), 40-tile radius, 50% cargo minimum
+- [x] Fix tryUnloadArmies: BFS 40-tile own-city check, require enemy targets on continent
+- [x] Fix createUnloadViewMap: skip value=0 continents (no more dumping on unexplored islands)
+- [x] Fix countNearbyArmies: only count loadable armies (None/Explore/WaitForTransport)
+- [x] Fix anyLoadableArmies: exclude claimedUnitIds from loadable count
+- [x] Document original Empire AI: transport, production, movement, pathfinding (4 docs in docs/)
 
 ## Known Issues
-_None known_
+- Transport mini-ferry possible on large islands where own city is >40 BFS tiles from coast
+- Remaining divergence from original: our shouldUnload / partial delivery adds complexity the original avoided
 
 ## Next Steps
-1. Playtesting and gameplay tuning
-2. Hosting / deployment
-3. Art assets (replace placeholder textures)
+1. Evaluate divergence checklist (docs/original-vs-rewrite-divergence.md)
+2. Playtesting and gameplay tuning
+3. Hosting / deployment
+4. Art assets (replace placeholder textures)
 
 ## Blockers
 _None_
@@ -56,5 +59,4 @@ _None_
 - Two-player E2E join test skipped: lobby doesn't auto-refresh game list
 - 301 total tests: 255 shared + 28 server + 18 E2E (17 pass + 1 skip)
 - Map constants are now mutable `let` — call `configureMapDimensions()` before map generation
-- Lake vs ocean threshold: 5% of map size (300 tiles on standard 100x60 map)
-- Full analysis document: `docs/sessions/session-025-ai-analysis.md`
+- Original AI reference docs in `docs/original-ai-*.md`

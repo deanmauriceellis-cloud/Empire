@@ -955,7 +955,7 @@ function aiTransportMove(
 
       // Navigate toward waiting armies or targets (only when empty or still loading)
       if (!deliveringMode) {
-        const loadMap = createTTLoadViewMap(viewMap, state, aiOwner, claimedPickupLocs);
+        const loadMap = createTTLoadViewMap(viewMap, state, aiOwner, claimedPickupLocs, claimedUnitIds);
         const loadResult = findMoveTowardWithObjective(loadMap, currentLoc, ttLoadMoveInfo());
         const target = loadResult ? loadResult.nextStep : null;
         if (target !== null && !recentLocs.has(target)) {
@@ -974,6 +974,7 @@ function aiTransportMove(
           if (projectedCargo < minDeliverCargo) {
             const anyLoadableArmies = state.units.some(u =>
               u.owner === aiOwner && u.type === UnitType.Army && u.shipId === null
+              && !claimedUnitIds.has(u.id)
               && (u.func === UnitBehavior.None || u.func === UnitBehavior.Explore || u.func === UnitBehavior.WaitForTransport),
             );
             if (anyLoadableArmies) {
@@ -1055,63 +1056,89 @@ function shouldUnload(
   viewMap: ViewMapCell[],
   atLoc?: Loc,
 ): boolean {
-  // Only unload near enemy or unowned cities/armies — NOT random land.
-  // Unloading on generic land caused premature dumping on home island.
+  // Only unload near enemy cities/armies — NOT random land or home territory.
   const loc = atLoc ?? unit.loc;
-  const adjacent = getAdjacentLocs(loc);
+  const capacity = objCapacity(unit);
 
-  // First: check if adjacent land is on a continent with WaitForTransport armies.
-  // If so, this is a loading continent — never unload here!
-  for (const adj of adjacent) {
-    const contents = viewMap[adj].contents;
-    if (contents !== "+" && contents !== " " && contents !== "X"
-        && contents !== "*" && contents !== "O" && contents !== "A" && contents !== "a") continue;
-    // This is a land cell — check its continent for waiting armies
-    const continent = mapContinent(viewMap, adj, ".");
-    for (const u of state.units) {
-      if (u.owner === aiOwner && u.type === UnitType.Army
-          && u.func === UnitBehavior.WaitForTransport && u.shipId === null
-          && continent.has(u.loc)) {
-        aiLog(`    Transport #${unit.id}: shouldUnload=false (adj ${adj} on loading continent with waiting armies)`);
-        return false;
-      }
-    }
-    break; // only check one adjacent land tile's continent
+  // Don't trigger partial unload with less than 50% cargo — prevents tiny wasteful deliveries.
+  // Full transports bypass shouldUnload entirely (handled by isFull check in caller).
+  if (unit.cargoIds.length < Math.ceil(capacity / 2)) {
+    aiLog(`    Transport #${unit.id}: shouldUnload=false (cargo ${unit.cargoIds.length}/${capacity} below 50% threshold)`);
+    return false;
   }
 
+  const adjacent = getAdjacentLocs(loc);
+
+  // Direct adjacency to enemy/unowned city or enemy army — always unload
   for (const adj of adjacent) {
     const contents = viewMap[adj].contents;
     if (contents === "X" || contents === "*" || contents === "a") {
       return true;
     }
   }
-  // Also check if adjacent land is on an enemy continent (short-range BFS, max 30 tiles)
+
+  // BFS from ALL adjacent land tiles (not just one) to check for:
+  // 1. Own cities nearby → home territory, never unload
+  // 2. WaitForTransport armies → loading zone, never unload
+  // 3. Enemy/unowned cities → worth unloading
+  // Uses distance-limited BFS (40 tiles) to detect own cities even on larger islands
+  let foundOwnCity = false;
+  let foundEnemyCity = false;
+  let foundLoadingArmy = false;
+  const visited = new Set<Loc>();
+  const queue: Loc[] = [];
+
+  // Seed BFS from all adjacent land tiles
   for (const adj of adjacent) {
     const contents = viewMap[adj].contents;
-    if (contents !== "+" && contents !== " ") continue;
-    // Quick BFS on land to see if enemy/unowned city is nearby
-    const visited = new Set<Loc>([adj]);
-    const queue: Loc[] = [adj];
-    let checked = 0;
-    while (queue.length > 0 && checked < 30) {
-      const cur = queue.shift()!;
-      checked++;
-      const c = viewMap[cur].contents;
-      if (c === "X" || c === "*") return true;
-      if (c === "O") return false; // own city found — this is home territory
-      for (const a of getAdjacentLocs(cur)) {
-        if (visited.has(a)) continue;
-        const ac = viewMap[a].contents;
-        if (ac === "+" || ac === " " || ac === "X" || ac === "*" || ac === "O"
-            || ac === "A" || ac === "a") {
-          visited.add(a);
-          queue.push(a);
+    if (contents === "+" || contents === " " || contents === "O" || contents === "A" || contents === "a") {
+      if (!visited.has(adj)) {
+        visited.add(adj);
+        queue.push(adj);
+      }
+    }
+  }
+
+  let checked = 0;
+  while (queue.length > 0 && checked < 40) {
+    const cur = queue.shift()!;
+    checked++;
+    const c = viewMap[cur].contents;
+    if (c === "O") { foundOwnCity = true; break; }
+    if (c === "X" || c === "*") foundEnemyCity = true;
+
+    // Check for WaitForTransport armies at this tile
+    if (!foundLoadingArmy) {
+      for (const u of state.units) {
+        if (u.owner === aiOwner && u.type === UnitType.Army
+            && u.func === UnitBehavior.WaitForTransport && u.shipId === null
+            && u.loc === cur) {
+          foundLoadingArmy = true;
+          break;
         }
       }
     }
-    break; // only check one adjacent land tile's continent
+
+    for (const a of getAdjacentLocs(cur)) {
+      if (visited.has(a)) continue;
+      const ac = viewMap[a].contents;
+      if (ac === "+" || ac === " " || ac === "X" || ac === "*" || ac === "O"
+          || ac === "A" || ac === "a") {
+        visited.add(a);
+        queue.push(a);
+      }
+    }
   }
-  return false;
+
+  if (foundOwnCity) {
+    aiLog(`    Transport #${unit.id}: shouldUnload=false (own city within ${checked} tiles)`);
+    return false;
+  }
+  if (foundLoadingArmy) {
+    aiLog(`    Transport #${unit.id}: shouldUnload=false (loading army within ${checked} tiles)`);
+    return false;
+  }
+  return foundEnemyCity;
 }
 
 /**
@@ -1144,14 +1171,31 @@ function tryUnloadArmies(
       // Unowned city — high priority
       landTargets.push({ loc: adj, priority: 2 });
     } else if (contents === "+" || contents === " ") {
-      // Land or unexplored — check if near enemy territory (not home)
-      // Only unload if this tile is NOT adjacent to our own cities
-      const isNearOwnCity = getAdjacentLocs(adj).some(a2 => {
-        const c = state.map[a2];
-        return c.cityId !== null && state.cities[c.cityId].owner === aiOwner;
-      });
-      if (!isNearOwnCity) {
-        // Check if this land is on a continent with WaitForTransport armies (loading zone)
+      // Land or unexplored — BFS to check for own cities nearby (20 tile radius)
+      // and require enemy/unowned cities on the continent to be worth unloading
+      let nearbyOwnCity = false;
+      let hasEnemyTargets = false;
+      const bfsVisited = new Set<Loc>([adj]);
+      const bfsQueue: Loc[] = [adj];
+      let bfsChecked = 0;
+      while (bfsQueue.length > 0 && bfsChecked < 40) {
+        const cur = bfsQueue.shift()!;
+        bfsChecked++;
+        const c = viewMap[cur].contents;
+        if (c === "O") { nearbyOwnCity = true; break; }
+        if (c === "X" || c === "*") hasEnemyTargets = true;
+        for (const a of getAdjacentLocs(cur)) {
+          if (bfsVisited.has(a)) continue;
+          const ac = viewMap[a].contents;
+          if (ac === "+" || ac === " " || ac === "X" || ac === "*" || ac === "O"
+              || ac === "A" || ac === "a") {
+            bfsVisited.add(a);
+            bfsQueue.push(a);
+          }
+        }
+      }
+      // Also check continent for WaitForTransport armies (loading zone)
+      if (!nearbyOwnCity && hasEnemyTargets) {
         const continent = mapContinent(viewMap, adj, ".");
         const isLoadingContinent = state.units.some(u =>
           u.owner === aiOwner && u.type === UnitType.Army
@@ -1163,6 +1207,8 @@ function tryUnloadArmies(
         } else {
           aiLog(`    Transport #${unit.id}: skip unload at ${adj} (loading continent)`);
         }
+      } else if (nearbyOwnCity) {
+        aiLog(`    Transport #${unit.id}: skip unload at ${adj} (own city nearby)`);
       }
     }
     // Skip 'O' (own city) — never unload at home
@@ -1270,7 +1316,8 @@ function countNearbyArmies(
       if (cell.terrain === TerrainType.Land || cell.terrain === TerrainType.City) {
         for (const u of state.units) {
           if (u.owner === aiOwner && u.type === UnitType.Army && u.loc === adj
-              && u.shipId === null && !claimedUnitIds.has(u.id)) {
+              && u.shipId === null && !claimedUnitIds.has(u.id)
+              && (u.func === UnitBehavior.None || u.func === UnitBehavior.Explore || u.func === UnitBehavior.WaitForTransport)) {
             count++;
           }
         }
@@ -1346,8 +1393,8 @@ function createUnloadViewMap(
       aiLog(`      unloadMap: skip loading continent (${continent.size} tiles, waitingArmies=${hasWaitingArmies}, targets=${targetCities})`);
       continue;
     }
-    // Skip continents with nothing interesting
-    if (value === 0 && unexplored === 0) continue;
+    // Skip continents with no city targets — only deliver armies to continents with capturable cities
+    if (value === 0) continue;
 
     aiLog(`      unloadMap: continent ${continent.size} tiles, value=${value}, targets=${targetCities}, unexplored=${unexplored}, own=${hasOwnCity}, waiting=${hasWaitingArmies}`);
     // Mark coastal water cells adjacent to this continent
@@ -1408,6 +1455,7 @@ function createTTLoadViewMap(
   state: GameState,
   aiOwner: Owner,
   excludeLocs?: Set<Loc>,
+  claimedUnitIds?: Set<number>,
 ): ViewMapCell[] {
   const tempMap = viewMap.map(cell => ({ ...cell }));
 
@@ -1418,6 +1466,8 @@ function createTTLoadViewMap(
     if (u.owner !== aiOwner || u.type !== UnitType.Army || u.shipId !== null) continue;
     // Mark idle, exploring, and waiting-for-transport armies as pickup targets
     if (u.func !== UnitBehavior.None && u.func !== UnitBehavior.Explore && u.func !== UnitBehavior.WaitForTransport) continue;
+    // Skip armies already claimed by other transports this turn
+    if (claimedUnitIds && claimedUnitIds.has(u.id)) continue;
 
     // Mark ALL adjacent water cells (not just one) so BFS has consistent targets
     const adjacent = getAdjacentLocs(u.loc);

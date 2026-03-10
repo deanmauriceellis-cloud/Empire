@@ -1,5 +1,23 @@
 # Empire Reborn — Changelog
 
+## v0.23.0 — Session 030 (2026-03-10)
+
+### Fixed
+- **Circular ferry** — transports loading then immediately unloading at same spot. `shouldUnload` now uses 40-tile BFS (was 20) for own-city detection, scans ALL adjacent land tiles
+- **Single-army delivery** — transports delivering 1/6 cargo. `shouldUnload` now requires ≥50% cargo (`Math.ceil(capacity / 2)`) before triggering partial unload
+- **Transport competition** — `createTTLoadViewMap` now accepts `claimedUnitIds` parameter to filter armies already claimed by other transports
+- **Dump on unexplored islands** — `createUnloadViewMap` now skips value=0 continents entirely (was only skipping when no unexplored tiles)
+- **Mini-ferry on large islands** — `tryUnloadArmies` BFS radius increased to 40 tiles, requires enemy targets on continent
+- **Loadable army count** — `countNearbyArmies` only counts armies with None/Explore/WaitForTransport behavior; `anyLoadableArmies` excludes `claimedUnitIds`
+
+### Added
+- **Original AI reference documentation** — 4 comprehensive docs analyzing original VMS-Empire C source:
+  - `docs/original-ai-transport.md` — binary state machine, load/unload maps, army coordination
+  - `docs/original-ai-production.md` — ratio tables, 3-priority algorithm, lake detection
+  - `docs/original-ai-movement.md` — unit decision trees, objective weight tables, cross-water cost
+  - `docs/original-ai-pathfinding.md` — BFS engine, terrain variants, continent analysis
+- **Divergence checklist** — `docs/original-vs-rewrite-divergence.md` — 25-item comparison across Transport, Army-Transport, Production, Movement, Fighter, Ships with status and recommended choices
+
 ## v0.22.0 — Session 027 (2026-03-10)
 
 ### Fixed
