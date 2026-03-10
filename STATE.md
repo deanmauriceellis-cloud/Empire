@@ -10,7 +10,7 @@
 - Preliminary fixes in ai.ts (shouldUnload, production guard, loading step, delivery mode) — need further work
 
 ## Latest commit
-`4a96b6d` — session 024: fix transport AI oscillation, stale-cargo unloading, and add verbose logging
+`cb5c748` — session 025: deep AI analysis, preliminary fixes, and 4-phase fix plan
 
 ## Completed
 - [x] Phase 0: Project scaffolding (pnpm monorepo, shared/client/server)
