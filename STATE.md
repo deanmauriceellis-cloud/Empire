@@ -12,6 +12,15 @@
 ## Latest commit
 `b808e6e` — session 035: transport AI fixes + 6-phase refactoring plan from code design review
 
+## Completed (session 036)
+- [x] Phase R1a: Create `shared/src/viewmap-chars.ts` — VM_WATER, VM_LAND, VM_UNEXPLORED, VM_OWN_CITY, VM_ENEMY_CITY, VM_UNOWNED_CITY, VM_HOME_PORT, VM_PICKUP_SINGLE, VM_PICKUP_CLUSTER constants + isEnemyUnit(), isCity(), isTargetCity(), isTraversableLand(), isPickupMarker() helpers
+- [x] Phase R1a: Replace 35+ magic character literals across ai.ts, game.ts, pathfinding.ts, continent.ts with named constants
+- [x] Phase R1a: Simplified BFS traversal check in tryUnloadArmies (6-condition OR → `!= VM_WATER`)
+- [x] Phase R1a: Simplified land cell filter in createUnloadViewMap (4-condition → `isTraversableLand()`)
+- [x] Phase R1d: Extract CSS custom properties in styles.ts — 30 design tokens (colors, font) replacing 80+ hardcoded values
+- [x] Phase R2: Split AI module (2027→5 files): ai-helpers.ts (316), ai-production.ts (395), ai-transport.ts (731), ai-movement.ts (309), ai.ts orchestrator (278)
+- [x] All 283 tests passing (255 shared + 28 server), client builds clean
+
 ## Completed (session 035)
 - [x] WaitForTransport armies BFS toward nearest non-full transport (not just any coast)
 - [x] Transport patience: wait up to 6 turns for armies at coastline, resets on each load
@@ -70,23 +79,24 @@
 
 ## Refactoring Plan (from session 035 code review)
 
-### Phase R1: Extract Constants & Helpers (Low Risk, High Impact) — START HERE
-- [ ] Create `shared/src/viewmap-chars.ts` — enum/constants for viewMap characters (`ENEMY_CITY = "X"`, `OWN_CITY = "O"`, etc.) + helpers `isEnemyUnit()`, `isOwnCity()`, `isCity()`
-- [ ] Create `shared/src/bfs.ts` — generic `bfsLand()`, `bfsWater()`, `bfsFrom()` with configurable terrain filter, max depth, target predicate. Replace 5 duplicate BFS implementations
-- [ ] Create `shared/src/adjacency.ts` — `getAdjacentEnemies()`, `getAdjacentAllies()`, `hasAdjacentTerrain()`. Replace 4 duplicate adjacent enemy scans
-- [ ] Extract CSS variables in `client/src/ui/styles.ts` — define `--color-bg`, `--color-accent`, etc. Replace 28+ repeated hex codes
+### Phase R1: Extract Constants & Helpers (Low Risk, High Impact)
+- [x] Create `shared/src/viewmap-chars.ts` — constants + helpers for viewMap characters; applied across ai.ts, game.ts, pathfinding.ts, continent.ts
+- [ ] Create `shared/src/bfs.ts` — generic BFS with configurable terrain filter (DEFERRED: BFS implementations are too varied for clean generalization)
+- [ ] Create `shared/src/adjacency.ts` — adjacent scanning helpers (DEFERRED: patterns are context-dependent)
+- [x] Extract CSS variables in `client/src/ui/styles.ts` — 30 design tokens replacing 80+ hardcoded values
 
-### Phase R2: Split AI Module (Medium Risk, High Impact)
-- [ ] Extract `shared/src/ai-production.ts` (~300 lines) — `decideProduction()` split into focused helpers, pre-compute unit counts once per turn
-- [ ] Extract `shared/src/ai-transport.ts` (~400 lines) — `aiTransportMove()`, load/unload helpers, viewMap creators
-- [ ] Extract `shared/src/ai-movement.ts` (~300 lines) — `aiArmyMove()`, `aiShipMove()`, `aiFighterMove()`, coast/moveAway helpers
-- [ ] Keep `shared/src/ai.ts` as `ai-core.ts` (~200 lines) — `computeAITurn()`, `assignIdleBehaviors()`, MoveInfo defs, orchestration
+### Phase R2: Split AI Module (Medium Risk, High Impact) ✓
+- [x] Extract `shared/src/ai-helpers.ts` (316 lines) — logging, MoveInfo factories, attack/movement helpers, lake detection, ratio tables
+- [x] Extract `shared/src/ai-production.ts` (395 lines) — `decideProduction()`, `aiProduction()`, ratio helpers
+- [x] Extract `shared/src/ai-transport.ts` (731 lines) — `aiTransportMove()`, load/unload helpers, viewMap creators
+- [x] Extract `shared/src/ai-movement.ts` (309 lines) — `aiArmyMove()`, `aiFighterMove()`, `aiShipMove()`, coast/moveAway helpers
+- [x] Slim `shared/src/ai.ts` (278 lines) — `computeAITurn()`, `assignIdleBehaviors()`, re-exports
 
-### Phase R3: Split Game Engine (Medium Risk, Medium Impact)
-- [ ] Extract `shared/src/behaviors.ts` (~500 lines) — `processUnitBehaviors()`, explore (split air/ground), aggressive, cautious, coast movement
-- [ ] Extract `shared/src/combat.ts` (~150 lines) — `attack()`, `resolveAttack()`, damage calculations
-- [ ] Extract `shared/src/vision.ts` (~100 lines) — `scan()`, visibility computation
-- [ ] Keep `shared/src/game.ts` (~600 lines) — `moveUnit()`, `processAction()`, `executeTurn()`, production, unit lifecycle
+### Phase R3: Split Game Engine (Medium Risk, Medium Impact) — DEFERRED
+- [ ] Extract behaviors.ts — circular dependency with game.ts (behaviors→game for moveUnit/attackCity, game→behaviors for processUnitBehaviors)
+- [ ] Extract combat.ts — same circular dep issue (combat uses moveUnit/killUnit, processAction uses attackCity/attackUnit)
+- [ ] Extract vision.ts — feasible but low impact (~80 lines)
+- _Recommendation_: resolve with a game-utils.ts shared layer if pursued later
 
 ### Phase R4: Split Client Main Loop (High Risk, High Impact) — DO LAST
 - [ ] Extract `client/src/game-loop.ts` (~100 lines) — rAF orchestrator, delta time, phase state machine

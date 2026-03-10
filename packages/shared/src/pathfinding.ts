@@ -13,6 +13,7 @@ import {
 } from "./constants.js";
 import type { Loc, ViewMapCell } from "./types.js";
 import { isOnBoard, locCol } from "./utils.js";
+import { VM_LAND, VM_WATER, VM_UNEXPLORED, VM_OWN_CITY, VM_ENEMY_CITY, VM_UNOWNED_CITY } from "./viewmap-chars.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -38,13 +39,13 @@ export interface MoveInfo {
 /** Convert a view map cell's contents to a TerrainFlag. */
 export function viewCellToTerrain(contents: string): TerrainFlag {
   switch (contents) {
-    case "+": return TerrainFlag.Land;
-    case ".": return TerrainFlag.Water;
-    case " ": return TerrainFlag.Unknown;
+    case VM_LAND: return TerrainFlag.Land;
+    case VM_WATER: return TerrainFlag.Water;
+    case VM_UNEXPLORED: return TerrainFlag.Unknown;
     default:
       // Cities, units, etc. are on either land or water
       // Uppercase = own, lowercase = enemy, * = unowned city, O = own city, X = enemy city
-      if (contents === "*" || contents === "O" || contents === "X") return TerrainFlag.Land;
+      if (contents === VM_UNOWNED_CITY || contents === VM_OWN_CITY || contents === VM_ENEMY_CITY) return TerrainFlag.Land;
       // Unit chars on water or land — for pathfinding, treat as passable terrain
       return TerrainFlag.Air; // most permissive; the canMove function handles specifics
   }

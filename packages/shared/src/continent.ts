@@ -11,6 +11,7 @@ import {
 } from "./constants.js";
 import type { Loc, ViewMapCell, ScanCounts } from "./types.js";
 import { isOnBoard, locCol } from "./utils.js";
+import { VM_UNEXPLORED, VM_UNOWNED_CITY, VM_OWN_CITY, VM_ENEMY_CITY } from "./viewmap-chars.js";
 
 // ─── Continent Mapping ──────────────────────────────────────────────────────────
 
@@ -55,7 +56,7 @@ export function mapContinent(
       continent.add(adj);
 
       // Unexplored cells are part of the continent but don't expand from them
-      if (contents !== " ") {
+      if (contents !== VM_UNEXPLORED) {
         queue.push(adj);
       }
     }
@@ -90,17 +91,17 @@ export function scanContinent(
     const contents = viewMap[loc].contents;
 
     switch (contents) {
-      case " ":
+      case VM_UNEXPLORED:
         counts.unexplored++;
         break;
-      case "*":
+      case VM_UNOWNED_CITY:
         counts.unownedCities++;
         counts.playerCities[Owner.Unowned]++;
         break;
-      case "O":
+      case VM_OWN_CITY:
         counts.playerCities[Owner.Player1]++;
         break;
-      case "X":
+      case VM_ENEMY_CITY:
         counts.playerCities[Owner.Player2]++;
         break;
       default: {
@@ -163,7 +164,7 @@ export function findExploreLocs(
   const exploreLocs: Loc[] = [];
 
   for (const loc of continent) {
-    if (viewMap[loc].contents === " ") continue; // skip unexplored cells themselves
+    if (viewMap[loc].contents === VM_UNEXPLORED) continue; // skip unexplored cells themselves
 
     // Check if any neighbor is unexplored
     for (let d = 0; d < 8; d++) {
@@ -173,7 +174,7 @@ export function findExploreLocs(
       const colDiff = Math.abs(locCol(adj) - locCol(loc));
       if (colDiff > 1) continue;
 
-      if (viewMap[adj].contents === " ") {
+      if (viewMap[adj].contents === VM_UNEXPLORED) {
         exploreLocs.push(loc);
         break;
       }

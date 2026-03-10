@@ -7,6 +7,36 @@ export function injectStyles(): void {
 }
 
 const CSS = `
+/* ─── Design Tokens ────────────────────────────────────────────────────── */
+
+:root {
+  --ui-font: 'Courier New', monospace;
+  --color-text: #ccc;
+  --color-text-bright: #fff;
+  --color-text-muted: #888;
+  --color-text-dim: #666;
+  --color-text-subtle: #777;
+  --color-text-faint: #aaa;
+  --color-accent: #4af;
+  --color-accent-light: #8af;
+  --color-accent-hex: #48f;
+  --color-accent-rgb: 68, 136, 255;
+  --color-orange: #fa4;
+  --color-orange-rgb: 255, 170, 68;
+  --color-green: #4c4;
+  --color-green-active: #4c8;
+  --color-green-bright: #4f4;
+  --color-red: #f44;
+  --color-red-dim: #f84;
+  --color-border: #333;
+  --color-border-dim: #335;
+  --color-border-dark: #444;
+  --color-bg-dark: rgba(0,0,0,0.8);
+  --color-bg-overlay: rgba(0,0,0,0.7);
+  --color-bg-modal: rgba(10,10,30,0.95);
+  --color-bg-menu: rgba(5,5,15,0.95);
+}
+
 /* ─── Root Overlay ──────────────────────────────────────────────────────── */
 
 #empire-ui {
@@ -14,9 +44,9 @@ const CSS = `
   inset: 0;
   pointer-events: none;
   z-index: 10;
-  font-family: 'Courier New', monospace;
+  font-family: var(--ui-font);
   font-size: 13px;
-  color: #ccc;
+  color: var(--color-text);
   user-select: none;
 }
 
@@ -41,16 +71,16 @@ const CSS = `
 }
 
 #hud-top .stat {
-  color: #8af;
+  color: var(--color-accent-light);
 }
 
 #hud-top .stat-label {
-  color: #777;
+  color: var(--color-text-subtle);
   margin-right: 4px;
 }
 
 #hud-top .unit-count {
-  color: #8af;
+  color: var(--color-accent-light);
   margin-right: 6px;
   font-size: 12px;
 }
@@ -78,18 +108,18 @@ const CSS = `
 }
 
 #hud-bottom .unit-name {
-  color: #4af;
+  color: var(--color-accent);
   font-weight: bold;
   text-transform: capitalize;
 }
 
 #hud-bottom .city-name {
-  color: #fa4;
+  color: var(--color-orange);
   font-weight: bold;
 }
 
 #hud-bottom .info-sep {
-  color: #444;
+  color: var(--color-border-dark);
 }
 
 /* ─── Right Sidebar ─────────────────────────────────────────────────────── */
@@ -101,8 +131,8 @@ const CSS = `
   right: 0;
   width: 200px;
   height: 100%;
-  background: rgba(0,0,0,0.8);
-  border-left: 1px solid #333;
+  background: var(--color-bg-dark);
+  border-left: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -112,7 +142,7 @@ const CSS = `
 
 #minimap-wrapper {
   padding: 8px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--color-border);
 }
 
 #minimap-wrapper canvas {
@@ -133,7 +163,7 @@ const CSS = `
 }
 
 #action-panel .section-label {
-  color: #666;
+  color: var(--color-text-dim);
   font-size: 11px;
   text-transform: uppercase;
   margin-top: 4px;
@@ -142,12 +172,12 @@ const CSS = `
 
 .action-btn {
   pointer-events: auto;
-  background: rgba(68,136,255,0.15);
-  border: 1px solid #335;
-  color: #8af;
+  background: rgba(var(--color-accent-rgb), 0.15);
+  border: 1px solid var(--color-border-dim);
+  color: var(--color-accent-light);
   padding: 4px 8px;
   cursor: pointer;
-  font-family: 'Courier New', monospace;
+  font-family: var(--ui-font);
   font-size: 12px;
   text-align: left;
   display: flex;
@@ -156,18 +186,18 @@ const CSS = `
 }
 
 .action-btn:hover {
-  background: rgba(68,136,255,0.3);
-  border-color: #48f;
+  background: rgba(var(--color-accent-rgb), 0.3);
+  border-color: var(--color-accent-hex);
 }
 
 .action-btn:active {
-  background: rgba(68,136,255,0.5);
+  background: rgba(var(--color-accent-rgb), 0.5);
 }
 
 .action-btn.active {
   background: rgba(68,200,100,0.25);
-  border-color: #4c8;
-  color: #4c8;
+  border-color: var(--color-green-active);
+  color: var(--color-green-active);
 }
 
 .action-btn.active:hover {
@@ -180,27 +210,27 @@ const CSS = `
 }
 
 .action-btn .hotkey {
-  color: #fa4;
+  color: var(--color-orange);
   font-size: 11px;
 }
 
 .action-btn.end-turn {
-  background: rgba(255,170,68,0.2);
+  background: rgba(var(--color-orange-rgb), 0.2);
   border-color: #553;
-  color: #fa4;
+  color: var(--color-orange);
   margin-top: 8px;
 }
 
 .action-btn.end-turn:hover {
-  background: rgba(255,170,68,0.4);
-  border-color: #fa4;
+  background: rgba(var(--color-orange-rgb), 0.4);
+  border-color: var(--color-orange);
 }
 
 /* ─── Turn Flow Buttons ─────────────────────────────────────────────────── */
 
 #turn-buttons {
   padding: 8px;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -217,9 +247,9 @@ const CSS = `
   max-height: 180px;
   overflow-y: auto;
   padding: 6px 10px;
-  background: rgba(0,0,0,0.7);
-  border-right: 1px solid #333;
-  border-top: 1px solid #333;
+  background: var(--color-bg-overlay);
+  border-right: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border);
   font-size: 11px;
   line-height: 1.4;
 }
@@ -234,14 +264,14 @@ const CSS = `
 }
 
 #event-log .event:hover {
-  color: #fff;
+  color: var(--color-text-bright);
 }
 
-#event-log .event.combat { color: #f84; }
-#event-log .event.capture { color: #fa4; }
-#event-log .event.production { color: #4c4; }
-#event-log .event.death { color: #888; }
-#event-log .event.discovery { color: #4af; }
+#event-log .event.combat { color: var(--color-red-dim); }
+#event-log .event.capture { color: var(--color-orange); }
+#event-log .event.production { color: var(--color-green); }
+#event-log .event.death { color: var(--color-text-muted); }
+#event-log .event.discovery { color: var(--color-accent); }
 
 /* ─── City Panel (Modal) ────────────────────────────────────────────────── */
 
@@ -251,8 +281,8 @@ const CSS = `
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: rgba(10,10,30,0.95);
-  border: 1px solid #48f;
+  background: var(--color-bg-modal);
+  border: 1px solid var(--color-accent-hex);
   padding: 16px;
   min-width: 360px;
   display: none;
@@ -265,8 +295,8 @@ const CSS = `
 #city-panel h2 {
   margin: 0 0 12px 0;
   font-size: 16px;
-  color: #fa4;
-  font-family: 'Courier New', monospace;
+  color: var(--color-orange);
+  font-family: var(--ui-font);
 }
 
 #city-panel .production-grid {
@@ -277,27 +307,27 @@ const CSS = `
 
 #city-panel .prod-btn {
   pointer-events: auto;
-  background: rgba(68,136,255,0.1);
-  border: 1px solid #335;
-  color: #aaa;
+  background: rgba(var(--color-accent-rgb), 0.1);
+  border: 1px solid var(--color-border-dim);
+  color: var(--color-text-faint);
   padding: 8px 6px;
   cursor: pointer;
-  font-family: 'Courier New', monospace;
+  font-family: var(--ui-font);
   font-size: 11px;
   text-align: center;
   transition: background 0.1s;
 }
 
 #city-panel .prod-btn:hover {
-  background: rgba(68,136,255,0.25);
-  border-color: #48f;
-  color: #fff;
+  background: rgba(var(--color-accent-rgb), 0.25);
+  border-color: var(--color-accent-hex);
+  color: var(--color-text-bright);
 }
 
 #city-panel .prod-btn.active {
-  background: rgba(68,136,255,0.3);
-  border-color: #48f;
-  color: #4af;
+  background: rgba(var(--color-accent-rgb), 0.3);
+  border-color: var(--color-accent-hex);
+  color: var(--color-accent);
 }
 
 #city-panel .prod-btn .prod-name {
@@ -307,7 +337,7 @@ const CSS = `
 }
 
 #city-panel .prod-btn .prod-stat {
-  color: #777;
+  color: var(--color-text-subtle);
   font-size: 10px;
 }
 
@@ -315,24 +345,24 @@ const CSS = `
   margin-top: 12px;
   height: 8px;
   background: #222;
-  border: 1px solid #444;
+  border: 1px solid var(--color-border-dark);
   position: relative;
 }
 
 #city-panel .progress-bar .fill {
   height: 100%;
-  background: #48f;
+  background: var(--color-accent-hex);
   transition: width 0.2s;
 }
 
 #city-panel .progress-info {
   margin-top: 4px;
   font-size: 11px;
-  color: #888;
+  color: var(--color-text-muted);
 }
 
 #city-panel .penalty-warning {
-  color: #f84;
+  color: var(--color-red-dim);
   font-size: 11px;
   margin-top: 8px;
   display: none;
@@ -345,14 +375,14 @@ const CSS = `
   right: 12px;
   background: none;
   border: none;
-  color: #888;
+  color: var(--color-text-muted);
   font-size: 18px;
   cursor: pointer;
   font-family: 'Courier New', monospace;
 }
 
 #city-panel .close-btn:hover {
-  color: #fff;
+  color: var(--color-text-bright);
 }
 
 /* ─── Menu Screens ──────────────────────────────────────────────────────── */
@@ -361,7 +391,7 @@ const CSS = `
   pointer-events: auto;
   position: absolute;
   inset: 0;
-  background: rgba(5,5,15,0.95);
+  background: var(--color-bg-menu);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -374,28 +404,28 @@ const CSS = `
 }
 
 #menu-screen h1 {
-  font-family: 'Courier New', monospace;
+  font-family: var(--ui-font);
   font-size: 36px;
-  color: #4af;
+  color: var(--color-accent);
   margin: 0 0 8px 0;
   letter-spacing: 4px;
 }
 
 #menu-screen .subtitle {
-  color: #666;
+  color: var(--color-text-dim);
   font-size: 14px;
   margin-bottom: 32px;
 }
 
 #menu-screen .menu-btn {
   pointer-events: auto;
-  background: rgba(68,136,255,0.15);
-  border: 1px solid #48f;
-  color: #8af;
+  background: rgba(var(--color-accent-rgb), 0.15);
+  border: 1px solid var(--color-accent-hex);
+  color: var(--color-accent-light);
   padding: 12px 40px;
   margin: 6px;
   cursor: pointer;
-  font-family: 'Courier New', monospace;
+  font-family: var(--ui-font);
   font-size: 16px;
   min-width: 200px;
   text-align: center;
@@ -403,8 +433,8 @@ const CSS = `
 }
 
 #menu-screen .menu-btn:hover {
-  background: rgba(68,136,255,0.35);
-  color: #fff;
+  background: rgba(var(--color-accent-rgb), 0.35);
+  color: var(--color-text-bright);
 }
 
 #menu-screen .result-text {
@@ -413,11 +443,11 @@ const CSS = `
   margin-bottom: 16px;
 }
 
-#menu-screen .result-text.victory { color: #4f4; }
-#menu-screen .result-text.defeat { color: #f44; }
+#menu-screen .result-text.victory { color: var(--color-green-bright); }
+#menu-screen .result-text.defeat { color: var(--color-red); }
 
 #menu-screen .stats {
-  color: #888;
+  color: var(--color-text-muted);
   font-size: 13px;
   margin-bottom: 24px;
   text-align: center;
@@ -425,9 +455,9 @@ const CSS = `
 }
 
 #menu-screen h2 {
-  font-family: 'Courier New', monospace;
+  font-family: var(--ui-font);
   font-size: 24px;
-  color: #4af;
+  color: var(--color-accent);
   margin: 0 0 12px 0;
   letter-spacing: 2px;
 }
@@ -436,11 +466,11 @@ const CSS = `
   pointer-events: auto;
   background: transparent;
   border: 1px solid #555;
-  color: #888;
+  color: var(--color-text-muted);
   padding: 8px 24px;
   margin: 6px;
   cursor: pointer;
-  font-family: 'Courier New', monospace;
+  font-family: var(--ui-font);
   font-size: 13px;
   min-width: 160px;
   text-align: center;
@@ -448,8 +478,8 @@ const CSS = `
 }
 
 #menu-screen .menu-btn-secondary:hover {
-  border-color: #888;
-  color: #ccc;
+  border-color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 /* ─── Connection Status ──────────────────────────────────────────────────── */
@@ -461,9 +491,9 @@ const CSS = `
   border-radius: 3px;
 }
 
-#menu-screen .conn-ok { color: #4c4; }
-#menu-screen .conn-warn { color: #fa4; }
-#menu-screen .conn-err { color: #f44; }
+#menu-screen .conn-ok { color: var(--color-green); }
+#menu-screen .conn-warn { color: var(--color-orange); }
+#menu-screen .conn-err { color: var(--color-red); }
 
 /* ─── Lobby ──────────────────────────────────────────────────────────────── */
 
@@ -479,11 +509,11 @@ const CSS = `
 }
 
 #menu-screen .lobby-section h3 {
-  color: #888;
+  color: var(--color-text-muted);
   font-size: 12px;
   text-transform: uppercase;
   margin: 0 0 6px 0;
-  font-family: 'Courier New', monospace;
+  font-family: var(--ui-font);
 }
 
 #menu-screen .lobby-game {
@@ -492,41 +522,41 @@ const CSS = `
   gap: 8px;
   padding: 6px 8px;
   background: rgba(255,255,255,0.03);
-  border: 1px solid #333;
+  border: 1px solid var(--color-border);
   margin-bottom: 4px;
 }
 
 #menu-screen .lobby-game .game-id {
-  color: #4af;
+  color: var(--color-accent);
   font-weight: bold;
   flex: 0 0 80px;
 }
 
 #menu-screen .lobby-game .game-info {
-  color: #777;
+  color: var(--color-text-subtle);
   font-size: 11px;
   flex: 1;
 }
 
 #menu-screen .lobby-btn {
   pointer-events: auto;
-  background: rgba(68,136,255,0.15);
-  border: 1px solid #48f;
-  color: #8af;
+  background: rgba(var(--color-accent-rgb), 0.15);
+  border: 1px solid var(--color-accent-hex);
+  color: var(--color-accent-light);
   padding: 4px 12px;
   cursor: pointer;
-  font-family: 'Courier New', monospace;
+  font-family: var(--ui-font);
   font-size: 12px;
   transition: background 0.15s;
 }
 
 #menu-screen .lobby-btn:hover {
-  background: rgba(68,136,255,0.35);
-  color: #fff;
+  background: rgba(var(--color-accent-rgb), 0.35);
+  color: var(--color-text-bright);
 }
 
 #menu-screen .lobby-empty {
-  color: #666;
+  color: var(--color-text-dim);
   font-size: 13px;
   text-align: center;
   padding: 24px 0;
@@ -540,7 +570,7 @@ const CSS = `
 }
 
 #menu-screen .setup-label {
-  color: #888;
+  color: var(--color-text-muted);
   font-size: 12px;
   text-transform: uppercase;
   margin-bottom: 8px;
@@ -556,11 +586,11 @@ const CSS = `
 #menu-screen .setup-option {
   pointer-events: auto;
   background: rgba(255,255,255,0.03);
-  border: 1px solid #333;
-  color: #aaa;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-faint);
   padding: 10px 12px;
   cursor: pointer;
-  font-family: 'Courier New', monospace;
+  font-family: var(--ui-font);
   font-size: 12px;
   text-align: left;
   transition: all 0.15s;
@@ -570,15 +600,15 @@ const CSS = `
 }
 
 #menu-screen .setup-option:hover {
-  background: rgba(68,136,255,0.1);
-  border-color: #48f;
-  color: #ccc;
+  background: rgba(var(--color-accent-rgb), 0.1);
+  border-color: var(--color-accent-hex);
+  color: var(--color-text);
 }
 
 #menu-screen .setup-option.selected {
-  background: rgba(68,136,255,0.2);
-  border-color: #48f;
-  color: #fff;
+  background: rgba(var(--color-accent-rgb), 0.2);
+  border-color: var(--color-accent-hex);
+  color: var(--color-text-bright);
 }
 
 #menu-screen .setup-option .option-name {
@@ -588,17 +618,17 @@ const CSS = `
 }
 
 #menu-screen .setup-option .option-detail {
-  color: #4af;
+  color: var(--color-accent);
   font-size: 11px;
 }
 
 #menu-screen .setup-option .option-desc {
-  color: #666;
+  color: var(--color-text-dim);
   font-size: 10px;
 }
 
 #menu-screen .setup-option.selected .option-desc {
-  color: #888;
+  color: var(--color-text-muted);
 }
 
 /* ─── Waiting Spinner ────────────────────────────────────────────────────── */
@@ -606,8 +636,8 @@ const CSS = `
 #menu-screen .waiting-spinner {
   width: 24px;
   height: 24px;
-  border: 2px solid #333;
-  border-top-color: #4af;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent);
   border-radius: 50%;
   margin: 16px auto;
   animation: spin 1s linear infinite;
@@ -621,14 +651,14 @@ const CSS = `
 
 #debug-panel {
   padding: 8px;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
 
 #debug-panel .debug-title {
-  color: #f44;
+  color: var(--color-red);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -652,13 +682,13 @@ const CSS = `
 
 .debug-toggle:hover {
   background: rgba(255,50,50,0.2);
-  border-color: #f44;
+  border-color: var(--color-red);
   color: #faa;
 }
 
 .debug-toggle.on {
   background: rgba(255,50,50,0.25);
-  border-color: #f44;
+  border-color: var(--color-red);
   color: #f88;
 }
 
@@ -668,7 +698,7 @@ const CSS = `
 }
 
 .debug-toggle.on .debug-state {
-  color: #4f4;
+  color: var(--color-green-bright);
 }
 
 /* ─── Scrollbar ─────────────────────────────────────────────────────────── */
@@ -682,7 +712,7 @@ const CSS = `
 }
 
 #empire-ui ::-webkit-scrollbar-thumb {
-  background: #444;
+  background: var(--color-border-dark);
   border-radius: 2px;
 }
 `;

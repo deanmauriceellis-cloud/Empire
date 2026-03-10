@@ -38,6 +38,7 @@ import {
   airMoveInfo,
 } from "./pathfinding.js";
 import { mapContinent } from "./continent.js";
+import { VM_UNEXPLORED, VM_ENEMY_CITY, VM_OWN_CITY, VM_UNOWNED_CITY, isEnemyUnit } from "./viewmap-chars.js";
 
 // ─── RNG ────────────────────────────────────────────────────────────────────────
 
@@ -1028,8 +1029,8 @@ function hasVisibleEnemyNearby(state: GameState, unit: UnitState, owner: Owner):
   for (const adj of adjacent) {
     const contents = viewMap[adj].contents;
     // Lowercase letters = enemy units, X = enemy city
-    if (contents === "X") return true;
-    if (contents >= "a" && contents <= "z") return true;
+    if (contents === VM_ENEMY_CITY) return true;
+    if (isEnemyUnit(contents)) return true;
   }
   return false;
 }
@@ -1040,12 +1041,12 @@ function hasVisibleEnemyNearby(state: GameState, unit: UnitState, owner: Owner):
  */
 function countNewTilesRevealed(viewMap: ViewMapCell[], loc: Loc): number {
   let count = 0;
-  if (viewMap[loc].contents === " ") count++;
+  if (viewMap[loc].contents === VM_UNEXPLORED) count++;
   for (let d = 0; d < 8; d++) {
     const adj = loc + DIR_OFFSET[d];
     if (adj >= 0 && adj < MAP_SIZE && isOnBoard(adj)) {
       const colDiff = Math.abs(locCol(adj) - locCol(loc));
-      if (colDiff <= 1 && viewMap[adj].contents === " ") count++;
+      if (colDiff <= 1 && viewMap[adj].contents === VM_UNEXPLORED) count++;
     }
   }
   return count;
@@ -1267,8 +1268,8 @@ function exploreUnit(state: GameState, unit: UnitState, owner: Owner): TurnEvent
           let hasEnemyCity = false;
           for (const loc of continent) {
             const cell = viewMap[loc];
-            if (cell.contents === "O") hasOwnCity = true;
-            if (cell.contents === "X" || cell.contents === "*") hasEnemyCity = true;
+            if (cell.contents === VM_OWN_CITY) hasOwnCity = true;
+            if (cell.contents === VM_ENEMY_CITY || cell.contents === VM_UNOWNED_CITY) hasEnemyCity = true;
           }
           if (!hasOwnCity && hasEnemyCity) {
             // On enemy continent — stay aggressive, don't request transport
