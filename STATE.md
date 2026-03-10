@@ -1,13 +1,13 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Post-Phase 12: Playtesting & Bug Fixes** — AI improvements + diagnostic tooling
+**Refactoring (Phase R1–R6)** — Code design review → phased refactor
 
 ## Status
 - All 12 phases complete + gameplay polish + debug tools + AI overhaul
 - 283 unit/integration tests passing (255 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
-- Phases A-D complete + playtest fixes + map gen fixes + transport fixes + balance fixes
+- Full code review completed (session 035) — 6-phase refactor plan below
 
 ## Latest commit
 `8de9c0a` — session 035: transport AI overhaul — patience, army coordination, exploration priority
@@ -68,8 +68,51 @@
 - [x] Phase 12.2: Integration tests — AI vs AI, save/load, determinism
 - [x] Phase 12.3: E2E tests — Playwright (singleplayer, multiplayer lobby, perf benchmarks)
 
-## Next Steps
-1. Continue playtesting — verify transport unloading, fighter cap, production stability
+## Refactoring Plan (from session 035 code review)
+
+### Phase R1: Extract Constants & Helpers (Low Risk, High Impact) — START HERE
+- [ ] Create `shared/src/viewmap-chars.ts` — enum/constants for viewMap characters (`ENEMY_CITY = "X"`, `OWN_CITY = "O"`, etc.) + helpers `isEnemyUnit()`, `isOwnCity()`, `isCity()`
+- [ ] Create `shared/src/bfs.ts` — generic `bfsLand()`, `bfsWater()`, `bfsFrom()` with configurable terrain filter, max depth, target predicate. Replace 5 duplicate BFS implementations
+- [ ] Create `shared/src/adjacency.ts` — `getAdjacentEnemies()`, `getAdjacentAllies()`, `hasAdjacentTerrain()`. Replace 4 duplicate adjacent enemy scans
+- [ ] Extract CSS variables in `client/src/ui/styles.ts` — define `--color-bg`, `--color-accent`, etc. Replace 28+ repeated hex codes
+
+### Phase R2: Split AI Module (Medium Risk, High Impact)
+- [ ] Extract `shared/src/ai-production.ts` (~300 lines) — `decideProduction()` split into focused helpers, pre-compute unit counts once per turn
+- [ ] Extract `shared/src/ai-transport.ts` (~400 lines) — `aiTransportMove()`, load/unload helpers, viewMap creators
+- [ ] Extract `shared/src/ai-movement.ts` (~300 lines) — `aiArmyMove()`, `aiShipMove()`, `aiFighterMove()`, coast/moveAway helpers
+- [ ] Keep `shared/src/ai.ts` as `ai-core.ts` (~200 lines) — `computeAITurn()`, `assignIdleBehaviors()`, MoveInfo defs, orchestration
+
+### Phase R3: Split Game Engine (Medium Risk, Medium Impact)
+- [ ] Extract `shared/src/behaviors.ts` (~500 lines) — `processUnitBehaviors()`, explore (split air/ground), aggressive, cautious, coast movement
+- [ ] Extract `shared/src/combat.ts` (~150 lines) — `attack()`, `resolveAttack()`, damage calculations
+- [ ] Extract `shared/src/vision.ts` (~100 lines) — `scan()`, visibility computation
+- [ ] Keep `shared/src/game.ts` (~600 lines) — `moveUnit()`, `processAction()`, `executeTurn()`, production, unit lifecycle
+
+### Phase R4: Split Client Main Loop (High Risk, High Impact) — DO LAST
+- [ ] Extract `client/src/game-loop.ts` (~100 lines) — rAF orchestrator, delta time, phase state machine
+- [ ] Extract `client/src/input-handler.ts` (~200 lines) — click-to-move, right-click, keyboard, selection
+- [ ] Extract `client/src/render-orchestrator.ts` (~150 lines) — per-frame render calls, camera updates
+- [ ] Extract `client/src/game-state-manager.ts` (~200 lines) — RenderableState, mode, selection, UI state
+- [ ] Slim `client/src/main.ts` to ~100 lines — thin entry point wiring modules
+
+### Phase R5: Server Hardening & Cleanup (Low Risk, Medium Impact)
+- [ ] Split `GameManager` into `GameRouter`, `GameService`, `VisibilityFilter`
+- [ ] Security: restrict CORS, add request size limits, protect `/api/gamelog`, add rate limiting
+- [ ] Add graceful shutdown — save all games on SIGTERM/SIGINT
+- [ ] Fix disconnect timer memory leak, persist game immediately on disconnect
+- [ ] Add server-side action validation (move legality, not just ownership)
+
+### Phase R6: Performance & Polish (Low Risk, Low Impact)
+- [ ] Cache AI pre-computations — unit counts, nearest cities, coastal flags once per turn
+- [ ] Fix client memory leaks — input cleanup, fog alpha map trim, sprite pool bounds
+- [ ] Optimize viewMap cloning — reuse temp maps across transport steps
+- [ ] Cache viewport bounds — memoize `getVisibleTileBounds()` per frame
+
+### Execution Order
+R1 and R5 can run in parallel (no dependencies). R2 and R3 depend on R1. R6 depends on R2/R3. R4 is last (depends on stable shared API).
+
+## Next Steps (post-refactor)
+1. Continue playtesting
 2. Hosting / deployment
 3. Art assets (replace placeholder textures)
 
