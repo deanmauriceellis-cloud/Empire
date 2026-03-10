@@ -6,6 +6,7 @@ import type { UIState } from "../types.js";
 export interface HUD {
   readonly topBar: HTMLDivElement;
   readonly bottomBar: HTMLDivElement;
+  setWarStatsButton(btn: HTMLButtonElement): void;
   update(state: UIState): void;
 }
 
@@ -13,12 +14,21 @@ export function createHUD(): HUD {
   const topBar = document.createElement("div");
   topBar.id = "hud-top";
 
+  // Content span so innerHTML doesn't destroy the war stats button
+  const topContent = document.createElement("span");
+  topContent.id = "hud-top-content";
+  topBar.appendChild(topContent);
+
   const bottomBar = document.createElement("div");
   bottomBar.id = "hud-bottom";
 
   return {
     topBar,
     bottomBar,
+
+    setWarStatsButton(btn: HTMLButtonElement): void {
+      topBar.insertBefore(btn, topContent);
+    },
 
     update(state: UIState): void {
       // Top bar — unit counts by type
@@ -32,7 +42,7 @@ export function createHUD(): HUD {
         ? unitParts.join("")
         : `<span class="stat">0</span>`;
 
-      topBar.innerHTML = [
+      topContent.innerHTML = [
         `<span><span class="stat-label">Turn</span><span class="stat">${state.turn}</span></span>`,
         `<span><span class="stat-label">Cities</span><span class="stat">${state.playerCityCount}</span></span>`,
         `<span><span class="stat-label">Units</span>${unitSummary}</span>`,

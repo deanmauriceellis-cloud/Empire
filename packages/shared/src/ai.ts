@@ -111,14 +111,23 @@ function assignIdleBehaviors(
     const atOwnCity = cell.cityId !== null && state.cities[cell.cityId].owner === aiOwner;
 
     if (atOwnCity) {
-      const currentSentries = sentryCounts.get(unit.loc) ?? 0;
-      if (currentSentries < 1) {
-        // First idle unit at this city becomes sentry
-        actions.push({ type: "setBehavior", unitId: unit.id, behavior: UnitBehavior.Sentry });
-        sentryCounts.set(unit.loc, currentSentries + 1);
-      } else {
-        // Additional units at city explore
+      // Fighters and combat ships should always explore — fighters are too fragile for sentry
+      // and ships are too valuable sitting in port when they could be patrolling
+      const isShip = unit.type === UnitType.Patrol || unit.type === UnitType.Destroyer
+        || unit.type === UnitType.Submarine || unit.type === UnitType.Carrier
+        || unit.type === UnitType.Battleship;
+      if (unit.type === UnitType.Fighter || isShip) {
         actions.push({ type: "setBehavior", unitId: unit.id, behavior: UnitBehavior.Explore });
+      } else {
+        const currentSentries = sentryCounts.get(unit.loc) ?? 0;
+        if (currentSentries < 1) {
+          // First idle unit at this city becomes sentry
+          actions.push({ type: "setBehavior", unitId: unit.id, behavior: UnitBehavior.Sentry });
+          sentryCounts.set(unit.loc, currentSentries + 1);
+        } else {
+          // Additional units at city explore
+          actions.push({ type: "setBehavior", unitId: unit.id, behavior: UnitBehavior.Explore });
+        }
       }
     } else if (unit.type === UnitType.Army && hasNearbyTransport(state, unit.loc, aiOwner)) {
       // Army near a non-full transport — go to coast for pickup (skip explore→wait cycle)

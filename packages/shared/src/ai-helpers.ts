@@ -63,14 +63,14 @@ export function aiVLog(...args: unknown[]): void {
 
 /** 2–3 cities: fighter-heavy early game */
 const RATIO_EARLY = [50, 20, 0, 0, 0, 15, 0, 0, 0];
-/** 4–10 cities */
-const RATIO_1 = [60, 10, 10, 0, 0, 20, 0, 0, 0];
-/** 11–20 cities */
-const RATIO_2 = [90, 15, 10, 10, 10, 40, 0, 0, 0];
-/** 21–30 cities */
-const RATIO_3 = [120, 20, 20, 10, 10, 60, 10, 10, 0];
-/** >30 cities */
-const RATIO_4 = [150, 30, 30, 20, 20, 70, 10, 10, 0];
+/** 4–10 cities: introduce patrol boats and submarines for naval presence */
+const RATIO_1 = [50, 10, 15, 5, 5, 20, 0, 0, 0];
+/** 11–20 cities: full naval mix with destroyers */
+const RATIO_2 = [70, 15, 15, 15, 10, 40, 0, 5, 0];
+/** 21–30 cities: heavier naval, battleships */
+const RATIO_3 = [90, 20, 20, 20, 15, 50, 0, 15, 0];
+/** >30 cities: full fleet */
+const RATIO_4 = [110, 25, 25, 25, 20, 60, 0, 15, 0];
 
 export function getRatioTable(cityCount: number): number[] {
   if (cityCount <= 3) return RATIO_EARLY;

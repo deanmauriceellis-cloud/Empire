@@ -334,12 +334,11 @@ export function decideProduction(
         return null;
       }
     }
-    // Commit to current production until at least 25% done.
+    // Commit to current production until at least 25% done (minimum 2 turns).
     // This prevents pathological oscillation where ratio rebalance flips production
     // every few turns (e.g., transport↔fighter) and nothing ever finishes.
-    // Minimum commitment: max(5 turns, 25% of build time) from work=0.
     // Note: work can be negative (retool penalty), so use absolute threshold.
-    const minCommitWork = Math.max(5, Math.ceil(currentAttrs.buildTime * 0.25));
+    const minCommitWork = Math.max(2, Math.ceil(currentAttrs.buildTime * 0.25));
     if (city.work < minCommitWork) {
       aiLog(`City #${city.id}: ${currentAttrs.name} overproduced but work=${city.work}/${currentAttrs.buildTime} (need ${minCommitWork} to consider switch), committed`);
       return null;

@@ -70,6 +70,10 @@ const CSS = `
   font-size: 13px;
 }
 
+#hud-top-content {
+  display: contents;
+}
+
 #hud-top .stat {
   color: var(--color-accent-light);
 }
@@ -645,6 +649,199 @@ const CSS = `
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* ─── War Stats Button ─────────────────────────────────────────────────── */
+
+#war-stats-btn {
+  pointer-events: auto;
+  background: rgba(var(--color-accent-rgb), 0.15);
+  border: 1px solid var(--color-border-dim);
+  color: var(--color-accent-light);
+  padding: 3px 10px;
+  cursor: pointer;
+  font-family: var(--ui-font);
+  font-size: 12px;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+
+#war-stats-btn:hover {
+  background: rgba(var(--color-accent-rgb), 0.3);
+  border-color: var(--color-accent-hex);
+  color: var(--color-text-bright);
+}
+
+/* ─── War Stats Panel ──────────────────────────────────────────────────── */
+
+#war-stats-panel {
+  pointer-events: auto;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--color-bg-modal);
+  border: 1px solid var(--color-accent-hex);
+  padding: 16px;
+  min-width: 500px;
+  max-width: 600px;
+  max-height: 70vh;
+  display: none;
+  flex-direction: column;
+  z-index: 50;
+}
+
+#war-stats-panel.visible {
+  display: flex;
+}
+
+#war-stats-panel .war-stats-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+#war-stats-panel h2 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--color-accent);
+  font-family: var(--ui-font);
+}
+
+#war-stats-panel .close-btn {
+  pointer-events: auto;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  font-family: var(--ui-font);
+}
+
+#war-stats-panel .close-btn:hover {
+  color: var(--color-text-bright);
+}
+
+/* Summary */
+
+.war-stats-summary {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+
+.war-stats-summary .summary-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.war-stats-summary .summary-p1 { color: var(--color-green); }
+.war-stats-summary .summary-p2 { color: var(--color-red); }
+
+/* Filters */
+
+.war-stats-filters {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.war-filter-btn {
+  pointer-events: auto;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  padding: 3px 10px;
+  cursor: pointer;
+  font-family: var(--ui-font);
+  font-size: 11px;
+  transition: all 0.1s;
+}
+
+.war-filter-btn:hover {
+  background: rgba(var(--color-accent-rgb), 0.15);
+  color: var(--color-text);
+}
+
+.war-filter-btn.active {
+  background: rgba(var(--color-accent-rgb), 0.2);
+  border-color: var(--color-accent-hex);
+  color: var(--color-accent-light);
+}
+
+/* Battle List */
+
+.war-stats-list {
+  overflow-y: auto;
+  max-height: 50vh;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.war-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.1s;
+}
+
+.war-row:hover {
+  background: rgba(var(--color-accent-rgb), 0.1);
+  border-color: var(--color-border);
+}
+
+.war-row .war-icon {
+  flex: 0 0 18px;
+  text-align: center;
+  font-size: 13px;
+}
+
+.war-row .war-turn {
+  flex: 0 0 32px;
+  color: var(--color-text-dim);
+  font-size: 11px;
+}
+
+.war-row .war-desc {
+  flex: 1;
+  color: var(--color-text);
+}
+
+.war-row .war-desc .p1 { color: var(--color-green); }
+.war-row .war-desc .p2 { color: var(--color-red); }
+
+.war-row .war-deaths {
+  color: var(--color-text-muted);
+  font-size: 10px;
+  flex: 0 0 auto;
+}
+
+.war-row .war-loc {
+  flex: 0 0 auto;
+  color: var(--color-accent);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.war-row .war-loc:hover {
+  color: var(--color-text-bright);
+  text-decoration: underline;
+}
+
+.war-empty {
+  color: var(--color-text-dim);
+  text-align: center;
+  padding: 24px 0;
+  font-size: 13px;
 }
 
 /* ─── Debug Panel ──────────────────────────────────────────────────────── */

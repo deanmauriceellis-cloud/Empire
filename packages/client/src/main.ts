@@ -151,6 +151,8 @@ async function init() {
     onTurnResult(turn, events) {
       if (mode !== "multiplayer") return;
       ui.eventLog.addEvents(events);
+      // turn is the NEW turn (after increment), battles happened on turn - 1
+      ui.warStats.addEvents(turn - 1, events);
       emitParticlesForEvents(events);
     },
 
@@ -297,6 +299,7 @@ async function init() {
     }
 
     ui.eventLog.clear();
+    ui.warStats.clear();
     ui.menus.hide();
     gameStarted = true;
     audio.playGameStart();
@@ -346,6 +349,7 @@ async function init() {
 
     resetSelection();
     ui.eventLog.clear();
+    ui.warStats.clear();
     ui.menus.hide();
     gameStarted = true;
 
@@ -777,6 +781,8 @@ async function init() {
     }
 
     ui.eventLog.addEvents(result.events);
+    // result.turn is the NEW turn (after increment), so battles happened on turn - 1
+    ui.warStats.addEvents(result.turn - 1, result.events);
 
     for (const event of result.events) {
       emitParticleForEvent(event);
