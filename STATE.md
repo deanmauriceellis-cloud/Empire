@@ -10,7 +10,15 @@
 - Phases A-D complete + playtest fixes + map gen fixes + transport fixes + balance fixes
 
 ## Latest commit
-`a7e0d6d` — session 034: AI transport, fighter & production fixes from diagnostic analysis
+`8de9c0a` — session 035: transport AI overhaul — patience, army coordination, exploration priority
+
+## Completed (session 035)
+- [x] WaitForTransport armies BFS toward nearest non-full transport (not just any coast)
+- [x] Transport patience: wait up to 6 turns for armies at coastline, resets on each load
+- [x] Empty stuck transports escape deadlock by moving to any adjacent water tile
+- [x] Unload targeting: unexplored continents get high priority (+4 if >70% unknown)
+- [x] Ships explore unknown waters 3x more aggressively (weight 21→7)
+- [x] prevLocs size increased 8→12 for patience window
 
 ## Completed (session 034)
 - [x] Fix transport unloading: removed "loading continent" block that prevented unloading on home continent, reduced own-city proximity check from 10 to 3 tiles
