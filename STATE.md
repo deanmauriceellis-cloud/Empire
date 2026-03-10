@@ -1,15 +1,15 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Post-Phase 12: AI & Gameplay Refinement** — Production fixes, smart behaviors, inland city guard
+**Post-Phase 12: AI Transport/Army Overhaul** — Transport loading, unloading, army coordination
 
 ## Status
-- All 12 phases complete + gameplay polish + debug tools + AI refinement
+- All 12 phases complete + gameplay polish + debug tools + AI transport overhaul
 - 268 unit/integration tests passing (240 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
 
 ## Latest commit
-`eac21f7` — session 018: AI production fixes, default behaviors, inland city guard
+`97173a5` — session 019: AI transport/army overhaul — loading, unloading, and coordination
 
 ## Completed
 - [x] Phase 0: Project scaffolding (pnpm monorepo, shared/client/server)
@@ -29,18 +29,27 @@
 - [x] Phase 12.3: E2E tests — Playwright (singleplayer, multiplayer lobby, perf benchmarks)
 
 ## Completed (this session)
-- [x] Fixed AI 1-city production flip-flop (Army↔Transport every turn, work never accumulated)
-- [x] Fixed inland cities trying to build ships (added isCityCoastal check)
-- [x] AI respects existing unit behaviors (skips units with Explore/Sentry/etc.)
-- [x] AI sets stuck armies to Explore instead of oscillating with moveAway
-- [x] Smart idle behavior assignment: max 1 sentry per city, rest explore
-- [x] Default unit behaviors on production (armies/fighters/ships explore, transports await orders)
-- [x] New tests: multi-turn production, bridge visibility, single-city stability, coastal transport
+- [x] Fixed transport oscillation — tryLoadArmies moves adjacent armies onto transport
+- [x] Fixed action conflicts — claimedUnitIds prevents army/transport move conflicts
+- [x] Fixed home-island dump — tryUnloadArmies only unloads at enemy/unowned territory
+- [x] Fixed reload loop — transport sails away after unloading, armies get Explore
+- [x] Fixed double-loading — projectedCargo tracks cargo across steps
+- [x] Transport waits to fill — countNearbyArmies BFS checks nearby armies
+- [x] Partially loaded transports navigate toward enemy territory
+- [x] Transports excluded from assignIdleBehaviors (stay func=None)
+- [x] Idle armies move toward coast for pickup (findNearestCoast BFS)
+- [x] Cargo labels on transport sprites, debug logging toggle
+- [x] City panel/HUD display fixes (negative percentage, cargo display)
+
+## Known Issues (in testing)
+- Transport AI still being refined — unload/explore behavior needs further testing
+- P2 transport can get stuck exploring with no targets
 
 ## Next Steps
-1. **Hosting** — deploy to server (any host running Node/Docker)
-2. **Art assets** — replace geometric placeholders with real sprites
-3. **Lobby polling** — refresh game list automatically for multiplayer
+1. **Continue transport AI testing** — verify unload→explore→return cycle works
+2. **Hosting** — deploy to server (any host running Node/Docker)
+3. **Art assets** — replace geometric placeholders with real sprites
+4. **Lobby polling** — refresh game list automatically for multiplayer
 
 ## Blockers
 _None_
