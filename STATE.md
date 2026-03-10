@@ -10,7 +10,7 @@
 - Phases A-D complete + playtest log review fixes
 
 ## Latest commit
-`bd29a02` — session 026: production intelligence + transport movement overhaul
+`9fc637c` — session 027: army-transport coordination + playtest log fixes
 
 ## Completed
 - [x] Phase 0: Project scaffolding (pnpm monorepo, shared/client/server)
