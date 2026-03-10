@@ -10,7 +10,19 @@
 - Phases A-D complete + playtest fixes + map gen fixes + transport fixes + balance fixes
 
 ## Latest commit
-`64d7ebb` — session 033: AI fighter & production fixes from diagnostic analysis
+`a7e0d6d` — session 034: AI transport, fighter & production fixes from diagnostic analysis
+
+## Completed (session 034)
+- [x] Fix transport unloading: removed "loading continent" block that prevented unloading on home continent, reduced own-city proximity check from 10 to 3 tiles
+- [x] Fix transport shouldUnload: simplified to only block adjacent to own city (was: 10-tile BFS for cities + loading armies)
+- [x] Fix empty transports stuck: return-to-pickup-zone → return-to-port fallback chain; created createPortViewMap for water navigation to own cities
+- [x] Fix partial cargo deadlock: transports deliver any cargo immediately when no more armies available (was: circle 20+ turns waiting for 50% fill)
+- [x] Fix transport unload navigation: mark water adjacent to unexplored tiles as low-priority unload targets
+- [x] Fix production flip-flop: commitment threshold max(5, 25% buildTime) before ratio rebalance can switch; retool penalty blocks switches; transport over-cap forces immediate switch
+- [x] Fix fighter overproduction: hard cap of 2 fighters (3 at 10+ cities) replaces broken idle-detection; ratio rebalance suppresses fighter at cap
+- [x] Fix fighter stuck at cities: base-hopping fallback flies toward farthest own city when BFS finds no objectives
+- [x] Fix map fairness: pickDistantCities ensures starting continent has ≥2 cities (at least 1 neutral)
+- [x] Add ship combat diagnostics: aiVLog calls in aiShipMove for repair, attack, movement, idle states
 
 ## Completed (session 033)
 - [x] Fix fighter production oscillation: ratio rebalance no longer undoes early fighter priority (was infinite army↔fighter loop, zero fighters ever built)
@@ -49,10 +61,9 @@
 - [x] Phase 12.3: E2E tests — Playwright (singleplayer, multiplayer lobby, perf benchmarks)
 
 ## Next Steps
-1. Continue playtesting — verify fighter fixes, transport coordination improvements
-2. Fix remaining AI issues (transport unloading threshold, multi-island expansion)
-3. Hosting / deployment
-4. Art assets (replace placeholder textures)
+1. Continue playtesting — verify transport unloading, fighter cap, production stability
+2. Hosting / deployment
+3. Art assets (replace placeholder textures)
 
 ## Blockers
 _None_
