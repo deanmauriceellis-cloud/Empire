@@ -539,12 +539,31 @@ function decideProduction(
       }
     }
 
-    // With 1 city, always build armies — no transport or ratio switching
-    if (city.production !== UnitType.Army) {
-      aiLog(`City #${city.id}: switch to Army (only 1 city)`);
-      return UnitType.Army;
+    // With 1 city: build armies, but allow a fighter once we have a transport
+    // (fighters provide essential recon for finding cities to capture)
+    {
+      const existingFighters = state.units.filter(
+        u => u.owner === aiOwner && u.type === UnitType.Fighter,
+      ).length;
+      const buildingFighter = city.production === UnitType.Fighter;
+      const hasTransport = state.units.some(
+        u => u.owner === aiOwner && u.type === UnitType.Transport,
+      ) || prodCounts[UnitType.Transport] > 0;
+      // Build 1 fighter once transport exists/building and no fighters yet
+      if (hasTransport && existingFighters === 0 && !buildingFighter) {
+        aiLog(`City #${city.id}: switch to Fighter (1 city, need recon)`);
+        return UnitType.Fighter;
+      }
+      if (buildingFighter) {
+        // Let it finish
+        return null;
+      }
+      if (city.production !== UnitType.Army) {
+        aiLog(`City #${city.id}: switch to Army (only 1 city)`);
+        return UnitType.Army;
+      }
+      return null;
     }
-    return null;
   }
 
   // Priority 1b: Ensure early fighter production (2+ cities)
@@ -624,6 +643,18 @@ function decideProduction(
   const ratioName = aiCityCount <= 3 ? "EARLY" : aiCityCount <= 10 ? "R1" : aiCityCount <= 20 ? "R2" : aiCityCount <= 30 ? "R3" : "R4";
 
   if (overproduced(prodCounts, ratio, city.production)) {
+    // Don't switch away from fighter if we still need early fighters — prevents
+    // oscillation where Priority 1b assigns fighter, then ratio rebalance undoes it every turn
+    if (city.production === UnitType.Fighter) {
+      const existingFighters = state.units.filter(
+        u => u.owner === aiOwner && u.type === UnitType.Fighter,
+      ).length;
+      const totalFighters = existingFighters + prodCounts[UnitType.Fighter];
+      if (totalFighters <= 2) {
+        aiLog(`City #${city.id}: fighter overproduced by ratio but only ${totalFighters} total, keeping`);
+        return null;
+      }
+    }
     // Don't switch if >40% done — prevents constant flip-flopping with work penalties
     if (progress >= 0.4) {
       aiLog(`City #${city.id}: ${currentAttrs.name} overproduced but ${Math.round(progress * 100)}% done, finishing`);

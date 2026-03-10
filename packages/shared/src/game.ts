@@ -921,8 +921,13 @@ function fighterFuelCheck(
     }
   }
 
-  // If in a city, no fuel concern
-  if (nearestCityDist === 0) return "ok";
+  // If in a city and fuel isn't full, stop moving — refueling happens at end-of-turn.
+  // Without this, the fighter explores away from the city in the same turn and misses refueling.
+  if (nearestCityDist === 0) {
+    const maxRange = UNIT_ATTRIBUTES[unit.type].range;
+    if (unit.range < maxRange) return "stranded"; // stop to refuel
+    return "ok";
+  }
 
   // Safety margin: need enough range to fly back + 1 turn of speed buffer
   const speed = UNIT_ATTRIBUTES[unit.type].speed;
@@ -1181,18 +1186,50 @@ function exploreUnit(state: GameState, unit: UnitState, owner: Owner): TurnEvent
         const pathMap = createPathMap();
         const moveInfo = airMoveInfo(" O", new Map([[" ", 1], ["O", 11]]));
         const objective = findObjective(pathMap, viewMap, unit.loc, moveInfo);
-        if (objective === null) {
-          // Nothing to explore — stay in explore mode, retry next turn
+        let bfsMoved = false;
+        if (objective !== null) {
+          markPath(pathMap, objective);
+          const dir = findDirection(pathMap, unit.loc);
+          if (dir !== null) {
+            const targetLoc = unit.loc + DIR_OFFSET[dir];
+            if (targetLoc >= 0 && targetLoc < MAP_SIZE) {
+              const r = behaviorMove(state, unit, targetLoc, owner);
+              events.push(...r.events);
+              if (r.died) break;
+              bfsMoved = r.moved;
+            }
+          }
+        }
+        if (!bfsMoved) {
+          // BFS found nothing or couldn't move — fly toward furthest own city to reposition.
+          // This enables base-hopping across the map to reach unexplored areas.
+          let farthestCityLoc: Loc = -1;
+          let farthestDist = 0;
+          for (const city of state.cities) {
+            if (city.owner === owner) {
+              const d = dist(unit.loc, city.loc);
+              if (d > farthestDist) {
+                farthestDist = d;
+                farthestCityLoc = city.loc;
+              }
+            }
+          }
+          if (farthestCityLoc >= 0 && farthestDist > 0) {
+            const unitRow = locRow(unit.loc);
+            const unitCol = locCol(unit.loc);
+            const cityRow = locRow(farthestCityLoc);
+            const cityCol = locCol(farthestCityLoc);
+            const dr = Math.sign(cityRow - unitRow);
+            const dc = Math.sign(cityCol - unitCol);
+            const flyTarget = rowColLoc(unitRow + dr, unitCol + dc);
+            if (flyTarget >= 0 && flyTarget < MAP_SIZE && goodLoc(state, unit, flyTarget)) {
+              moveUnit(state, unit, flyTarget);
+              scan(state, owner, unit.loc);
+              continue;
+            }
+          }
           break;
         }
-        markPath(pathMap, objective);
-        const dir = findDirection(pathMap, unit.loc);
-        if (dir === null) break;
-        const targetLoc = unit.loc + DIR_OFFSET[dir];
-        if (targetLoc < 0 || targetLoc >= MAP_SIZE) break;
-        const r = behaviorMove(state, unit, targetLoc, owner);
-        events.push(...r.events);
-        if (!r.moved || r.died) break;
       } else {
         const r = behaviorMove(state, unit, bestLoc, owner);
         events.push(...r.events);

@@ -10,7 +10,13 @@
 - Phases A-D complete + playtest fixes + map gen fixes + transport fixes + balance fixes
 
 ## Latest commit
-`b6d9dd4` — session 032: AI fixes + diagnostic logging system
+`pending` — session 033: AI fighter & production fixes from diagnostic analysis
+
+## Completed (session 033)
+- [x] Fix fighter production oscillation: ratio rebalance no longer undoes early fighter priority (was infinite army↔fighter loop, zero fighters ever built)
+- [x] Fix fighter refuel-and-leave: fighters now stop at own cities when fuel < max to await end-of-turn refueling (was: return to base, explore away, miss refuel, die)
+- [x] Fix grounded fighters: when explore finds no objectives AND BFS/pathfinding fails, fighters fly toward furthest own city to reposition (base-hopping)
+- [x] Fix 1-city fighter production: single-city players now build 1 fighter for recon once a transport exists (was: permanently forced to build only armies)
 
 ## Completed (session 032)
 - [x] Fix production flip-flopping: ratio rebalance threshold 50%→40%, same-type switch guard, progress guard on first transport
@@ -43,8 +49,8 @@
 - [x] Phase 12.3: E2E tests — Playwright (singleplayer, multiplayer lobby, perf benchmarks)
 
 ## Next Steps
-1. Playtesting with diagnostic logs — analyze AI behavior patterns
-2. Fix remaining AI issues (armies not capturing cities, transport coordination)
+1. Continue playtesting — verify fighter fixes, transport coordination improvements
+2. Fix remaining AI issues (transport unloading threshold, multi-island expansion)
 3. Hosting / deployment
 4. Art assets (replace placeholder textures)
 
