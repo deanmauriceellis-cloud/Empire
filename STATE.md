@@ -1,15 +1,15 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Post-Phase 12: Lake/Ocean Detection & Transport Intelligence** — Reliable water body classification, transport delivery logic
+**Post-Phase 12: UI Polish & AI Intelligence** — Click-drag panning, fighter base-hopping, transport delivery fixes
 
 ## Status
-- All 12 phases complete + gameplay polish + debug tools + AI transport overhaul
+- All 12 phases complete + gameplay polish + debug tools + AI overhaul
 - 268 unit/integration tests passing (240 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
 
 ## Latest commit
-`2228fbe` — session 022: fix lake vs ocean detection, transport oscillation, and island escape
+`5fe5047` — session 023: click-drag panning, early fighters with base-hopping, AI transport fixes
 
 ## Completed
 - [x] Phase 0: Project scaffolding (pnpm monorepo, shared/client/server)
@@ -29,18 +29,20 @@
 - [x] Phase 12.3: E2E tests — Playwright (singleplayer, multiplayer lobby, perf benchmarks)
 
 ## Completed (this session)
-- [x] Map gen: `isOceanShore()` — starting cities require ocean access (>= 5% map size water body), not just any adjacent water
-- [x] Map gen: `floodWaterSize()` BFS helper — measures connected water body size with early exit
-- [x] AI: `isCityOnLake()` upgraded — uses actual terrain BFS instead of unreliable viewMap (unexplored cells caused false negatives)
-- [x] AI: island escape — single-city with all armies WaitForTransport now builds transport
-- [x] AI: army surplus detection — switches coastal cities to transport when wait:transport count exceeds capacity + 6
-- [x] AI: transport oscillation fix — partially-loaded transports switch to delivery when tryLoadArmies fails
+- [x] Click-drag map panning — replaced edge-scroll (caused UI hover scrolling) with click-and-drag (4px threshold, grab cursor)
+- [x] Early fighter production — RATIO_1 (≤10 cities) now includes fighters at 10%
+- [x] Fighter base-to-base exploration — own cities as low-weight pathfinding objectives, fuel margin uses +speed buffer
+- [x] Production oscillation fix — transport surplus guard uses actual unit capacity (not inflated in-production counts)
+- [x] Transport delivery mode — deliveringMode flag prevents step 0 deliver / step 1 reload oscillation
+- [x] Same-island delivery fix — createUnloadViewMap skips continents with WaitForTransport armies
+- [x] Transport reload loop fix — unloaded armies set to Aggressive (not Explore), preventing re-pickup
 
 ## Known Issues (in testing)
-- Needs continued playtesting with new lake detection + transport fixes
+- Needs continued playtesting with fighter base-hopping and transport delivery fixes
+- Some transports may still bounce between two delivery tiles (pathfinding gives alternate results)
 
 ## Next Steps
-1. **Continue playtesting** — verify lake detection and transport delivery in real games
+1. **Continue playtesting** — verify fighter exploration and transport improvements
 2. **Hosting** — deploy to server (any host running Node/Docker)
 3. **Art assets** — replace geometric placeholders with real sprites
 4. **Lobby polling** — refresh game list automatically for multiplayer
