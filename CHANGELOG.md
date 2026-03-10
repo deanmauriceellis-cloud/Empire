@@ -1,5 +1,15 @@
 # Empire Reborn — Changelog
 
+## v0.27.0 — Session 038 (2026-03-10)
+
+### Added
+- **War Stats panel** — "War Stats" button in top-left HUD opens modal dialog tracking all battles: unit types, casualties (e.g. "Transport + 3 Army (4 lost)"), clickable locations, filter tabs (All/Combat/Cities), player summary stats
+
+### Fixed
+- **AI production lock** — army cities could never switch production via ratio rebalance (`minCommitWork` threshold of 5 was unreachable for buildTime=5 armies; reduced to `max(2, 25%)`)
+- **Fighter/ship idle behavior** — fighters and combat ships now always explore instead of becoming sentries at cities
+- **Naval production ratios** — Patrol boats, destroyers, and submarines introduced at 4 cities (was 11); battleships at 11 cities; heavier naval ratios across all tiers
+
 ## v0.26.0 — Session 037 (2026-03-10)
 
 ### Security (R5)

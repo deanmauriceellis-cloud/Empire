@@ -1,0 +1,106 @@
+Session 038 — 2026-03-10
+========================
+
+Summary
+-------
+Added War Stats dialog panel for battle tracking. Fixed critical AI production bug
+where army cities could never switch production. Rebalanced naval production ratios.
+Fixed idle behavior for fighters and combat ships.
+
+Conversation Context
+--------------------
+User wanted a few more features before moving to graphics. Requested:
+1. War Stats button/dialog showing all battles between players
+2. Review of diagnostic log for anomalies
+
+Changes
+-------
+
+### War Stats Panel (new feature)
+- `packages/client/src/ui/warStats.ts` (NEW, ~260 lines)
+  - BattleRecord interface: turn, loc, kind (unit/city_capture/city_failed), participants, deaths
+  - buildBattles(): correlates combat/capture/death events by location into battle records
+  - Modal dialog with summary stats (P1/P2 wins, captures, units lost)
+  - Filter tabs: All / Combat / Cities
+  - Scrollable battle list (newest first) with:
+    - Icons: sword (combat), flag (capture), shield (failed assault)
+    - Turn number, color-coded combatant names (P1=green, P2=red)
+    - Casualty summary (e.g. "Transport + 3 Army (4 lost)")
+    - Clickable coordinates that pan camera to battle location
+  - Button badge shows total battle count: "War Stats (12)"
+  - Clears on new game start
+
+- `packages/client/src/ui/hud.ts`
+  - Added `setWarStatsButton()` method to HUD interface
+  - Restructured top bar: added `#hud-top-content` span so innerHTML doesn't destroy button
+  - War Stats button inserted before Turn label via `insertBefore`
+
+- `packages/client/src/ui/UIManager.ts`
+  - Creates WarStats, wires button into HUD, appends panel to DOM
+  - Added warStats to UIManager interface
+
+- `packages/client/src/ui/styles.ts`
+  - Added ~150 lines of CSS for War Stats button, modal, summary, filters, battle rows
+  - Uses existing design tokens (--color-accent, --color-green, --color-red, etc.)
+
+- `packages/client/src/main.ts`
+  - Added `ui.warStats.addEvents(turn, events)` at both single-player and multiplayer event paths
+  - Turn number adjusted: `result.turn - 1` since executeTurn increments before returning
+  - Added `ui.warStats.clear()` alongside `ui.eventLog.clear()` on new game start
+
+### AI Production Bug Fix (critical)
+- `packages/shared/src/ai-production.ts:342`
+  - Changed `minCommitWork` from `Math.max(5, ...)` to `Math.max(2, ...)`
+  - ROOT CAUSE: Army buildTime=5, so max(5, ceil(5*0.25))=5, but city.work resets at 5
+    → army cities could NEVER switch via ratio rebalance (work always 0-4 < 5)
+  - Fix: max(2, ceil(buildTime*0.25)) gives armies threshold of 2 (reachable at work=2)
+
+### Naval Production Ratio Rebalance
+- `packages/shared/src/ai-helpers.ts:64-73`
+  - RATIO_1 (4-10 cities): Added Patrol(15), Destroyer(5), Submarine(5)
+  - RATIO_2 (11-20 cities): Destroyer 10→15, added Battleship(5)
+  - RATIO_3 (21-30 cities): Higher across the board, Battleship 10→15
+  - RATIO_4 (>30 cities): Full fleet ratios
+  - Carrier kept at 0 (following original AI — needMore() also hard-blocks carriers)
+
+### Idle Behavior Fix
+- `packages/shared/src/ai.ts:assignIdleBehaviors()`
+  - Fighters always get Explore instead of Sentry (1 HP makes sentry useless)
+  - Combat ships (Patrol, Destroyer, Submarine, Carrier, Battleship) always Explore
+  - Only armies remain eligible for Sentry duty at own cities
+
+Diagnostic Analysis
+-------------------
+Reviewed 263-turn game diagnostic log:
+
+**Production variety working**: P1 (34 cities) built full naval mix: 20 Army, 7 Transport,
+2 Destroyer, 2 Patrol, 1 Fighter, 1 Submarine, 1 Battleship.
+
+**Fighters NOT stuck**: Initial report claimed 20 idle fighters. Investigation via test
+harness showed fighters visit 15-32 unique locations per lifetime. They return to base
+between missions (range=32 after refuel). Diagnostic snapshot caught them mid-refuel.
+
+**P2 resigned at turn 263**: P1 had 34 cities / 390 units vs P2's 11 cities / 70 units.
+P2 was pinned to northeast peninsula, never recovered from early expansion disadvantage.
+
+Known remaining issues:
+- Stuck transports (some full transports can't find unload targets)
+- Transport #765 on enclosed water (lake) — permanently useless
+- City #5 captured/recaptured 30 times (strategic AI limitation)
+- Transport capacity bottleneck in mid-game
+
+Test Results
+------------
+- 255 shared tests passing
+- 28 server tests passing
+- Client builds clean (tsc + vite)
+- Total: 283 tests passing
+
+Important Decisions
+-------------------
+1. minCommitWork reduced to max(2,...) rather than removing entirely — still prevents
+   oscillation for expensive units (transport=8, destroyer=5, battleship=10)
+2. Kept carrier ratio at 0 across all tables (original AI design)
+3. Fighter sentry fix: fighters always explore, ships always explore, only armies sentry
+4. War Stats button placed before Turn label in top bar per user request
+5. Turn number in battle records is result.turn-1 (executeTurn increments before returning)

@@ -10,7 +10,14 @@
 - Full code review completed (session 035) — 6-phase refactor plan below
 
 ## Latest commit
-`b3020e3` — session 037: Phase R5 + R6 refactoring — server hardening, performance optimization
+`8c0ced5` — session 038: War Stats panel, AI production fix, naval ratio rebalance
+
+## Completed (session 038)
+- [x] War Stats dialog panel — battle tracking with unit types, casualties, clickable locations, filters
+- [x] Fix critical AI production bug — army cities could never switch (minCommitWork max(5,...)→max(2,...))
+- [x] Naval ratio rebalance — Patrol/Destroyer/Sub from 4 cities, Battleship from 11
+- [x] Fighter/ship idle fix — always explore, never sentry
+- [x] All 283 tests passing (255 shared + 28 server), client builds clean
 
 ## Completed (session 037)
 - [x] Phase R5: CORS — environment-based origin restriction (wildcard in dev, whitelist in production)
