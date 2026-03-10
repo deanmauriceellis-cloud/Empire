@@ -10,7 +10,23 @@
 - Full code review completed (session 035) — 6-phase refactor plan below
 
 ## Latest commit
-`7612808` — session 036: Phase R1 + R2 refactoring — viewmap constants, CSS tokens, AI module split
+`pending` — session 037: Phase R5 + R6 refactoring — server hardening, performance optimization
+
+## Completed (session 037)
+- [x] Phase R5: CORS — environment-based origin restriction (wildcard in dev, whitelist in production)
+- [x] Phase R5: Request size limits — 1MB JSON body, 256KB WebSocket max payload
+- [x] Phase R5: Diagnostic logging endpoint restricted to dev mode only
+- [x] Phase R5: WebSocket rate limiting — 30 msgs/sec per connection
+- [x] Phase R5: Action queue size limit — max 500 actions per player per turn
+- [x] Phase R5: Graceful shutdown — SIGTERM/SIGINT save all games, close DB, drain connections
+- [x] Phase R5: Persist game immediately on player disconnect (not just after timeout)
+- [x] Phase R5: Enhanced action validation — bounds checking, enum validation, embark ship ownership
+- [x] Phase R5: Explicit OPTIONS preflight response (204)
+- [x] Phase R6: Fix fogAlphaMap memory leak — delete entries when alpha reaches 0 (was: set to 0 and keep forever)
+- [x] Phase R6: Input manager dispose() — named handlers with removeEventListener cleanup method
+- [x] Phase R6: Consolidate duplicate mousemove listeners into single handler
+- [x] Phase R6: Lazy viewMap caching in aiTransportMove — createUnloadViewMap, createTTLoadViewMap, createPortViewMap computed once per transport instead of up to 4×
+- [x] All 283 tests passing (255 shared + 28 server), client builds clean
 
 ## Completed (session 036)
 - [x] Phase R1a: Create `shared/src/viewmap-chars.ts` — VM_WATER, VM_LAND, VM_UNEXPLORED, VM_OWN_CITY, VM_ENEMY_CITY, VM_UNOWNED_CITY, VM_HOME_PORT, VM_PICKUP_SINGLE, VM_PICKUP_CLUSTER constants + isEnemyUnit(), isCity(), isTargetCity(), isTraversableLand(), isPickupMarker() helpers
@@ -107,15 +123,15 @@
 
 ### Phase R5: Server Hardening & Cleanup (Low Risk, Medium Impact)
 - [ ] Split `GameManager` into `GameRouter`, `GameService`, `VisibilityFilter`
-- [ ] Security: restrict CORS, add request size limits, protect `/api/gamelog`, add rate limiting
-- [ ] Add graceful shutdown — save all games on SIGTERM/SIGINT
-- [ ] Fix disconnect timer memory leak, persist game immediately on disconnect
-- [ ] Add server-side action validation (move legality, not just ownership)
+- [x] Security: restrict CORS, add request size limits, protect `/api/gamelog`, add rate limiting
+- [x] Add graceful shutdown — save all games on SIGTERM/SIGINT
+- [x] Fix disconnect timer memory leak, persist game immediately on disconnect
+- [x] Add server-side action validation (move legality, not just ownership)
 
 ### Phase R6: Performance & Polish (Low Risk, Low Impact)
 - [ ] Cache AI pre-computations — unit counts, nearest cities, coastal flags once per turn
-- [ ] Fix client memory leaks — input cleanup, fog alpha map trim, sprite pool bounds
-- [ ] Optimize viewMap cloning — reuse temp maps across transport steps
+- [x] Fix client memory leaks — input cleanup, fog alpha map trim, sprite pool bounds
+- [x] Optimize viewMap cloning — reuse temp maps across transport steps
 - [ ] Cache viewport bounds — memoize `getVisibleTileBounds()` per frame
 
 ### Execution Order

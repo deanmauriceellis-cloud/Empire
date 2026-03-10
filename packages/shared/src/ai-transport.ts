@@ -45,6 +45,14 @@ export function aiTransportMove(
   const prevLocs = unit.prevLocs || [];
   const recentLocs = new Set<Loc>([currentLoc, ...prevLocs]);
 
+  // Lazily-created view maps — computed once per transport, reused across steps
+  let cachedUnloadMap: ViewMapCell[] | null = null;
+  let cachedLoadMap: ViewMapCell[] | null = null;
+  let cachedPortMap: ViewMapCell[] | null = null;
+  const getUnloadMap = () => cachedUnloadMap ?? (cachedUnloadMap = createUnloadViewMap(viewMap, state, aiOwner));
+  const getLoadMap = () => cachedLoadMap ?? (cachedLoadMap = createTTLoadViewMap(viewMap, state, aiOwner, claimedPickupLocs, claimedUnitIds));
+  const getPortMap = () => cachedPortMap ?? (cachedPortMap = createPortViewMap(viewMap, state, aiOwner));
+
   for (let step = 0; step < movesLeft; step++) {
     if (findUnit(state, unit.id) === undefined) break;
 
@@ -90,7 +98,7 @@ export function aiTransportMove(
 
       aiVLog(`    Transport #${unit.id}: no valid unload targets adjacent, navigating`);
       // Navigate toward enemy continent
-      const unloadMap = createUnloadViewMap(viewMap, state, aiOwner);
+      const unloadMap = getUnloadMap();
       const target = findMoveToward(unloadMap, currentLoc, ttUnloadMoveInfo());
       if (target !== null && !recentLocs.has(target)) {
         aiVLog(`    Transport #${unit.id}: full, navigating toward target at ${target}`);
@@ -131,7 +139,7 @@ export function aiTransportMove(
 
       // If carrying cargo and already committed to delivery, keep delivering
       if (projectedCargo > 0 && deliveringMode) {
-        const unloadMap = createUnloadViewMap(viewMap, state, aiOwner);
+        const unloadMap = getUnloadMap();
         const deliverTarget = findMoveToward(unloadMap, currentLoc, ttUnloadMoveInfo());
         if (deliverTarget !== null && !recentLocs.has(deliverTarget)) {
           aiVLog(`    Transport #${unit.id}: continuing delivery toward ${deliverTarget}`);
@@ -190,7 +198,7 @@ export function aiTransportMove(
 
       // Navigate toward waiting armies or targets (only when empty or still loading)
       if (!deliveringMode) {
-        const loadMap = createTTLoadViewMap(viewMap, state, aiOwner, claimedPickupLocs, claimedUnitIds);
+        const loadMap = getLoadMap();
         const loadResult = findMoveTowardWithObjective(loadMap, currentLoc, ttLoadMoveInfo());
         const target = loadResult ? loadResult.nextStep : null;
         if (target !== null && !recentLocs.has(target)) {
@@ -211,7 +219,7 @@ export function aiTransportMove(
           // Partially loaded with no armies to find — head toward enemy territory
           aiVLog(`    Transport #${unit.id}: delivering ${projectedCargo}/${capacity} (no more armies available)`);
           deliveringMode = true;
-          const unloadMap = createUnloadViewMap(viewMap, state, aiOwner);
+          const unloadMap = getUnloadMap();
           const unloadTarget = findMoveToward(unloadMap, currentLoc, ttUnloadMoveInfo());
           if (unloadTarget !== null && !recentLocs.has(unloadTarget)) {
             aiVLog(`    Transport #${unit.id}: delivering toward ${unloadTarget}`);
@@ -240,8 +248,7 @@ export function aiTransportMove(
             currentLoc = exploreTarget;
           } else {
             // No unexplored water — try to return toward waiting armies
-            const returnLoadMap = createTTLoadViewMap(viewMap, state, aiOwner, claimedPickupLocs, claimedUnitIds);
-            const returnTarget = findMoveToward(returnLoadMap, currentLoc, ttLoadMoveInfo());
+            const returnTarget = findMoveToward(getLoadMap(), currentLoc, ttLoadMoveInfo());
             if (returnTarget !== null && !recentLocs.has(returnTarget)) {
               aiVLog(`    Transport #${unit.id}: empty, returning toward waiting armies at ${returnTarget}`);
               actions.push({ type: "move", unitId: unit.id, loc: returnTarget });
@@ -251,8 +258,7 @@ export function aiTransportMove(
               // No armies either — navigate toward own coastal cities (army production).
               // Can't use waterMoveInfo("O") because cities are on land and water BFS can't reach them.
               // Instead, mark water tiles adjacent to own cities as targets.
-              const portMap = createPortViewMap(viewMap, state, aiOwner);
-              const homeTarget = findMoveToward(portMap, currentLoc, waterMoveInfo("H", new Map([["H", 1]])));
+              const homeTarget = findMoveToward(getPortMap(), currentLoc, waterMoveInfo("H", new Map([["H", 1]])));
               if (homeTarget !== null && !recentLocs.has(homeTarget)) {
                 aiVLog(`    Transport #${unit.id}: empty, returning to own port at ${homeTarget}`);
                 actions.push({ type: "move", unitId: unit.id, loc: homeTarget });

@@ -11,6 +11,8 @@ import {
   type UnitState,
   type ViewMapCell,
   Owner,
+  UnitType,
+  UnitBehavior,
   MAP_WIDTH,
   MAP_HEIGHT,
   MAP_SIZE,
@@ -21,6 +23,7 @@ import {
   scan,
   executeTurn,
   computeAITurn,
+  isOnBoard,
 } from "@empire/shared";
 import type {
   ClientMessage,
@@ -65,6 +68,8 @@ const DEFAULT_CONFIG: GameConfig = {
 };
 
 const DISCONNECT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const RATE_LIMIT_WINDOW_MS = 1000; // 1 second
+const RATE_LIMIT_MAX_MSGS = 30; // max messages per window
 
 // ─── Game Manager ───────────────────────────────────────────────────────────
 
@@ -72,6 +77,7 @@ export class GameManager {
   private games = new Map<string, ActiveGame>();
   private playerConnections = new Map<WebSocket, PlayerConnection>();
   private db: GameDatabase | null;
+  private rateLimits = new Map<WebSocket, { count: number; resetAt: number }>();
 
   constructor(db?: GameDatabase) {
     this.db = db ?? null;
@@ -81,6 +87,11 @@ export class GameManager {
     this.send(ws, { type: "welcome", version: "0.1.0" });
 
     ws.on("message", (data) => {
+      // Rate limiting
+      if (this.isRateLimited(ws)) {
+        this.send(ws, { type: "error", message: "Rate limited — slow down" });
+        return;
+      }
       try {
         const msg = JSON.parse(data.toString()) as ClientMessage;
         this.handleMessage(ws, msg);
@@ -90,8 +101,21 @@ export class GameManager {
     });
 
     ws.on("close", () => {
+      this.rateLimits.delete(ws);
       this.handleDisconnect(ws);
     });
+  }
+
+  /** Check and increment rate limit for a WebSocket connection. */
+  private isRateLimited(ws: WebSocket): boolean {
+    const now = Date.now();
+    let entry = this.rateLimits.get(ws);
+    if (!entry || now >= entry.resetAt) {
+      entry = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+      this.rateLimits.set(ws, entry);
+    }
+    entry.count++;
+    return entry.count > RATE_LIMIT_MAX_MSGS;
   }
 
   // ─── Message Router ─────────────────────────────────────────────────────
@@ -287,6 +311,10 @@ export class GameManager {
     }
 
     const actions = game.pendingActions.get(conn.owner)!;
+    if (actions.length >= 500) {
+      this.send(ws, { type: "error", message: "Too many actions queued" });
+      return;
+    }
     actions.push(action);
   }
 
@@ -294,17 +322,51 @@ export class GameManager {
 
   private validateAction(state: GameState, owner: Owner, action: PlayerAction): boolean {
     switch (action.type) {
-      case "move":
-      case "attack":
-      case "setBehavior":
-      case "embark":
+      case "move": {
+        const unit = state.units.find((u) => u.id === action.unitId);
+        if (!unit || unit.owner !== owner) return false;
+        // Validate target location is on the board
+        if (typeof action.loc !== "number" || action.loc < 0 || action.loc >= MAP_SIZE || !isOnBoard(action.loc)) return false;
+        return true;
+      }
+      case "attack": {
+        const unit = state.units.find((u) => u.id === action.unitId);
+        if (!unit || unit.owner !== owner) return false;
+        if (typeof action.targetLoc !== "number" || action.targetLoc < 0 || action.targetLoc >= MAP_SIZE || !isOnBoard(action.targetLoc)) return false;
+        return true;
+      }
+      case "setBehavior": {
+        const unit = state.units.find((u) => u.id === action.unitId);
+        if (!unit || unit.owner !== owner) return false;
+        // Validate behavior is a valid enum value
+        const validBehaviors = Object.values(UnitBehavior);
+        if (!validBehaviors.includes(action.behavior)) return false;
+        return true;
+      }
+      case "setTarget": {
+        const unit = state.units.find((u) => u.id === action.unitId);
+        if (!unit || unit.owner !== owner) return false;
+        if (typeof action.targetLoc !== "number" || action.targetLoc < 0 || action.targetLoc >= MAP_SIZE || !isOnBoard(action.targetLoc)) return false;
+        return true;
+      }
+      case "embark": {
+        const unit = state.units.find((u) => u.id === action.unitId);
+        if (!unit || unit.owner !== owner) return false;
+        const ship = state.units.find((u) => u.id === action.shipId);
+        if (!ship || ship.owner !== owner) return false;
+        return true;
+      }
       case "disembark": {
         const unit = state.units.find((u) => u.id === action.unitId);
         return !!unit && unit.owner === owner;
       }
       case "setProduction": {
         const city = state.cities.find((c) => c.id === action.cityId);
-        return !!city && city.owner === owner;
+        if (!city || city.owner !== owner) return false;
+        // Validate unit type is a valid enum value
+        const validUnitTypes = Object.values(UnitType).filter((v) => typeof v === "number");
+        if (!validUnitTypes.includes(action.unitType)) return false;
+        return true;
       }
       case "endTurn":
       case "resign":
@@ -488,17 +550,18 @@ export class GameManager {
     // Mark player as disconnected (hold game state)
     game.players.set(conn.owner, null);
 
+    // Persist game immediately so state is safe even if server crashes
+    this.persistGame(game);
+
     // Notify other player
     this.broadcastToGame(game, { type: "player_disconnected", gameId: game.id }, conn.owner);
 
-    // Set reconnection timeout
+    // Set reconnection timeout — remove game from memory after grace period
     const timer = setTimeout(() => {
-      // If both players are gone, persist and clean up
       const allDisconnected = [...game.players.values()].every((ws) => ws === null);
       if (allDisconnected) {
-        this.persistGame(game);
         this.games.delete(game.id);
-        console.log(`Game ${game.id} saved and removed (all players disconnected)`);
+        console.log(`Game ${game.id} removed from memory (all players disconnected)`);
       }
     }, DISCONNECT_TIMEOUT_MS);
 
@@ -597,5 +660,25 @@ export class GameManager {
   deleteSavedGame(gameId: string): boolean {
     if (!this.db) return false;
     return this.db.deleteGame(gameId);
+  }
+
+  /** Persist all active games and clear disconnect timers (for graceful shutdown). */
+  shutdown(): void {
+    for (const [id, game] of this.games) {
+      // Clear any pending disconnect timers
+      for (const [, timer] of game.disconnectTimers) {
+        clearTimeout(timer);
+      }
+      game.disconnectTimers.clear();
+
+      // Persist game state
+      if (game.phase !== "lobby") {
+        this.persistGame(game);
+        console.log(`Game ${id} saved (shutdown)`);
+      }
+    }
+    this.games.clear();
+    this.playerConnections.clear();
+    this.rateLimits.clear();
   }
 }

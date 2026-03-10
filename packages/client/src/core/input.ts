@@ -21,6 +21,9 @@ export interface InputState {
   consumeClicks(): ClickEvent[];
   consumeRightClicks(): ClickEvent[];
   consumeKeyPresses(): string[];
+
+  /** Remove all event listeners (for cleanup). */
+  dispose(): void;
 }
 
 /**
@@ -47,24 +50,24 @@ export function createInput(canvas: HTMLCanvasElement): InputState {
   let rightClicks: ClickEvent[] = [];
   let keyPresses: string[] = [];
 
-  window.addEventListener("keydown", (e) => {
+  // Named handlers so they can be removed on dispose
+  const onKeyDown = (e: KeyboardEvent) => {
     const key = e.key.toLowerCase();
     if (!keys.has(key)) {
       keyPresses.push(key);
     }
     keys.add(key);
-  });
+  };
 
-  window.addEventListener("keyup", (e) => {
+  const onKeyUp = (e: KeyboardEvent) => {
     keys.delete(e.key.toLowerCase());
-  });
+  };
 
-  // Lose all keys on blur (tab switch, etc.)
-  window.addEventListener("blur", () => {
+  const onBlur = () => {
     keys.clear();
-  });
+  };
 
-  canvas.addEventListener("mousemove", (e) => {
+  const onMouseMove = (e: MouseEvent) => {
     const prevX = mouseX;
     const prevY = mouseY;
     mouseX = e.clientX;
@@ -80,48 +83,49 @@ export function createInput(canvas: HTMLCanvasElement): InputState {
       if (isDragging) {
         dragDeltaX += mouseX - prevX;
         dragDeltaY += mouseY - prevY;
+        canvas.style.cursor = "grabbing";
       }
     }
-  });
+  };
 
-  canvas.addEventListener("mousedown", (e) => {
+  const onMouseDown = (e: MouseEvent) => {
     if (e.button === 0) {
       isMouseDown = true;
       isDragging = false;
       dragStartX = e.clientX;
       dragStartY = e.clientY;
     }
-  });
+  };
 
-  canvas.addEventListener("mouseup", (e) => {
+  const onMouseUp = (e: MouseEvent) => {
     if (e.button === 0) {
       isMouseDown = false;
-      // Only emit a click if we didn't drag
       if (!isDragging) {
         clicks.push({ x: e.clientX, y: e.clientY, shiftKey: e.shiftKey });
       }
       isDragging = false;
       canvas.style.cursor = "";
     }
-  });
+  };
 
-  // Update cursor during drag
-  canvas.addEventListener("mousemove", () => {
-    if (isDragging) {
-      canvas.style.cursor = "grabbing";
-    }
-  });
-
-  canvas.addEventListener("wheel", (e) => {
+  const onWheel = (e: WheelEvent) => {
     e.preventDefault();
     wheelDelta += e.deltaY > 0 ? 1 : -1;
-  }, { passive: false });
+  };
 
-  // Right click
-  canvas.addEventListener("contextmenu", (e) => {
+  const onContextMenu = (e: MouseEvent) => {
     e.preventDefault();
     rightClicks.push({ x: e.clientX, y: e.clientY, shiftKey: e.shiftKey });
-  });
+  };
+
+  window.addEventListener("keydown", onKeyDown);
+  window.addEventListener("keyup", onKeyUp);
+  window.addEventListener("blur", onBlur);
+  canvas.addEventListener("mousemove", onMouseMove);
+  canvas.addEventListener("mousedown", onMouseDown);
+  canvas.addEventListener("mouseup", onMouseUp);
+  canvas.addEventListener("wheel", onWheel, { passive: false });
+  canvas.addEventListener("contextmenu", onContextMenu);
 
   return {
     get mouseX() { return mouseX; },
@@ -161,6 +165,17 @@ export function createInput(canvas: HTMLCanvasElement): InputState {
       const result = keyPresses;
       keyPresses = [];
       return result;
+    },
+
+    dispose(): void {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onBlur);
+      canvas.removeEventListener("mousemove", onMouseMove);
+      canvas.removeEventListener("mousedown", onMouseDown);
+      canvas.removeEventListener("mouseup", onMouseUp);
+      canvas.removeEventListener("wheel", onWheel);
+      canvas.removeEventListener("contextmenu", onContextMenu);
     },
   };
 }

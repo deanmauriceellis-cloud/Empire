@@ -128,7 +128,7 @@ export class TilemapRenderer {
           fog.visible = true;
           this.fogAlphaMap.set(loc, newAlpha);
         } else {
-          this.fogAlphaMap.set(loc, 0);
+          this.fogAlphaMap.delete(loc);
         }
       }
     }
