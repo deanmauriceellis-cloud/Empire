@@ -697,7 +697,6 @@ async function init() {
       // Apply debug vision BEFORE AI computes (so AI can see the full map if enabled)
       applyDebugFlags();
       const aiP1Actions = computeAITurn(game.state, Owner.Player1);
-      console.log(`[Auto-Play] Turn ${game.state.turn}: ${aiP1Actions.length} AI actions for P1`, aiP1Actions);
       result = game.submitTurn(aiP1Actions);
     } else {
       result = collector.endTurn();

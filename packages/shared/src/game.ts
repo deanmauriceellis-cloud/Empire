@@ -641,8 +641,12 @@ export function tickCityProduction(
 
     const buildTime = UNIT_ATTRIBUTES[city.production].buildTime;
     if (city.work >= buildTime) {
-      // Produce the unit
+      // Produce the unit with city's default behavior for this type
       const unit = createUnit(state, city.production, owner, city.loc);
+      const cityBehavior = city.func[city.production];
+      if (cityBehavior !== UnitBehavior.None) {
+        unit.func = cityBehavior;
+      }
       city.work = 0;
 
       events.push({

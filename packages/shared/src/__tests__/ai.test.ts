@@ -174,10 +174,12 @@ describe("AI System", () => {
     });
 
     it("should produce transports when no transport producers exist", () => {
-      // Multiple AI cities, none producing transports
+      // Multiple AI cities, none producing transports — at least one must be coastal
       const city1 = addCity(state, rowColLoc(10, 10), AI, UnitType.Army);
       const city2 = addCity(state, rowColLoc(12, 10), AI, UnitType.Army);
       const city3 = addCity(state, rowColLoc(14, 10), AI, UnitType.Army);
+      // Make city1 coastal by adding water adjacent to it
+      setWater(state, 10, 11, 1, 1);
       refreshVision(state, AI);
 
       const actions = computeAITurn(state, AI);
@@ -792,6 +794,33 @@ describe("AI System", () => {
         a => (a.type === "move" || a.type === "attack") && a.unitId === sat.id,
       );
       expect(satActions).toHaveLength(0);
+    });
+  });
+
+  describe("single-city production stability", () => {
+    it("does not flip-flop production with only 1 city", () => {
+      const state = createTestState();
+      addCity(state, rowColLoc(20, 20), AI);
+      addCity(state, rowColLoc(40, 40), HUMAN);
+
+      // Give AI an army so it has a unit
+      createUnit(state, UnitType.Army, AI, rowColLoc(20, 20));
+      refreshVision(state, AI);
+
+      // Run AI for several turns and check production never changes from Army
+      const city = state.cities.find(c => c.owner === AI)!;
+      expect(city.production).toBe(UnitType.Army);
+
+      for (let t = 0; t < 10; t++) {
+        const actions = computeAITurn(state, AI);
+        const prodChanges = actions.filter(a => a.type === "setProduction");
+        // With 1 city, AI should never switch production away from Army
+        for (const pc of prodChanges) {
+          if (pc.type === "setProduction") {
+            expect(pc.unitType).toBe(UnitType.Army);
+          }
+        }
+      }
     });
   });
 });

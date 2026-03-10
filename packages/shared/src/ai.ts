@@ -219,23 +219,20 @@ function findMoveToward(
  * Check if a city is on a lake (surrounded by water with no strategic value).
  * Lake cities can only build armies or fighters.
  */
-function isCityOnLake(viewMap: ViewMapCell[], cityLoc: Loc): boolean {
-  // Check if any adjacent cell is water
+/** Check if a city has any adjacent water tiles. */
+function isCityCoastal(viewMap: ViewMapCell[], cityLoc: Loc): boolean {
   const adjacent = getAdjacentLocs(cityLoc);
-  let hasWater = false;
   for (const adj of adjacent) {
-    const contents = viewMap[adj].contents;
-    if (contents === ".") {
-      hasWater = true;
-      break;
-    }
+    if (viewMap[adj].contents === ".") return true;
   }
-  if (!hasWater) return false; // no water nearby, not on a lake
+  return false;
+}
 
-  // Check if adjacent water is a lake
+/** Check if a coastal city is on a lake (not open ocean). */
+function isCityOnLake(viewMap: ViewMapCell[], cityLoc: Loc): boolean {
+  const adjacent = getAdjacentLocs(cityLoc);
   for (const adj of adjacent) {
-    const contents = viewMap[adj].contents;
-    if (contents === ".") {
+    if (viewMap[adj].contents === ".") {
       return isLake(viewMap, adj);
     }
   }
@@ -283,7 +280,7 @@ function needMore(prodCounts: number[], ratio: number[], onLake: boolean): UnitT
 
   for (let i = 0; i < NUM_UNIT_TYPES; i++) {
     if (ratio[i] === 0) continue;
-    // Lake cities can't build ships (except fighters and armies)
+    // Inland/lake cities can't build ships — only armies and fighters
     if (onLake && i !== UnitType.Army && i !== UnitType.Fighter) continue;
     // Never build carriers or satellites (following original AI)
     if (i === UnitType.Carrier || i === UnitType.Satellite) continue;
@@ -315,7 +312,10 @@ function decideProduction(
   viewMap: ViewMapCell[],
   prodCounts: number[],
 ): UnitType | null {
-  const onLake = isCityOnLake(viewMap, city.loc);
+  const coastal = isCityCoastal(viewMap, city.loc);
+  const onLake = coastal && isCityOnLake(viewMap, city.loc);
+  // Can this city build ships? Only coastal, non-lake cities
+  const canBuildShips = coastal && !onLake;
 
   // Map the city's continent
   const continent = mapContinent(viewMap, city.loc, ".");
@@ -335,20 +335,30 @@ function decideProduction(
     return UnitType.Army;
   }
 
-  // Priority 2: Ensure transport production (first non-lake coastal city)
-  // Skip if this is the ONLY city producing armies and armies are still needed
-  if (!onLake && prodCounts[UnitType.Transport] === 0) {
+  // Priority 2: Ensure transport production (first ship-capable city)
+  // Never switch away from army production when we have only 1 city —
+  // the AI needs to build armies to capture more cities first.
+  const aiCityCount = state.cities.filter(c => c.owner === aiOwner).length;
+  if (aiCityCount <= 1) {
+    // With 1 city, always build armies — no transport or ratio switching
+    if (city.production !== UnitType.Army) {
+      return UnitType.Army;
+    }
+    return null;
+  }
+
+  // Only coastal non-lake cities can build transports/ships
+  if (canBuildShips && prodCounts[UnitType.Transport] === 0) {
     if (!(armiesNeeded > 0 && prodCounts[UnitType.Army] <= 1)) {
       return UnitType.Transport;
     }
   }
 
   // Priority 3: Follow ratio tables if current production is overproduced
-  const aiCityCount = state.cities.filter(c => c.owner === aiOwner).length;
   const ratio = getRatioTable(aiCityCount);
 
   if (overproduced(prodCounts, ratio, city.production)) {
-    return needMore(prodCounts, ratio, onLake);
+    return needMore(prodCounts, ratio, !canBuildShips);
   }
 
   // Keep current production
@@ -438,12 +448,9 @@ function aiArmyMove(
     } else if (loadTarget !== null) {
       actions.push({ type: "move", unitId: unit.id, loc: loadTarget });
     } else {
-      // Try to move away from city if stuck
-      const awayLoc = moveAway(state, unit, viewMap);
-      if (awayLoc !== null) {
-        actions.push({ type: "move", unitId: unit.id, loc: awayLoc });
-      }
-      break; // no more moves if truly stuck
+      // No objectives and no transport — set unit to explore via behavior system
+      actions.push({ type: "setBehavior", unitId: unit.id, behavior: UnitBehavior.Explore });
+      break;
     }
 
     // Check if we can still move (unit might have been consumed by attack)
@@ -871,6 +878,61 @@ function aiShipMove(
   return actions;
 }
 
+// ─── Idle Behavior Assignment ─────────────────────────────────────────────────
+
+/**
+ * Assign behaviors to idle units that the AI didn't move.
+ * - Armies: max 1 sentry per city, rest explore
+ * - Ships/fighters: explore
+ */
+function assignIdleBehaviors(
+  state: GameState,
+  aiOwner: Owner,
+  actions: PlayerAction[],
+): void {
+  // Track which units already have actions
+  const unitsWithActions = new Set<number>();
+  for (const a of actions) {
+    if ("unitId" in a) unitsWithActions.add((a as any).unitId);
+  }
+
+  // Track sentry count per city location
+  const sentryCounts = new Map<number, number>();
+  for (const unit of state.units) {
+    if (unit.owner === aiOwner && unit.func === UnitBehavior.Sentry) {
+      const count = sentryCounts.get(unit.loc) ?? 0;
+      sentryCounts.set(unit.loc, count + 1);
+    }
+  }
+
+  for (const unit of state.units) {
+    if (unit.owner !== aiOwner) continue;
+    if (unit.func !== UnitBehavior.None) continue;
+    if (unit.shipId !== null) continue;
+    if (unit.type === UnitType.Satellite) continue;
+    if (unitsWithActions.has(unit.id)) continue;
+
+    // Check if this unit is at one of our cities
+    const cell = state.map[unit.loc];
+    const atOwnCity = cell.cityId !== null && state.cities[cell.cityId].owner === aiOwner;
+
+    if (atOwnCity) {
+      const currentSentries = sentryCounts.get(unit.loc) ?? 0;
+      if (currentSentries < 1) {
+        // First idle unit at this city becomes sentry
+        actions.push({ type: "setBehavior", unitId: unit.id, behavior: UnitBehavior.Sentry });
+        sentryCounts.set(unit.loc, currentSentries + 1);
+      } else {
+        // Additional units at city explore
+        actions.push({ type: "setBehavior", unitId: unit.id, behavior: UnitBehavior.Explore });
+      }
+    } else {
+      // Not at a city — explore
+      actions.push({ type: "setBehavior", unitId: unit.id, behavior: UnitBehavior.Explore });
+    }
+  }
+}
+
 // ─── Step 4.5: AI Turn Orchestrator ────────────────────────────────────────────
 
 /**
@@ -917,10 +979,16 @@ export function computeAITurn(
       const unit = findUnit(state, unitId);
       if (!unit) continue; // unit may have died
 
+      // Skip units that already have a behavior — let processUnitBehaviors handle them
+      if (unit.func !== UnitBehavior.None) continue;
+
       const moveActions = moveAIUnit(state, unit, aiOwner, viewMap);
       actions.push(...moveActions);
     }
   }
+
+  // 5. Assign behaviors to idle units (no objectives found by AI movement)
+  assignIdleBehaviors(state, aiOwner, actions);
 
   // 4. Check for surrender
   const aiCities = state.cities.filter(c => c.owner === aiOwner).length;

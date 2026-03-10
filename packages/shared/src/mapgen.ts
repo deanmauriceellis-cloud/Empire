@@ -172,8 +172,18 @@ export function placeCities(
   const cities: CityState[] = [];
   let minDist = calcMinCityDist(map, numCities);
 
-  // Default city behaviors for each unit type
-  const defaultFunc: UnitBehavior[] = new Array(9).fill(UnitBehavior.None);
+  // Default city behaviors for each unit type produced
+  const defaultFunc: UnitBehavior[] = [
+    UnitBehavior.Explore,   // Army — go find cities
+    UnitBehavior.Explore,   // Fighter — scout
+    UnitBehavior.Explore,   // Patrol — patrol waters
+    UnitBehavior.Explore,   // Destroyer — patrol waters
+    UnitBehavior.Explore,   // Submarine — patrol waters
+    UnitBehavior.None,      // Transport — wait for loading orders
+    UnitBehavior.Explore,   // Carrier — patrol waters
+    UnitBehavior.Explore,   // Battleship — patrol waters
+    UnitBehavior.None,      // Satellite — gets random diagonal in createUnit
+  ];
 
   while (cities.length < numCities) {
     // Build list of candidate land cells respecting min distance
