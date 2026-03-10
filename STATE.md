@@ -10,7 +10,7 @@
 - Phases A-D complete + playtest fixes + map gen fixes + transport fixes + balance fixes
 
 ## Latest commit
-`pending` — session 031: gameplay balance fixes + console logging
+`6cb9845` — session 031: gameplay balance fixes + console logging
 
 ## Completed (session 031)
 - [x] Fix explore auto-capture: armies stop at cities instead of auto-attacking (prevents self-playing games)
