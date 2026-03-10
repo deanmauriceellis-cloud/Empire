@@ -1174,8 +1174,9 @@ function exploreUnit(state: GameState, unit: UnitState, owner: Owner): TurnEvent
 
       if (bestLoc === -1 || bestScore === 0) {
         // No adjacent move reveals new tiles — use BFS to reach distant unseen area
+        // Include own cities ('O') as low-priority targets for base-hopping
         const pathMap = createPathMap();
-        const moveInfo = airMoveInfo(" ", new Map([[" ", 1]]));
+        const moveInfo = airMoveInfo(" O", new Map([[" ", 1], ["O", 11]]));
         const objective = findObjective(pathMap, viewMap, unit.loc, moveInfo);
         if (objective === null) {
           // Nothing to explore — stay in explore mode, retry next turn

@@ -14,6 +14,9 @@ export interface InputState {
   isKeyDown(key: string): boolean;
   consumeWheel(): void;
 
+  /** Consume accumulated drag delta (pixels) since last call. */
+  consumeDragDelta(): { dx: number; dy: number };
+
   // Event queues (one-shot, consumed each frame)
   consumeClicks(): ClickEvent[];
   consumeRightClicks(): ClickEvent[];
@@ -30,6 +33,14 @@ export function createInput(canvas: HTMLCanvasElement): InputState {
   let mouseY = 0;
   let wheelDelta = 0;
   let isMouseDown = false;
+
+  // Drag tracking
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let dragDeltaX = 0;
+  let dragDeltaY = 0;
+  const DRAG_THRESHOLD = 4; // pixels before a mousedown becomes a drag
 
   // Event queues
   let clicks: ClickEvent[] = [];
@@ -54,18 +65,50 @@ export function createInput(canvas: HTMLCanvasElement): InputState {
   });
 
   canvas.addEventListener("mousemove", (e) => {
+    const prevX = mouseX;
+    const prevY = mouseY;
     mouseX = e.clientX;
     mouseY = e.clientY;
+
+    if (isMouseDown) {
+      if (!isDragging) {
+        const dist = Math.abs(mouseX - dragStartX) + Math.abs(mouseY - dragStartY);
+        if (dist >= DRAG_THRESHOLD) {
+          isDragging = true;
+        }
+      }
+      if (isDragging) {
+        dragDeltaX += mouseX - prevX;
+        dragDeltaY += mouseY - prevY;
+      }
+    }
   });
 
   canvas.addEventListener("mousedown", (e) => {
-    if (e.button === 0) isMouseDown = true;
+    if (e.button === 0) {
+      isMouseDown = true;
+      isDragging = false;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+    }
   });
 
   canvas.addEventListener("mouseup", (e) => {
     if (e.button === 0) {
       isMouseDown = false;
-      clicks.push({ x: e.clientX, y: e.clientY, shiftKey: e.shiftKey });
+      // Only emit a click if we didn't drag
+      if (!isDragging) {
+        clicks.push({ x: e.clientX, y: e.clientY, shiftKey: e.shiftKey });
+      }
+      isDragging = false;
+      canvas.style.cursor = "";
+    }
+  });
+
+  // Update cursor during drag
+  canvas.addEventListener("mousemove", () => {
+    if (isDragging) {
+      canvas.style.cursor = "grabbing";
     }
   });
 
@@ -92,6 +135,14 @@ export function createInput(canvas: HTMLCanvasElement): InputState {
 
     consumeWheel(): void {
       wheelDelta = 0;
+    },
+
+    consumeDragDelta(): { dx: number; dy: number } {
+      const dx = dragDeltaX;
+      const dy = dragDeltaY;
+      dragDeltaX = 0;
+      dragDeltaY = 0;
+      return { dx, dy };
     },
 
     consumeClicks(): ClickEvent[] {

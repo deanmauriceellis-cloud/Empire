@@ -3,7 +3,7 @@
 import { cartToIso } from "../iso/coords.js";
 import {
   MIN_ZOOM, MAX_ZOOM, ZOOM_SPEED,
-  PAN_SPEED, EDGE_PAN_MARGIN, LERP_FACTOR,
+  PAN_SPEED, LERP_FACTOR,
   HALF_TILE_W, HALF_TILE_H,
 } from "../constants.js";
 import type { InputState } from "./input.js";
@@ -90,11 +90,12 @@ export function createCamera(mapWidth: number, mapHeight: number): Camera {
       if (input.isKeyDown("a") || input.isKeyDown("arrowleft")) targetX -= panAmount;
       if (input.isKeyDown("d") || input.isKeyDown("arrowright")) targetX += panAmount;
 
-      // Edge panning
-      if (input.mouseX < EDGE_PAN_MARGIN) targetX -= panAmount * 0.5;
-      if (input.mouseX > viewportW - EDGE_PAN_MARGIN) targetX += panAmount * 0.5;
-      if (input.mouseY < EDGE_PAN_MARGIN) targetY -= panAmount * 0.5;
-      if (input.mouseY > viewportH - EDGE_PAN_MARGIN) targetY += panAmount * 0.5;
+      // Click-and-drag panning
+      const drag = input.consumeDragDelta();
+      if (drag.dx !== 0 || drag.dy !== 0) {
+        targetX -= drag.dx / zoom;
+        targetY -= drag.dy / zoom;
+      }
 
       // Zoom
       if (input.wheelDelta !== 0) {
