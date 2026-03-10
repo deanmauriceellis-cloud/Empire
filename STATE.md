@@ -10,7 +10,7 @@
 - Phases A-D complete + playtest fixes + map gen fixes + transport fixes
 
 ## Latest commit
-`1ef5f3a` — session 029: fix AI transport coordination, island escape, and oscillation
+`7d78fd3` — session 030: fix transport bugs + document original AI for reference
 
 ## Completed
 - [x] Phase 0: Project scaffolding (pnpm monorepo, shared/client/server)
