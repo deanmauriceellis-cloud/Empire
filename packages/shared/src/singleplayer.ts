@@ -81,11 +81,25 @@ export function createSinglePlayerGame(configOverrides?: Partial<GameConfig>): S
         throw new Error("Game is already over");
       }
 
+      const t0 = performance.now();
+
       // Compute AI actions
       const aiActions = computeAITurn(state, Owner.Player2);
+      const t1 = performance.now();
 
       // Execute the turn
       const result = executeTurn(state, playerActions, aiActions);
+      const t2 = performance.now();
+
+      // Log turn timing and AI summary
+      const aiMs = (t1 - t0).toFixed(0);
+      const execMs = (t2 - t1).toFixed(0);
+      const totalMs = (t2 - t0).toFixed(0);
+      const p1Units = state.units.filter(u => u.owner === Owner.Player1).length;
+      const p2Units = state.units.filter(u => u.owner === Owner.Player2).length;
+      console.log(
+        `[PERF] Turn ${state.turn}: AI=${aiMs}ms exec=${execMs}ms total=${totalMs}ms | P1:${playerActions.length} actions, AI:${aiActions.length} actions | Units: P1=${p1Units} P2=${p2Units}`,
+      );
 
       if (result.winner !== null) {
         isGameOver = true;

@@ -461,14 +461,23 @@ export function selectStartingCities(
     return pickDistantCities(cities, rng, map, mapWidth, mapHeight);
   }
 
-  // Create pairs ranked by balance (smallest diff first = easiest)
+  // Create pairs ranked by balance (smallest diff first = fairest)
+  // Heavily penalize pairs where city counts differ by more than 2x
   const pairs: ContinentPair[] = [];
   for (let i = 0; i < scored.length; i++) {
     for (let j = i + 1; j < scored.length; j++) {
+      let diff = Math.abs(scored[i].value - scored[j].value);
+      // Penalize unbalanced city counts — ensures both players have similar neutral city access
+      const cities1 = scored[i].cont.cities.length;
+      const cities2 = scored[j].cont.cities.length;
+      const cityRatio = Math.max(cities1, cities2) / Math.max(Math.min(cities1, cities2), 1);
+      if (cityRatio > 2) {
+        diff += (cityRatio - 2) * 50000; // heavy penalty for >2x city imbalance
+      }
       pairs.push({
         cont1: scored[i].cont,
         cont2: scored[j].cont,
-        diff: Math.abs(scored[i].value - scored[j].value),
+        diff,
       });
     }
   }

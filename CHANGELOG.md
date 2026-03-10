@@ -1,5 +1,27 @@
 # Empire Reborn — Changelog
 
+## v0.24.0 — Session 031 (2026-03-10)
+
+### Fixed
+- **Explore auto-capture removed** — exploring armies no longer auto-attack adjacent cities; they stop (func=None) so the player must manually order the attack. Prevents games from playing themselves
+- **Aggressive city attack massing** — aggressive armies adjacent to enemy cities now wait for 2+ friendly armies within 2 tiles before attacking (unowned cities still attacked immediately). Prevents wasteful single-army suicide attacks
+- **Resignation threshold relaxed** — AI surrenders at `< 1/5` enemy strength (was `< 1/3`), giving the AI more time to recover from disadvantages
+- **Starting city balance** — continent pair selection now penalizes pairs where city counts differ by more than 2x, ensuring both players have similar access to neutral cities
+
+### Added
+- **Console event logging** — all game events (combat, capture, death, production) logged with `[TYPE] (col,row) description {data}` format
+- **Turn summary logging** — `[TURN N] P1: X cities, Y units | P2: ...` printed each turn
+- **Player action logging** — `[MOVE]` and `[ATTACK]` logged with unit type and coordinates
+- **Performance timing** — `[PERF] Turn N: AI=Xms exec=Yms total=Zms` shows AI computation and execution time per turn
+- **AI turn summary** — concise action breakdown (moves, attacks, prod, behav) + transport cargo stats
+- **AI verbose log toggle** — "Verbose" button in debug panel; per-transport detail logs separated from summary-level AI logs
+- `setAIVerboseLog()` / `aiVerboseLog` flag in shared AI module
+
+### Changed
+- **Camera lerp** — `LERP_FACTOR` 0.12 → 0.25 (camera pans ~2x faster, reducing move-to-move latency)
+- **Unit move animation** — `UNIT_MOVE_LERP` 0.15 → 0.3 (unit slide ~2x faster)
+- Transport-level debug logs moved from `aiLog` to `aiVLog` (only shown with Verbose toggle)
+
 ## v0.23.0 — Session 030 (2026-03-10)
 
 ### Fixed

@@ -1120,15 +1120,15 @@ function exploreUnit(state: GameState, unit: UnitState, owner: Owner): TurnEvent
       const adjacent = getAdjacentLocs(unit.loc);
       let engaged = false;
 
-      // Armies: capture adjacent unowned/enemy cities immediately
+      // Armies: stop exploring when adjacent to unowned/enemy cities
+      // Unit gets func=None so turnFlow alerts the player (or AI picks it up next cycle)
       if (unit.type === UnitType.Army) {
         for (const adj of adjacent) {
           const cell = state.map[adj];
           if (cell.cityId !== null) {
             const city = state.cities[cell.cityId];
             if (city.owner !== owner) {
-              const r = behaviorMove(state, unit, adj, owner);
-              events.push(...r.events);
+              unit.func = UnitBehavior.None;
               engaged = true;
               break;
             }
@@ -1338,6 +1338,7 @@ function aggressiveUnit(state: GameState, unit: UnitState, owner: Owner): TurnEv
     // Check for adjacent enemies — attack immediately
     const adjacent = getAdjacentLocs(unit.loc);
     let attacked = false;
+    let waitingAtCity = false;
     for (const adj of adjacent) {
       const enemy = state.units.find(
         (u) => u.loc === adj && u.owner !== owner && u.shipId === null,
@@ -1347,13 +1348,24 @@ function aggressiveUnit(state: GameState, unit: UnitState, owner: Owner): TurnEv
         attacked = true;
         break;
       }
-      // Also attack enemy cities
+      // Attack cities — but for enemy cities, wait for 2+ friendly armies nearby
       const cell = state.map[adj];
       if (cell.cityId !== null) {
         const city = state.cities[cell.cityId];
         if (city.owner !== owner && city.owner !== Owner.Unowned) {
-          events.push(...attackCity(state, unit, cell.cityId));
-          attacked = true;
+          // Count friendly armies within 2 tiles of the city
+          const nearbyAllies = state.units.filter(u =>
+            u.owner === owner && u.type === UnitType.Army &&
+            u.id !== unit.id && dist(u.loc, city.loc) <= 2,
+          ).length;
+          if (nearbyAllies >= 1) {
+            // 2+ armies (self + ally), attack!
+            events.push(...attackCity(state, unit, cell.cityId));
+            attacked = true;
+          } else {
+            // Wait for reinforcements — hold position near city
+            waitingAtCity = true;
+          }
           break;
         }
         if (city.owner === Owner.Unowned && unit.type === UnitType.Army) {
@@ -1363,7 +1375,7 @@ function aggressiveUnit(state: GameState, unit: UnitState, owner: Owner): TurnEv
         }
       }
     }
-    if (attacked) break;
+    if (attacked || waitingAtCity) break;
 
     // Pathfind toward enemies: lowercase = enemy units, X = enemy city, * = unowned city
     const enemyTargets = unit.type === UnitType.Army

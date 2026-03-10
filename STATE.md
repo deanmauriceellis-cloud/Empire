@@ -1,16 +1,28 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Post-Phase 12: Playtesting & Bug Fixes** — AI transport logistics overhaul
+**Post-Phase 12: Playtesting & Bug Fixes** — gameplay balance + observability
 
 ## Status
 - All 12 phases complete + gameplay polish + debug tools + AI overhaul
 - 283 unit/integration tests passing (255 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
-- Phases A-D complete + playtest fixes + map gen fixes + transport fixes
+- Phases A-D complete + playtest fixes + map gen fixes + transport fixes + balance fixes
 
 ## Latest commit
-`7d78fd3` — session 030: fix transport bugs + document original AI for reference
+`pending` — session 031: gameplay balance fixes + console logging
+
+## Completed (session 031)
+- [x] Fix explore auto-capture: armies stop at cities instead of auto-attacking (prevents self-playing games)
+- [x] Fix aggressive city attacks: wait for 2+ friendly armies before attacking enemy cities
+- [x] Fix resignation threshold: /3 → /5 (AI fights longer before surrendering)
+- [x] Fix starting city balance: penalize continent pairs with >2x city count disparity
+- [x] Add console event logging ([COMBAT], [CAPTURE], [DEATH], [PRODUCTION], [MOVE], [ATTACK])
+- [x] Add turn summary logging ([TURN N] with city/unit counts)
+- [x] Add AI turn perf timing ([PERF] AI=Xms exec=Yms)
+- [x] Add AI turn summary (action counts + transport cargo)
+- [x] Add verbose log toggle (separates per-transport detail from summary)
+- [x] Fix camera/animation latency (LERP_FACTOR 0.12→0.25, UNIT_MOVE_LERP 0.15→0.3)
 
 ## Completed
 - [x] Phase 0: Project scaffolding (pnpm monorepo, shared/client/server)
@@ -29,25 +41,10 @@
 - [x] Phase 12.2: Integration tests — AI vs AI, save/load, determinism
 - [x] Phase 12.3: E2E tests — Playwright (singleplayer, multiplayer lobby, perf benchmarks)
 
-## Completed (session 030)
-- [x] Analyze x.log: identify circular ferry, oscillation, mini-ferry, single-army delivery bugs
-- [x] Fix createTTLoadViewMap: filter armies already claimed by other transports (claimedUnitIds)
-- [x] Fix shouldUnload: BFS all adjacent land (not just first), 40-tile radius, 50% cargo minimum
-- [x] Fix tryUnloadArmies: BFS 40-tile own-city check, require enemy targets on continent
-- [x] Fix createUnloadViewMap: skip value=0 continents (no more dumping on unexplored islands)
-- [x] Fix countNearbyArmies: only count loadable armies (None/Explore/WaitForTransport)
-- [x] Fix anyLoadableArmies: exclude claimedUnitIds from loadable count
-- [x] Document original Empire AI: transport, production, movement, pathfinding (4 docs in docs/)
-
-## Known Issues
-- Transport mini-ferry possible on large islands where own city is >40 BFS tiles from coast
-- Remaining divergence from original: our shouldUnload / partial delivery adds complexity the original avoided
-
 ## Next Steps
-1. Evaluate divergence checklist (docs/original-vs-rewrite-divergence.md)
-2. Playtesting and gameplay tuning
-3. Hosting / deployment
-4. Art assets (replace placeholder textures)
+1. Playtesting — verify balance fixes work in practice
+2. Hosting / deployment
+3. Art assets (replace placeholder textures)
 
 ## Blockers
 _None_
@@ -60,3 +57,4 @@ _None_
 - 301 total tests: 255 shared + 28 server + 18 E2E (17 pass + 1 skip)
 - Map constants are now mutable `let` — call `configureMapDimensions()` before map generation
 - Original AI reference docs in `docs/original-ai-*.md`
+- Debug panel: AI Log = summary, Verbose = per-transport details

@@ -1,13 +1,14 @@
 // Empire Reborn — Debug Panel
 // Testing tools: reveal map, AI omniscience, player auto-play, AI logging.
 
-import { setAIDebugLog } from "@empire/shared";
+import { setAIDebugLog, setAIVerboseLog } from "@empire/shared";
 
 export interface DebugFlags {
   revealMap: boolean;
   aiOmniscient: boolean;
   playerAI: boolean;
   aiLog: boolean;
+  aiVerbose: boolean;
 }
 
 export interface DebugPanel {
@@ -24,6 +25,7 @@ export function createDebugPanel(): DebugPanel {
     aiOmniscient: false,
     playerAI: false,
     aiLog: false,
+    aiVerbose: false,
   };
 
   function render(): void {
@@ -32,7 +34,8 @@ export function createDebugPanel(): DebugPanel {
       toggle("Reveal Map", "revealMap", flags.revealMap) +
       toggle("AI Omni", "aiOmniscient", flags.aiOmniscient) +
       toggle("Auto-Play", "playerAI", flags.playerAI) +
-      toggle("AI Log", "aiLog", flags.aiLog);
+      toggle("AI Log", "aiLog", flags.aiLog) +
+      toggle("Verbose", "aiVerbose", flags.aiVerbose);
   }
 
   function toggle(label: string, key: string, on: boolean): string {
@@ -48,6 +51,9 @@ export function createDebugPanel(): DebugPanel {
     flags[key] = !flags[key];
     if (key === "aiLog") {
       setAIDebugLog(flags.aiLog);
+    }
+    if (key === "aiVerbose") {
+      setAIVerboseLog(flags.aiVerbose);
     }
     render();
   });

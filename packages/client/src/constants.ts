@@ -49,11 +49,11 @@ export const MAX_ZOOM = 3.0;
 export const ZOOM_SPEED = 0.1;
 export const PAN_SPEED = 12;
 export const EDGE_PAN_MARGIN = 32;
-export const LERP_FACTOR = 0.12;
+export const LERP_FACTOR = 0.25;
 
 // ─── Animation ──────────────────────────────────────────────────────────────
 
-export const UNIT_MOVE_LERP = 0.15;
+export const UNIT_MOVE_LERP = 0.3;
 export const UNIT_DEATH_FADE_MS = 300;
 
 // ─── Fog Alpha ──────────────────────────────────────────────────────────────

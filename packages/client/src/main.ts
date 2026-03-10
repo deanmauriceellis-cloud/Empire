@@ -579,14 +579,18 @@ async function init() {
     let success = false;
 
     if (action.type === "move") {
-      success = collector.moveUnit(unitId, directionFromLocs(
-        game.state.units.find((u) => u.id === unitId)!.loc, loc,
-      ));
+      const srcLoc = game.state.units.find((u) => u.id === unitId)!.loc;
+      success = collector.moveUnit(unitId, directionFromLocs(srcLoc, loc));
       if (success) {
         const u = game.state.units.find((u) => u.id === unitId);
-        if (u) audio.playMove(u.type);
+        if (u) {
+          console.log(`[MOVE] Unit #${unitId} (${UnitType[u.type]}) → (${locCol(loc)},${locRow(loc)})`);
+          audio.playMove(u.type);
+        }
       }
     } else {
+      const u = game.state.units.find((u) => u.id === unitId);
+      console.log(`[ATTACK] Unit #${unitId} (${u ? UnitType[u.type] : "?"}) → (${locCol(loc)},${locRow(loc)})`);
       success = collector.attackTarget(unitId, loc);
       if (success) audio.playCombat();
     }
@@ -652,7 +656,17 @@ async function init() {
     }
   }
 
+  function logEvent(event: TurnEvent): void {
+    const col = locCol(event.loc);
+    const row = locRow(event.loc);
+    const tag = `[${event.type.toUpperCase()}]`;
+    const pos = `(${col},${row})`;
+    const data = event.data ? ` ${JSON.stringify(event.data)}` : "";
+    console.log(`${tag} ${pos} ${event.description}${data}`);
+  }
+
   function emitParticleForEvent(event: TurnEvent): void {
+    logEvent(event);
     if (event.type === "combat") {
       particles.emitExplosion(event.loc);
       audio.playExplosion();
@@ -715,6 +729,13 @@ async function init() {
 
     // Apply debug flags after turn (reveal map, AI omniscience)
     applyDebugFlags();
+
+    const s = game.state;
+    const p1Units = s.units.filter(u => u.owner === Owner.Player1).length;
+    const p2Units = s.units.filter(u => u.owner === Owner.Player2).length;
+    const p1Cities = s.cities.filter(c => c.owner === Owner.Player1).length;
+    const p2Cities = s.cities.filter(c => c.owner === Owner.Player2).length;
+    console.log(`[TURN ${s.turn}] P1: ${p1Cities} cities, ${p1Units} units | P2: ${p2Cities} cities, ${p2Units} units | ${result.events.length} events`);
 
     ui.eventLog.addEvents(result.events);
 
