@@ -1,7 +1,7 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Post-Phase 12: UI Polish & AI Intelligence** — Click-drag panning, fighter base-hopping, transport delivery fixes
+**Post-Phase 12: AI Transport Intelligence** — Transport oscillation fixes, stale-cargo bug, verbose AI logging
 
 ## Status
 - All 12 phases complete + gameplay polish + debug tools + AI overhaul
@@ -9,7 +9,7 @@
 - 18 E2E tests (17 passing, 1 skipped)
 
 ## Latest commit
-`5fe5047` — session 023: click-drag panning, early fighters with base-hopping, AI transport fixes
+`4a96b6d` — session 024: fix transport AI oscillation, stale-cargo unloading, and add verbose logging
 
 ## Completed
 - [x] Phase 0: Project scaffolding (pnpm monorepo, shared/client/server)
@@ -29,17 +29,17 @@
 - [x] Phase 12.3: E2E tests — Playwright (singleplayer, multiplayer lobby, perf benchmarks)
 
 ## Completed (this session)
-- [x] Click-drag map panning — replaced edge-scroll (caused UI hover scrolling) with click-and-drag (4px threshold, grab cursor)
-- [x] Early fighter production — RATIO_1 (≤10 cities) now includes fighters at 10%
-- [x] Fighter base-to-base exploration — own cities as low-weight pathfinding objectives, fuel margin uses +speed buffer
-- [x] Production oscillation fix — transport surplus guard uses actual unit capacity (not inflated in-production counts)
-- [x] Transport delivery mode — deliveringMode flag prevents step 0 deliver / step 1 reload oscillation
-- [x] Same-island delivery fix — createUnloadViewMap skips continents with WaitForTransport armies
-- [x] Transport reload loop fix — unloaded armies set to Aggressive (not Explore), preventing re-pickup
+- [x] Anti-oscillation — track prevLoc to prevent transports bouncing between two tiles each turn
+- [x] Fix "unloading 0 armies" — loadedThisTurn flag skips unload when unit.cargoIds is stale from batched loads
+- [x] Fix cargo dumping at own coast — remove premature tryUnloadArmies in deliveringMode, navigate to enemy territory first
+- [x] Remove shouldUnload 1/3 capacity gate — any cargo triggers unload when adjacent to enemy territory
+- [x] Fix A:undefined in behavior log — add goto/aggressive/cautious to BEHAVIOR_NAMES array
+- [x] Verbose AI transport logging — per-step state dumps, unload target details, continent evaluation, navigation decisions
 
 ## Known Issues (in testing)
-- Needs continued playtesting with fighter base-hopping and transport delivery fixes
-- Some transports may still bounce between two delivery tiles (pathfinding gives alternate results)
+- Transport production may still over-build when existing transports are dysfunctional
+- Transports don't wait long enough to fill up before delivering (leave with 1-2/6 cargo)
+- Need to verify anti-oscillation works across multi-turn delivery paths
 
 ## Next Steps
 1. **Continue playtesting** — verify fighter exploration and transport improvements
