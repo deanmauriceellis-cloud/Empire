@@ -1,7 +1,7 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Post-Phase 12: Map & Army Intelligence** — Small island fix, smart army coast-seeking
+**Post-Phase 12: Lake/Ocean Detection & Transport Intelligence** — Reliable water body classification, transport delivery logic
 
 ## Status
 - All 12 phases complete + gameplay polish + debug tools + AI transport overhaul
@@ -9,7 +9,7 @@
 - 18 E2E tests (17 passing, 1 skipped)
 
 ## Latest commit
-`29a6738` — session 021: fix small island starts and smart army WaitForTransport behavior
+`2228fbe` — session 022: fix lake vs ocean detection, transport oscillation, and island escape
 
 ## Completed
 - [x] Phase 0: Project scaffolding (pnpm monorepo, shared/client/server)
@@ -29,23 +29,21 @@
 - [x] Phase 12.3: E2E tests — Playwright (singleplayer, multiplayer lobby, perf benchmarks)
 
 ## Completed (this session)
-- [x] Map gen: minimum continent area for starting cities (2% of map size) — prevents tiny island starts
-- [x] Smart army WaitForTransport behavior — armies auto-seek coast when island fully explored
-- [x] moveArmyTowardCoast() BFS helper — shared game logic for coast pathfinding
-- [x] WaitForTransport re-checks for new explore objectives each turn (auto-resumes explore)
-- [x] Transport loading recognizes WaitForTransport armies (3 places in ai.ts)
-- [x] UI label: "wait:transport" behavior name for clarity
+- [x] Map gen: `isOceanShore()` — starting cities require ocean access (>= 5% map size water body), not just any adjacent water
+- [x] Map gen: `floodWaterSize()` BFS helper — measures connected water body size with early exit
+- [x] AI: `isCityOnLake()` upgraded — uses actual terrain BFS instead of unreliable viewMap (unexplored cells caused false negatives)
+- [x] AI: island escape — single-city with all armies WaitForTransport now builds transport
+- [x] AI: army surplus detection — switches coastal cities to transport when wait:transport count exceeds capacity + 6
+- [x] AI: transport oscillation fix — partially-loaded transports switch to delivery when tryLoadArmies fails
 
 ## Known Issues (in testing)
-- Army surplus still large when transport capacity is limited (production ratio tuning)
-- Needs continued playtesting with new map gen + army behavior changes
+- Needs continued playtesting with new lake detection + transport fixes
 
 ## Next Steps
-1. **Continue playtesting** — verify map gen fix and army behavior in real games
-2. **Production ratio tuning** — build more transports when army surplus is large
-3. **Hosting** — deploy to server (any host running Node/Docker)
-4. **Art assets** — replace geometric placeholders with real sprites
-5. **Lobby polling** — refresh game list automatically for multiplayer
+1. **Continue playtesting** — verify lake detection and transport delivery in real games
+2. **Hosting** — deploy to server (any host running Node/Docker)
+3. **Art assets** — replace geometric placeholders with real sprites
+4. **Lobby polling** — refresh game list automatically for multiplayer
 
 ## Blockers
 _None_
@@ -57,3 +55,4 @@ _None_
 - Two-player E2E join test skipped: lobby doesn't auto-refresh game list
 - 286 total tests: 240 shared + 28 server + 18 E2E (17 pass + 1 skip)
 - Map constants are now mutable `let` — call `configureMapDimensions()` before map generation
+- Lake vs ocean threshold: 5% of map size (300 tiles on standard 100x60 map)
