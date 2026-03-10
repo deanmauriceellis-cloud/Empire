@@ -24,8 +24,8 @@ export function createCityPanel(): CityPanel {
 
   function render(city: CityState): void {
     const currentAttrs = UNIT_ATTRIBUTES[city.production];
-    const pct = Math.min(100, Math.floor((city.work / currentAttrs.buildTime) * 100));
-    const turnsLeft = Math.max(1, Math.ceil((currentAttrs.buildTime - city.work) / 1));
+    const pct = Math.max(0, Math.min(100, Math.floor((city.work / currentAttrs.buildTime) * 100)));
+    const turnsLeft = Math.max(1, currentAttrs.buildTime - city.work);
 
     let html = `<button class="close-btn" data-action="close">&times;</button>`;
     html += `<h2>City #${city.id} Production</h2>`;
@@ -51,7 +51,7 @@ export function createCityPanel(): CityPanel {
     html += `</div>`;
 
     // Penalty warning
-    html += `<div class="penalty-warning" id="penalty-warn">Changing production costs 20% of accumulated work.</div>`;
+    html += `<div class="penalty-warning" id="penalty-warn">Switching production incurs a 20% penalty on the new unit's build time.</div>`;
 
     element.innerHTML = html;
   }

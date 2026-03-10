@@ -13,6 +13,7 @@ import {
   DIR_OFFSET,
   MAP_SIZE,
   NUM_UNIT_TYPES,
+  UNIT_ATTRIBUTES,
   objMoves,
   scan,
   computeAITurn,
@@ -512,6 +513,14 @@ async function init() {
     const playerUnit = units.find(
       (u) => u.loc === loc && u.owner === playerOwner && u.shipId === null,
     );
+
+    // Debug: log what's at the clicked tile
+    const allAtLoc = units.filter((u) => u.loc === loc);
+    if (allAtLoc.length > 0) {
+      console.log(`[Click] tile=${loc} found ${allAtLoc.length} unit(s):`,
+        allAtLoc.map(u => `#${u.id} ${UNIT_ATTRIBUTES[u.type].name} owner=${u.owner} shipId=${u.shipId}`));
+      console.log(`[Click] playerOwner=${playerOwner} matched=${playerUnit ? `#${playerUnit.id}` : "none"}`);
+    }
 
     const cities = mode === "singleplayer"
       ? game.state.cities

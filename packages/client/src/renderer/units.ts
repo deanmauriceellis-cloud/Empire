@@ -2,7 +2,7 @@
 // Renders units with isometric positioning, player colors, health bars,
 // selection glow, smooth movement animation, idle bobbing, and shadows.
 
-import { Container, Sprite, Graphics } from "pixi.js";
+import { Container, Sprite, Graphics, Text, TextStyle } from "pixi.js";
 import { locRow, locCol, UNIT_ATTRIBUTES, Owner } from "@empire/shared";
 import type { UnitState } from "@empire/shared";
 import { cartToIso } from "../iso/coords.js";
@@ -18,6 +18,7 @@ interface UnitSprite {
   shadow: Graphics;
   healthBar: Graphics | null;
   selectionGlow: Graphics;
+  cargoLabel: Text | null;
   currentX: number;
   currentY: number;
   targetX: number;
@@ -77,6 +78,26 @@ export class UnitRenderer {
       container.addChild(healthBar);
     }
 
+    // Cargo label for transports/carriers
+    const unitAttrs = UNIT_ATTRIBUTES[unit.type];
+    let cargoLabel: Text | null = null;
+    if (unitAttrs.capacity > 0) {
+      cargoLabel = new Text({
+        text: "",
+        style: new TextStyle({
+          fontSize: 9,
+          fontFamily: "monospace",
+          fontWeight: "bold",
+          fill: 0xffffff,
+          stroke: { color: 0x000000, width: 2 },
+        }),
+      });
+      cargoLabel.anchor.set(0.5, 0);
+      cargoLabel.position.set(0, 8);
+      cargoLabel.zIndex = 3;
+      container.addChild(cargoLabel);
+    }
+
     const col = locCol(unit.loc);
     const row = locRow(unit.loc);
     const iso = cartToIso(col, row);
@@ -89,6 +110,7 @@ export class UnitRenderer {
       shadow,
       healthBar,
       selectionGlow,
+      cargoLabel,
       currentX: iso.x,
       currentY: iso.y,
       targetX: iso.x,
@@ -168,6 +190,12 @@ export class UnitRenderer {
       if (us.healthBar) {
         const maxHits = UNIT_ATTRIBUTES[unit.type].maxHits;
         this.drawHealthBar(us.healthBar, unit.hits, maxHits);
+      }
+
+      // Cargo label
+      if (us.cargoLabel) {
+        const cap = UNIT_ATTRIBUTES[unit.type].capacity;
+        us.cargoLabel.text = `${unit.cargoIds.length}/${cap}`;
       }
 
       // Selection glow with pulse

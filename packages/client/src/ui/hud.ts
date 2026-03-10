@@ -60,7 +60,7 @@ export function createHUD(): HUD {
         }
         parts.push(`<span class="info-sep">|</span>`);
         parts.push(`<span style="color:#888">${behaviorName}</span>`);
-        if (u.cargoIds.length > 0) {
+        if (attrs.capacity > 0) {
           parts.push(`<span class="info-sep">|</span>`);
           parts.push(`<span>Cargo: ${u.cargoIds.length}/${attrs.capacity}</span>`);
         }
@@ -69,8 +69,8 @@ export function createHUD(): HUD {
       } else if (state.selectedCity) {
         const c = state.selectedCity;
         const attrs = UNIT_ATTRIBUTES[c.production];
-        const turnsLeft = Math.max(1, Math.ceil((attrs.buildTime - c.work) / 1));
-        const pct = Math.min(100, Math.floor((c.work / attrs.buildTime) * 100));
+        const turnsLeft = Math.max(1, attrs.buildTime - c.work);
+        const pct = Math.max(0, Math.min(100, Math.floor((c.work / attrs.buildTime) * 100)));
 
         bottomBar.innerHTML = `<div class="unit-info">` +
           `<span class="city-name">City #${c.id}</span>` +

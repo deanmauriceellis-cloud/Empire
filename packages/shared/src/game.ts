@@ -1153,11 +1153,9 @@ function exploreUnit(state: GameState, unit: UnitState, owner: Owner): TurnEvent
       const pathMap = createPathMap();
       const objective = findObjective(pathMap, viewMap, unit.loc, moveInfo);
       if (objective === null) {
-        // Nothing reachable to explore — army auto-sentries on isolated landmass,
-        // other unit types stay in explore mode and retry next turn
-        if (unit.type === UnitType.Army) {
-          unit.func = UnitBehavior.Sentry;
-        }
+        // Nothing reachable to explore — reset to None so the AI can
+        // try alternative strategies (e.g., seeking transports) next turn.
+        unit.func = UnitBehavior.None;
         break;
       }
 

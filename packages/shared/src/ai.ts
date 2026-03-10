@@ -12,6 +12,8 @@ import {
   MOVE_ORDER,
   INFINITY,
   NUM_UNIT_TYPES,
+  BEHAVIOR_NAMES,
+  behaviorIndex,
 } from "./constants.js";
 import {
   UNIT_ATTRIBUTES,
@@ -63,6 +65,20 @@ import {
   scanContinent,
   isLake,
 } from "./continent.js";
+
+// ─── AI Debug Logging ─────────────────────────────────────────────────────────
+
+/** When true, AI logs production and movement decisions to console. */
+export let aiDebugLog = false;
+
+/** Toggle AI debug logging on/off. */
+export function setAIDebugLog(enabled: boolean): void {
+  aiDebugLog = enabled;
+}
+
+function aiLog(...args: unknown[]): void {
+  if (aiDebugLog) console.log("[AI]", ...args);
+}
 
 // ─── Production Ratio Tables ───────────────────────────────────────────────────
 // Index by UnitType: [Army, Fighter, Patrol, Destroyer, Submarine, Transport, Carrier, Battleship, Satellite]
@@ -312,6 +328,7 @@ function decideProduction(
   viewMap: ViewMapCell[],
   prodCounts: number[],
 ): UnitType | null {
+  const currentAttrs = UNIT_ATTRIBUTES[city.production];
   const coastal = isCityCoastal(viewMap, city.loc);
   const onLake = coastal && isCityOnLake(viewMap, city.loc);
   // Can this city build ships? Only coastal, non-lake cities
@@ -323,8 +340,19 @@ function decideProduction(
 
   const enemyOwner = aiOwner === Owner.Player1 ? Owner.Player2 : Owner.Player1;
   const enemyCities = census.playerCities[enemyOwner];
+  const enemyArmies = census.playerUnits[enemyOwner][UnitType.Army];
   const aiArmies = census.playerUnits[aiOwner][UnitType.Army];
   const hasInterest = census.unexplored > 0 || enemyCities > 0 || census.unownedCities > 0;
+
+  // How far along is current production? (0.0 to 1.0, can be negative during penalty)
+  const progress = city.work / currentAttrs.buildTime;
+
+  // Guard: never switch away from Transport if this is the only transport producer.
+  // Other cities handle defense — the AI needs at least one transport to expand.
+  if (city.production === UnitType.Transport && prodCounts[UnitType.Transport] <= 1) {
+    aiLog(`City #${city.id}: keeping Transport (only transport producer)`);
+    return null;
+  }
 
   // Priority 1: Defend against enemy presence on continent
   let armiesNeeded = enemyCities - aiArmies;
@@ -332,7 +360,12 @@ function decideProduction(
   if (enemyCities > 0) armiesNeeded++;
 
   if (armiesNeeded > 0 && city.production !== UnitType.Army) {
-    return UnitType.Army;
+    // Only switch for defense if enemy armies are present or production barely started
+    if (enemyArmies > 0 || progress < 0.25) {
+      aiLog(`City #${city.id}: switch to Army (defense: ${armiesNeeded} needed, enemyArmies=${enemyArmies}, progress=${Math.round(progress * 100)}%)`);
+      return UnitType.Army;
+    }
+    aiLog(`City #${city.id}: keeping ${currentAttrs.name} (${Math.round(progress * 100)}% done, no enemy armies on continent)`);
   }
 
   // Priority 2: Ensure transport production (first ship-capable city)
@@ -342,6 +375,7 @@ function decideProduction(
   if (aiCityCount <= 1) {
     // With 1 city, always build armies — no transport or ratio switching
     if (city.production !== UnitType.Army) {
+      aiLog(`City #${city.id}: switch to Army (only 1 city)`);
       return UnitType.Army;
     }
     return null;
@@ -350,6 +384,7 @@ function decideProduction(
   // Only coastal non-lake cities can build transports/ships
   if (canBuildShips && prodCounts[UnitType.Transport] === 0) {
     if (!(armiesNeeded > 0 && prodCounts[UnitType.Army] <= 1)) {
+      aiLog(`City #${city.id}: switch to Transport (none being built)`);
       return UnitType.Transport;
     }
   }
@@ -358,7 +393,14 @@ function decideProduction(
   const ratio = getRatioTable(aiCityCount);
 
   if (overproduced(prodCounts, ratio, city.production)) {
-    return needMore(prodCounts, ratio, !canBuildShips);
+    // Don't switch if >50% done
+    if (progress >= 0.5) {
+      aiLog(`City #${city.id}: ${currentAttrs.name} overproduced but ${Math.round(progress * 100)}% done, finishing`);
+      return null;
+    }
+    const needed = needMore(prodCounts, ratio, !canBuildShips);
+    aiLog(`City #${city.id}: switch from ${currentAttrs.name} to ${UNIT_ATTRIBUTES[needed].name} (ratio rebalance)`);
+    return needed;
   }
 
   // Keep current production
@@ -382,6 +424,9 @@ function aiProduction(
 
     const newProd = decideProduction(state, city, aiOwner, viewMap, prodCounts);
     if (newProd !== null && newProd !== city.production) {
+      const oldName = UNIT_ATTRIBUTES[city.production].name;
+      const newName = UNIT_ATTRIBUTES[newProd].name;
+      aiLog(`City #${city.id}: SWITCHING ${oldName} → ${newName} (work=${city.work}/${UNIT_ATTRIBUTES[city.production].buildTime})`);
       actions.push({ type: "setProduction", cityId: city.id, unitType: newProd });
       // Update counts for subsequent city decisions
       prodCounts[city.production]--;
@@ -448,8 +493,21 @@ function aiArmyMove(
     } else if (loadTarget !== null) {
       actions.push({ type: "move", unitId: unit.id, loc: loadTarget });
     } else {
-      // No objectives and no transport — set unit to explore via behavior system
-      actions.push({ type: "setBehavior", unitId: unit.id, behavior: UnitBehavior.Explore });
+      // No fight and no transport reachable — move toward nearest coast for pickup
+      const adjacent = getAdjacentLocs(unit.loc);
+      const isAtCoast = adjacent.some(adj => state.map[adj].terrain === TerrainType.Sea);
+      if (isAtCoast) {
+        aiLog(`  Army #${unit.id}: at coast, waiting for transport`);
+      } else {
+        // Try to move toward water (BFS for nearest coastal land tile)
+        const coastMove = findNearestCoast(state, unit.loc);
+        if (coastMove !== null) {
+          aiLog(`  Army #${unit.id}: moving toward coast`);
+          actions.push({ type: "move", unitId: unit.id, loc: coastMove });
+        } else {
+          aiLog(`  Army #${unit.id}: no objectives, no coast reachable`);
+        }
+      }
       break;
     }
 
@@ -491,6 +549,44 @@ function createTempViewMap(
 }
 
 /**
+ * BFS to find the first step toward the nearest coastal land tile (adjacent to water).
+ * Returns the first move toward coast, or null if already at coast or unreachable.
+ */
+function findNearestCoast(state: GameState, startLoc: Loc): Loc | null {
+  const visited = new Uint8Array(MAP_SIZE);
+  const parent = new Int32Array(MAP_SIZE).fill(-1);
+  const queue: Loc[] = [startLoc];
+  visited[startLoc] = 1;
+
+  while (queue.length > 0) {
+    const loc = queue.shift()!;
+    const adj = getAdjacentLocs(loc);
+
+    // Check if this land tile is adjacent to water
+    if (loc !== startLoc && state.map[loc].terrain === TerrainType.Land) {
+      const isCoastal = adj.some(a => state.map[a].terrain === TerrainType.Sea);
+      if (isCoastal) {
+        // Trace back to find the first step from startLoc
+        let cur = loc;
+        while (parent[cur] !== startLoc && parent[cur] !== -1) {
+          cur = parent[cur];
+        }
+        return cur;
+      }
+    }
+
+    for (const a of adj) {
+      if (!visited[a] && (state.map[a].terrain === TerrainType.Land || state.map[a].terrain === TerrainType.City)) {
+        visited[a] = 1;
+        parent[a] = loc;
+        queue.push(a);
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Try to move a unit away from its current location (leave a city).
  */
 function moveAway(
@@ -519,34 +615,52 @@ function aiTransportMove(
   unit: UnitState,
   aiOwner: Owner,
   viewMap: ViewMapCell[],
+  claimedUnitIds: Set<number>,
 ): PlayerAction[] {
   const actions: PlayerAction[] = [];
   const movesLeft = objMoves(unit) - unit.moved;
   if (movesLeft <= 0) return actions;
 
   const capacity = objCapacity(unit);
-  const isFull = unit.cargoIds.length >= capacity;
-  const isEmpty = unit.cargoIds.length === 0;
+  // Track projected cargo across steps (actions are batched, cargoIds doesn't update mid-turn)
+  let projectedCargo = unit.cargoIds.length;
+  let justUnloaded = false;
+
+  aiLog(`  Transport #${unit.id}: loc=${unit.loc} cargo=${projectedCargo}/${capacity} moves=${movesLeft}`);
 
   for (let step = 0; step < movesLeft; step++) {
     if (findUnit(state, unit.id) === undefined) break;
 
-    // Decide mode: loading vs unloading
-    if (isFull || (!isEmpty && shouldUnload(state, unit, aiOwner, viewMap))) {
-      // UNLOADING MODE: head toward enemy continents
+    const isFull = projectedCargo >= capacity;
+    const isEmpty = projectedCargo === 0;
 
-      // Check for adjacent attack (transports can attack other transports)
+    // After unloading, sail away (don't sit and reload)
+    if (justUnloaded) {
+      const exploreTarget = findMoveToward(viewMap, unit.loc, ttExploreMoveInfo());
+      if (exploreTarget !== null) {
+        aiLog(`    Transport #${unit.id}: sailing away after unloading`);
+        actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
+      }
+      break;
+    }
+
+    // UNLOAD MODE: full, or partially loaded near enemy territory
+    if (isFull || (!isEmpty && shouldUnload(state, unit, aiOwner, viewMap))) {
+      // Check for adjacent attack
       const attack = findAdjacentAttack(viewMap, unit.loc, TT_ATTACK);
       if (attack) {
         actions.push({ type: "attack", unitId: unit.id, targetLoc: attack.targetLoc });
         return actions;
       }
 
-      // Check if we should unload armies (adjacent to land with enemy nearby)
+      // Try to unload onto enemy/unowned land
       const unloadAction = tryUnloadArmies(state, unit, aiOwner, viewMap);
       if (unloadAction.length > 0) {
         actions.push(...unloadAction);
-        return actions;
+        projectedCargo = 0;
+        justUnloaded = true;
+        aiLog(`    Transport #${unit.id}: unloaded, will sail away`);
+        continue; // use remaining move to sail away
       }
 
       // Navigate toward enemy continent
@@ -560,25 +674,57 @@ function aiTransportMove(
     } else {
       // LOADING MODE: seek armies to load
 
-      // Check for adjacent armies to load
-      const loaded = tryLoadArmies(state, unit, aiOwner);
-      if (loaded) {
-        // Don't spend a move, just loaded
-        if (unit.cargoIds.length >= capacity) continue; // switch to unload mode
-        // Stay here if more armies nearby
+      // Only try loading on the FIRST step (prevents double-loading from batched actions)
+      if (step === 0) {
+        const loadActions = tryLoadArmies(state, unit, aiOwner, claimedUnitIds);
+        if (loadActions.length > 0) {
+          actions.push(...loadActions);
+          const willLoad = loadActions.filter(a => a.type === "move" || a.type === "embark").length;
+          projectedCargo += willLoad;
+          if (projectedCargo >= capacity) {
+            aiLog(`    Transport #${unit.id}: will be full after loading ${willLoad}, switching to unload mode`);
+            continue; // switch to unload mode next iteration
+          }
+          // If we loaded some but not full, check if more armies are nearby — wait for them
+          if (projectedCargo > 0) {
+            const nearbyArmies = countNearbyArmies(state, unit.loc, aiOwner, claimedUnitIds);
+            if (nearbyArmies > 0) {
+              aiLog(`    Transport #${unit.id}: loaded ${willLoad}, waiting for ${nearbyArmies} more nearby armies`);
+              break; // stay put and wait
+            }
+          }
+        }
       }
 
-      // Navigate toward waiting armies
+      // Navigate toward waiting armies or targets
       const loadMap = createTTLoadViewMap(viewMap, state, aiOwner);
       const target = findMoveToward(loadMap, unit.loc, ttLoadMoveInfo());
       if (target !== null) {
+        aiLog(`    Transport #${unit.id}: loading mode, moving toward armies at ${target}`);
         actions.push({ type: "move", unitId: unit.id, loc: target });
+      } else if (projectedCargo > 0) {
+        // Partially loaded with no armies to find — head toward enemy territory
+        aiLog(`    Transport #${unit.id}: no more armies, sailing with ${projectedCargo}/${capacity} toward targets`);
+        const unloadMap = createUnloadViewMap(viewMap, state, aiOwner);
+        const unloadTarget = findMoveToward(unloadMap, unit.loc, ttUnloadMoveInfo());
+        if (unloadTarget !== null) {
+          actions.push({ type: "move", unitId: unit.id, loc: unloadTarget });
+        } else {
+          const exploreTarget = findMoveToward(viewMap, unit.loc, ttExploreMoveInfo());
+          if (exploreTarget !== null) {
+            actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
+          } else {
+            break;
+          }
+        }
       } else {
-        // No armies to find, explore
+        // Empty with no targets — explore
+        aiLog(`    Transport #${unit.id}: empty, no armies found, exploring`);
         const exploreTarget = findMoveToward(viewMap, unit.loc, ttExploreMoveInfo());
         if (exploreTarget !== null) {
           actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
         } else {
+          aiLog(`    Transport #${unit.id}: no explore target either, stuck`);
           break;
         }
       }
@@ -590,6 +736,7 @@ function aiTransportMove(
 
 /**
  * Decide if a partially-loaded transport should start unloading.
+ * Only trigger near enemy/unowned territory — NOT near own cities.
  */
 function shouldUnload(
   state: GameState,
@@ -597,23 +744,35 @@ function shouldUnload(
   aiOwner: Owner,
   viewMap: ViewMapCell[],
 ): boolean {
-  // If more than half full and near enemy coast, start unloading
+  // Need at least a third full to start unloading early
   const capacity = objCapacity(unit);
-  if (unit.cargoIds.length >= capacity / 2) {
-    // Check if near enemy territory
-    const adjacent = getAdjacentLocs(unit.loc);
-    for (const adj of adjacent) {
-      const contents = viewMap[adj].contents;
-      if (contents === "X" || contents === "+" || contents === "*") {
-        return true;
-      }
+  if (unit.cargoIds.length < capacity / 3) return false;
+
+  // Check if near enemy or unowned territory
+  const adjacent = getAdjacentLocs(unit.loc);
+  for (const adj of adjacent) {
+    const contents = viewMap[adj].contents;
+    // 'X' = enemy city, '*' = unowned city
+    if (contents === "X" || contents === "*") {
+      return true;
+    }
+    // '+' = land — only if not near our own cities
+    if (contents === "+") {
+      const cell = state.map[adj];
+      if (cell.cityId !== null) continue; // skip city tiles handled above
+      const nearOwnCity = getAdjacentLocs(adj).some(a2 => {
+        const c = state.map[a2];
+        return c.cityId !== null && state.cities[c.cityId].owner === aiOwner;
+      });
+      if (!nearOwnCity) return true;
     }
   }
   return false;
 }
 
 /**
- * Try to unload armies from transport onto adjacent land.
+ * Try to unload armies from transport onto adjacent land near enemy/unowned territory.
+ * Will NOT unload onto friendly territory (home island).
  */
 function tryUnloadArmies(
   state: GameState,
@@ -624,25 +783,49 @@ function tryUnloadArmies(
   const actions: PlayerAction[] = [];
   const adjacent = getAdjacentLocs(unit.loc);
 
-  // Find adjacent land tiles that are interesting (enemy cities, unowned cities, or plain land)
-  const landTargets: Loc[] = [];
+  // Only unload onto land that is enemy, unowned, or near enemy/unowned cities
+  // viewMap contents: 'X'=enemy city, 'O'=own city, '*'=unowned city, '+'=land
+  const landTargets: { loc: Loc; priority: number }[] = [];
   for (const adj of adjacent) {
     const cell = state.map[adj];
-    if (cell.terrain === TerrainType.Land || cell.terrain === TerrainType.City) {
-      // Prefer tiles near enemy/unowned cities
-      landTargets.push(adj);
+    if (cell.terrain !== TerrainType.Land && cell.terrain !== TerrainType.City) continue;
+
+    const contents = viewMap[adj].contents;
+    if (contents === "X") {
+      // Enemy city — highest priority
+      landTargets.push({ loc: adj, priority: 3 });
+    } else if (contents === "*") {
+      // Unowned city — high priority
+      landTargets.push({ loc: adj, priority: 2 });
+    } else if (contents === "+" || contents === " ") {
+      // Land or unexplored — check if near enemy territory (not home)
+      // Only unload if this tile is NOT adjacent to our own cities
+      const isNearOwnCity = getAdjacentLocs(adj).some(a2 => {
+        const c = state.map[a2];
+        return c.cityId !== null && state.cities[c.cityId].owner === aiOwner;
+      });
+      if (!isNearOwnCity) {
+        landTargets.push({ loc: adj, priority: 1 });
+      }
     }
+    // Skip 'O' (own city) — never unload at home
   }
 
   if (landTargets.length === 0) return actions;
 
-  // Unload all cargo onto the best land tile
-  const bestLand = landTargets[0]; // simple: first available
+  // Sort by priority (highest first)
+  landTargets.sort((a, b) => b.priority - a.priority);
+  const bestLand = landTargets[0].loc;
+
+  aiLog(`    Transport #${unit.id}: unloading ${unit.cargoIds.length} armies at ${bestLand}`);
+
   for (const cargoId of [...unit.cargoIds]) {
     const cargo = findUnit(state, cargoId);
     if (cargo) {
       actions.push({ type: "disembark", unitId: cargoId });
       actions.push({ type: "move", unitId: cargoId, loc: bestLand });
+      // Set unloaded armies to Explore so they march inland (not sit on beach)
+      actions.push({ type: "setBehavior", unitId: cargoId, behavior: UnitBehavior.Explore });
     }
   }
 
@@ -651,26 +834,80 @@ function tryUnloadArmies(
 
 /**
  * Try to load adjacent armies onto the transport.
+ * Returns embark actions for armies at the transport's location.
  */
 function tryLoadArmies(
   state: GameState,
   unit: UnitState,
   aiOwner: Owner,
-): boolean {
-  let loaded = false;
+  claimedUnitIds: Set<number>,
+): PlayerAction[] {
+  const actions: PlayerAction[] = [];
   const cap = objCapacity(unit);
+  let loadCount = unit.cargoIds.length;
 
-  // Look for armies at the same location
+  // First: embark armies already at the transport's location
   for (const u of state.units) {
-    if (unit.cargoIds.length >= cap) break;
-    if (u.owner === aiOwner && u.type === UnitType.Army && u.loc === unit.loc && u.shipId === null) {
-      // Army is here and not embarked — it should auto-embark via moveUnit
-      // but we can explicitly embark it
-      loaded = true;
+    if (loadCount >= cap) break;
+    if (u.owner === aiOwner && u.type === UnitType.Army && u.loc === unit.loc
+        && u.shipId === null && u.func === UnitBehavior.None) {
+      actions.push({ type: "embark", unitId: u.id, shipId: unit.id });
+      claimedUnitIds.add(u.id);
+      loadCount++;
     }
   }
 
-  return loaded;
+  // Second: move adjacent idle armies onto the transport (they auto-embark via moveUnit)
+  const adjacent = getAdjacentLocs(unit.loc);
+  for (const adj of adjacent) {
+    if (loadCount >= cap) break;
+    for (const u of state.units) {
+      if (loadCount >= cap) break;
+      if (u.owner === aiOwner && u.type === UnitType.Army && u.loc === adj && u.shipId === null
+          && u.func === UnitBehavior.None && u.moved < objMoves(u) && !claimedUnitIds.has(u.id)) {
+        aiLog(`    Loading army #${u.id} from adjacent tile ${adj} onto transport #${unit.id}`);
+        actions.push({ type: "move", unitId: u.id, loc: unit.loc });
+        claimedUnitIds.add(u.id);
+        loadCount++;
+      }
+    }
+  }
+
+  return actions;
+}
+
+/**
+ * Count armies within a few tiles of a location that could be loaded (not already claimed).
+ */
+function countNearbyArmies(
+  state: GameState,
+  loc: Loc,
+  aiOwner: Owner,
+  claimedUnitIds: Set<number>,
+): number {
+  let count = 0;
+  // Check tiles within BFS distance 3 (a couple turns of army movement)
+  const visited = new Set<Loc>([loc]);
+  let frontier = getAdjacentLocs(loc);
+  for (let depth = 0; depth < 3; depth++) {
+    const nextFrontier: Loc[] = [];
+    for (const adj of frontier) {
+      if (visited.has(adj)) continue;
+      visited.add(adj);
+      const cell = state.map[adj];
+      if (cell.terrain === TerrainType.Land || cell.terrain === TerrainType.City) {
+        for (const u of state.units) {
+          if (u.owner === aiOwner && u.type === UnitType.Army && u.loc === adj
+              && u.shipId === null && !claimedUnitIds.has(u.id)) {
+            count++;
+          }
+        }
+        nextFrontier.push(...getAdjacentLocs(adj));
+      }
+    }
+    frontier = nextFrontier;
+  }
+  return count;
 }
 
 /**
@@ -730,6 +967,7 @@ function createUnloadViewMap(
 
 /**
  * Create a view map with waiting armies marked as '$' for transport loading.
+ * Marks ALL water tiles adjacent to own coastal armies so the transport can path to them.
  */
 function createTTLoadViewMap(
   viewMap: ViewMapCell[],
@@ -738,17 +976,16 @@ function createTTLoadViewMap(
 ): ViewMapCell[] {
   const tempMap = viewMap.map(cell => ({ ...cell }));
 
-  // Mark armies that are waiting for transport
   for (const u of state.units) {
-    if (u.owner === aiOwner && u.type === UnitType.Army && u.shipId === null) {
-      // Check if the army is on a coastal tile (adjacent to water)
-      const adjacent = getAdjacentLocs(u.loc);
-      for (const adj of adjacent) {
-        if (viewMap[adj].contents === ".") {
-          // Mark adjacent water cells so transport can path to them
-          tempMap[adj] = { ...tempMap[adj], contents: "$" };
-          break;
-        }
+    if (u.owner !== aiOwner || u.type !== UnitType.Army || u.shipId !== null) continue;
+    // Only mark idle armies as pickup targets (not exploring/sentrying ones)
+    if (u.func !== UnitBehavior.None) continue;
+
+    // Mark ALL adjacent water cells (not just one) so BFS has consistent targets
+    const adjacent = getAdjacentLocs(u.loc);
+    for (const adj of adjacent) {
+      if (viewMap[adj].contents === ".") {
+        tempMap[adj] = { ...tempMap[adj], contents: "$" };
       }
     }
   }
@@ -910,6 +1147,8 @@ function assignIdleBehaviors(
     if (unit.func !== UnitBehavior.None) continue;
     if (unit.shipId !== null) continue;
     if (unit.type === UnitType.Satellite) continue;
+    // Transports must stay idle (func=None) so aiTransportMove handles them each turn
+    if (unit.type === UnitType.Transport) continue;
     if (unitsWithActions.has(unit.id)) continue;
 
     // Check if this unit is at one of our cities
@@ -963,9 +1202,33 @@ export function computeAITurn(
   }
 
   // 2. Production decisions
+  {
+    const ownCities = state.cities.filter(c => c.owner === aiOwner);
+    aiLog(`=== Turn ${state.turn} (${aiOwner === Owner.Player1 ? "P1" : "P2"}) — ${ownCities.length} cities, ${state.units.filter(u => u.owner === aiOwner).length} units ===`);
+    for (const c of ownCities) {
+      const a = UNIT_ATTRIBUTES[c.production];
+      aiLog(`  City #${c.id}: building ${a.name} (work=${c.work}/${a.buildTime})`);
+    }
+  }
   actions.push(...aiProduction(state, aiOwner, viewMap));
 
+  // Log unit behavior summary
+  {
+    const behaviorCounts: Record<string, number> = {};
+    for (const u of state.units) {
+      if (u.owner !== aiOwner) continue;
+      const bName = u.func === UnitBehavior.None ? "idle" : BEHAVIOR_NAMES[behaviorIndex(u.func)];
+      const label = `${UNIT_ATTRIBUTES[u.type].char}:${bName}`;
+      behaviorCounts[label] = (behaviorCounts[label] || 0) + 1;
+    }
+    const parts = Object.entries(behaviorCounts).map(([k, v]) => `${k}(${v})`);
+    if (parts.length > 0) aiLog(`  Units: ${parts.join(" ")}`);
+  }
+
   // 3. Move units in MOVE_ORDER priority
+  // Track armies claimed by transports so aiArmyMove doesn't generate conflicting actions
+  const claimedUnitIds = new Set<number>();
+
   for (const unitType of MOVE_ORDER) {
     // Skip satellites — they move automatically in executeTurn
     if (unitType === UnitType.Satellite) continue;
@@ -976,13 +1239,14 @@ export function computeAITurn(
       .map(u => u.id);
 
     for (const unitId of unitsOfType) {
+      if (claimedUnitIds.has(unitId)) continue; // claimed by a transport
       const unit = findUnit(state, unitId);
       if (!unit) continue; // unit may have died
 
       // Skip units that already have a behavior — let processUnitBehaviors handle them
       if (unit.func !== UnitBehavior.None) continue;
 
-      const moveActions = moveAIUnit(state, unit, aiOwner, viewMap);
+      const moveActions = moveAIUnit(state, unit, aiOwner, viewMap, claimedUnitIds);
       actions.push(...moveActions);
     }
   }
@@ -1018,12 +1282,13 @@ function moveAIUnit(
   unit: UnitState,
   aiOwner: Owner,
   viewMap: ViewMapCell[],
+  claimedUnitIds: Set<number>,
 ): PlayerAction[] {
   switch (unit.type) {
     case UnitType.Army:
       return aiArmyMove(state, unit, aiOwner, viewMap);
     case UnitType.Transport:
-      return aiTransportMove(state, unit, aiOwner, viewMap);
+      return aiTransportMove(state, unit, aiOwner, viewMap, claimedUnitIds);
     case UnitType.Fighter:
       return aiFighterMove(state, unit, aiOwner, viewMap);
     case UnitType.Patrol:
