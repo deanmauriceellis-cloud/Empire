@@ -388,11 +388,22 @@ function decideProduction(
   // How far along is current production? (0.0 to 1.0, can be negative during penalty)
   const progress = city.work / currentAttrs.buildTime;
 
-  // Guard: never switch away from Transport if this is the only transport producer.
-  // Other cities handle defense — the AI needs at least one transport to expand.
+  // Guard: never switch away from Transport if this is the only transport producer
+  // AND there are armies that still need transport (or no transport exists yet).
   if (city.production === UnitType.Transport && prodCounts[UnitType.Transport] <= 1) {
-    aiLog(`City #${city.id}: keeping Transport (only transport producer)`);
-    return null;
+    const waitingArmies = state.units.filter(
+      u => u.owner === aiOwner && u.type === UnitType.Army
+        && u.func === UnitBehavior.WaitForTransport && u.shipId === null,
+    ).length;
+    const existingTransports = state.units.filter(
+      u => u.owner === aiOwner && u.type === UnitType.Transport,
+    ).length;
+    if (waitingArmies > 0 || existingTransports === 0) {
+      aiLog(`City #${city.id}: keeping Transport (only transport producer, ${waitingArmies} waiting, ${existingTransports} existing)`);
+      return null;
+    }
+    // No waiting armies and we already have a transport — allow switching
+    aiLog(`City #${city.id}: no armies waiting and transport exists, allowing switch`);
   }
 
   // Guard: don't switch away from Transport via ratio rebalance if there's still army surplus.
@@ -835,8 +846,8 @@ function aiTransportMove(
         break;
       }
 
-      // Only try loading on the FIRST step (prevents double-loading from batched actions)
-      if (step === 0) {
+      // Try loading armies every step (claimedUnitIds prevents double-loading)
+      {
         const loadActions = tryLoadArmies(state, unit, aiOwner, claimedUnitIds);
         if (loadActions.length > 0) {
           actions.push(...loadActions);
@@ -855,35 +866,12 @@ function aiTransportMove(
               aiLog(`    Transport #${unit.id}: waiting for ${nearbyArmies} more nearby armies`);
               break; // stay put and wait
             }
-            // Not full and no nearby armies — navigate toward more armies
+            // Not full and no nearby armies — fall through to navigate toward distant armies
             aiLog(`    Transport #${unit.id}: partially loaded, seeking more armies`);
           }
-        } else if (projectedCargo > 0) {
-          // Already carrying armies but couldn't load more — deliver what we have
-          aiLog(`    Transport #${unit.id}: cargo=${projectedCargo}/${capacity}, no loadable armies nearby, delivering`);
-          deliveringMode = true;
-          // Navigate toward enemy territory (don't try unloading here — we might be at own coast)
-          const unloadMap = createUnloadViewMap(viewMap, state, aiOwner);
-          const deliverTarget = findMoveToward(unloadMap, currentLoc, ttUnloadMoveInfo());
-          if (deliverTarget !== null) {
-            aiLog(`    Transport #${unit.id}: heading to deliver at ${deliverTarget}`);
-            actions.push({ type: "move", unitId: unit.id, loc: deliverTarget });
-            prevLoc = currentLoc;
-            currentLoc = deliverTarget;
-            continue;
-          }
-          // No unload targets — explore to find enemy territory
-          const exploreTarget2 = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
-          if (exploreTarget2 !== null) {
-            aiLog(`    Transport #${unit.id}: no delivery target, exploring toward ${exploreTarget2}`);
-            actions.push({ type: "move", unitId: unit.id, loc: exploreTarget2 });
-            prevLoc = currentLoc;
-            currentLoc = exploreTarget2;
-            continue;
-          }
-          aiLog(`    Transport #${unit.id}: delivering, no targets or explore options`);
-          break;
         }
+        // Don't enter delivery mode here — fall through to navigate-toward-armies
+        // which will check if there are any loadable armies elsewhere
       }
 
       // Navigate toward waiting armies or targets (only when empty or still loading)
@@ -950,25 +938,41 @@ function shouldUnload(
   viewMap: ViewMapCell[],
   atLoc?: Loc,
 ): boolean {
-  // Check if near enemy or unowned territory
+  // Only unload near enemy or unowned cities/armies — NOT random land.
+  // Unloading on generic land caused premature dumping on home island.
   const loc = atLoc ?? unit.loc;
   const adjacent = getAdjacentLocs(loc);
   for (const adj of adjacent) {
     const contents = viewMap[adj].contents;
-    // 'X' = enemy city, '*' = unowned city
-    if (contents === "X" || contents === "*") {
+    if (contents === "X" || contents === "*" || contents === "a") {
       return true;
     }
-    // '+' = land — only if not near our own cities
-    if (contents === "+") {
-      const cell = state.map[adj];
-      if (cell.cityId !== null) continue; // skip city tiles handled above
-      const nearOwnCity = getAdjacentLocs(adj).some(a2 => {
-        const c = state.map[a2];
-        return c.cityId !== null && state.cities[c.cityId].owner === aiOwner;
-      });
-      if (!nearOwnCity) return true;
+  }
+  // Also check if adjacent land is on an enemy continent (short-range BFS, max 30 tiles)
+  for (const adj of adjacent) {
+    const contents = viewMap[adj].contents;
+    if (contents !== "+" && contents !== " ") continue;
+    // Quick BFS on land to see if enemy/unowned city is nearby
+    const visited = new Set<Loc>([adj]);
+    const queue: Loc[] = [adj];
+    let checked = 0;
+    while (queue.length > 0 && checked < 30) {
+      const cur = queue.shift()!;
+      checked++;
+      const c = viewMap[cur].contents;
+      if (c === "X" || c === "*") return true;
+      if (c === "O") return false; // own city found — this is home territory
+      for (const a of getAdjacentLocs(cur)) {
+        if (visited.has(a)) continue;
+        const ac = viewMap[a].contents;
+        if (ac === "+" || ac === " " || ac === "X" || ac === "*" || ac === "O"
+            || ac === "A" || ac === "a") {
+          visited.add(a);
+          queue.push(a);
+        }
+      }
     }
+    break; // only check one adjacent land tile's continent
   }
   return false;
 }
