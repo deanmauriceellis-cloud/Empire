@@ -53,6 +53,7 @@ export interface UnitState {
   cargoIds: number[];          // ids of cargo units (if this is a transport/carrier)
   range: number;               // remaining range (for fighters/satellites)
   targetLoc: Loc | null;       // navigation waypoint (for GoTo behavior)
+  prevLocs?: Loc[];            // recent turn-end locations (transports, max 4, for cross-turn oscillation detection)
 }
 
 // ─── Game Config ─────────────────────────────────────────────────────────────

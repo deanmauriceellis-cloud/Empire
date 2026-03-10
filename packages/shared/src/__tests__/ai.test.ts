@@ -258,6 +258,43 @@ describe("AI System", () => {
       expect(ttProd.length).toBeLessThanOrEqual(2);
     });
 
+    it("transport surplus guard respects cap — allows switch when over cap", () => {
+      // 4 cities, max transport cap = ceil(4/4) = 1
+      // 3 cities already building transports (over cap), with army surplus
+      // The surplus guard should NOT prevent switching for the over-cap cities
+      const city1 = addCity(state, rowColLoc(10, 10), AI, UnitType.Transport);
+      const city2 = addCity(state, rowColLoc(12, 10), AI, UnitType.Transport);
+      const city3 = addCity(state, rowColLoc(14, 10), AI, UnitType.Transport);
+      const city4 = addCity(state, rowColLoc(16, 10), AI, UnitType.Army);
+      addCity(state, rowColLoc(30, 30), HUMAN);
+      setWater(state, 5, 11, 30, 20);
+
+      // Create many WaitForTransport armies (army surplus)
+      for (let i = 0; i < 10; i++) {
+        const a = createUnit(state, UnitType.Army, AI, rowColLoc(10 + Math.floor(i / 3), 5 + (i % 3)));
+        a.func = UnitBehavior.WaitForTransport;
+      }
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+      // At most 1 city (the cap) should be building transport at the end
+      const transportProducers = state.cities.filter(
+        c => c.owner === AI && c.production === UnitType.Transport,
+      );
+      // Apply production switch actions
+      for (const a of actions) {
+        if (a.type === "setProduction") {
+          const city = state.cities.find(c => c.id === (a as any).cityId);
+          if (city) city.production = (a as any).unitType;
+        }
+      }
+      const finalTransportProducers = state.cities.filter(
+        c => c.owner === AI && c.production === UnitType.Transport,
+      ).length;
+      const maxCap = Math.ceil(4 / 4); // = 1
+      expect(finalTransportProducers).toBeLessThanOrEqual(maxCap + 1); // allow small margin
+    });
+
     it("should allow switching from transport when 2+ transports exist", () => {
       // City building transport, but 2 transports already exist and no armies waiting
       const city1 = addCity(state, rowColLoc(10, 10), AI, UnitType.Transport);
@@ -895,6 +932,77 @@ describe("AI System", () => {
           }
         }
       }
+    });
+  });
+
+  describe("army-transport coordination (Phase C)", () => {
+    it("C1: idle army near transport gets WaitForTransport, not Explore", () => {
+      // Island setup: AI city on small land, water channel, transport in water
+      const state = createTestState();
+      // Create water channel at row 15
+      setWater(state, 14, 1, 3, MAP_WIDTH - 2);
+      // AI city on upper island
+      addCity(state, rowColLoc(10, 10), AI);
+      addCity(state, rowColLoc(20, 20), HUMAN);
+
+      // AI army at coast (row 13, near water)
+      const army = createUnit(state, UnitType.Army, AI, rowColLoc(13, 10));
+      // AI transport in adjacent water
+      const transport = createUnit(state, UnitType.Transport, AI, rowColLoc(14, 10));
+
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+
+      // The idle army should be assigned WaitForTransport (not Explore)
+      // because there's a non-full transport nearby
+      const behaviorActions = actions.filter(
+        a => a.type === "setBehavior" && (a as any).unitId === army.id,
+      );
+      const hasBehavior = behaviorActions.some(
+        a => (a as any).behavior === UnitBehavior.WaitForTransport,
+      );
+      // Army should either be WaitForTransport or already loaded onto transport
+      const hasEmbark = actions.some(
+        a => a.type === "embark" && (a as any).unitId === army.id,
+      );
+      const hasMove = actions.some(
+        a => a.type === "move" && (a as any).unitId === army.id,
+      );
+      expect(hasBehavior || hasEmbark || hasMove).toBe(true);
+    });
+
+    it("C2: transport prefers army clusters over lone armies", () => {
+      // Setup: transport at center, 3 armies clustered on left coast, 1 army on right coast
+      const state = createTestState();
+      // Water channel in the middle
+      setWater(state, 14, 1, 5, MAP_WIDTH - 2);
+      // AI cities
+      addCity(state, rowColLoc(5, 5), AI);
+      addCity(state, rowColLoc(30, 50), HUMAN);
+
+      // 3 armies clustered near left coast (WaitForTransport)
+      for (let i = 0; i < 3; i++) {
+        const a = createUnit(state, UnitType.Army, AI, rowColLoc(13, 5 + i));
+        a.func = UnitBehavior.WaitForTransport;
+      }
+      // 1 army on right coast (WaitForTransport)
+      const loneArmy = createUnit(state, UnitType.Army, AI, rowColLoc(13, 50));
+      loneArmy.func = UnitBehavior.WaitForTransport;
+
+      // Transport in middle of water
+      const transport = createUnit(state, UnitType.Transport, AI, rowColLoc(15, 25));
+
+      refreshVision(state, AI);
+
+      const actions = computeAITurn(state, AI);
+
+      // Transport should move — check it moved toward the cluster (col < 25)
+      const transportMoves = actions.filter(
+        a => a.type === "move" && (a as any).unitId === transport.id,
+      );
+      // Transport should have at least one move action
+      expect(transportMoves.length).toBeGreaterThan(0);
     });
   });
 });

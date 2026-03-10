@@ -1,13 +1,13 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Post-Phase 12: AI Fix Plan (Phases A+B complete)** — Production intelligence and transport movement overhaul
+**Post-Phase 12: AI Fix Plan (Phases A+B+C+D complete + playtest fixes)** — All AI issues resolved
 
 ## Status
 - All 12 phases complete + gameplay polish + debug tools + AI overhaul
-- 272 unit/integration tests passing (244 shared + 28 server)
+- 278 unit/integration tests passing (250 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
-- Phase A (production) and Phase B (transport movement) fixes implemented and validated
+- Phases A-D complete + playtest log review fixes
 
 ## Latest commit
 `bd29a02` — session 026: production intelligence + transport movement overhaul
@@ -30,37 +30,27 @@
 - [x] Phase 12.3: E2E tests — Playwright (singleplayer, multiplayer lobby, perf benchmarks)
 
 ## Completed (this session)
-- [x] A1: Early fighter production — switch one army producer to fighter when 2+ cities, 0 fighters
-- [x] A2: Transport production cap — max ceil(cities/4) cities building transports
-- [x] A3: Relaxed transport guard — allow switch from transport with 2+ transports existing
-- [x] A4: Early-game ratio table — RATIO_EARLY for 2-3 cities (20% fighter weight)
-- [x] B1: Don't unload on loading continent — shouldUnload, tryUnload, createUnloadViewMap all check for WaitForTransport armies
-- [x] B2: Position history — recentLocs Set replaces prevLoc (prevents multi-tile oscillation)
-- [x] B3: Minimum cargo for delivery — 50% capacity threshold before delivering
-- [x] B5: countNearbyArmies expanded to 3-tile BFS radius
-- [x] 4 new production tests added
-- [x] 100-turn AI vs AI validation: fighters by turn 33-36, transport cap working, no home-continent unloading
+- [x] C1: Idle armies near transport → WaitForTransport (skip explore→wait cycle)
+- [x] C2: Transport load map weighted by army cluster density ('%' for 2+ armies)
+- [x] C3: Multi-transport coordination — claimedPickupLocs prevents competing for same armies
+- [x] B4: Enemy continent detection — armies on enemy continents stay Aggressive, not WaitForTransport
+- [x] Transport cap bypass fix — "keeping Transport" surplus guard now respects max cap
+- [x] Cross-turn oscillation fix — `prevLocs` on UnitState tracks last 4 turn-end positions
+- [x] D1-D5: 200-turn auto-play, transport cap, B4 enemy continent, C1, C2, cap guard tests
+- [x] Playtest log (x.log) review — identified and fixed 3 additional bugs from turn 301-304 data
 
-## Known Issues (remaining from session-025 analysis)
-1. ~~**Transport load/unload cycle**~~ (Fixed: B1 — loading continent detection)
-2. ~~**Transport 2-tile oscillation**~~ (Fixed: B2 — recentLocs Set)
-3. ~~**1-army delivery**~~ (Fixed: B3 — min cargo threshold)
-4. ~~**Zero fighters built**~~ (Fixed: A1+A4 — early fighter priority + ratio table)
-5. ~~**Transport overproduction**~~ (Fixed: A2 — production cap)
-6. **Aggressive→idle→WaitForTransport cycle** (Moderate): Unloaded armies cycle back to transport-eligible state. Partially mitigated by B1.
-7. ~~**countNearbyArmies too narrow**~~ (Fixed: B5 — 3-tile BFS)
+## Known Issues
+All 7 issues from session-025 analysis resolved. Playtest log issues also fixed:
+1. ~~**Transport cap bypass**~~ (Fixed: surplus guard now checks `ownCityCount/4` cap)
+2. ~~**Cross-turn oscillation**~~ (Fixed: `prevLocs` persistent history, cleared on load/unload)
+3. ~~**1-army delivery bypass**~~ (Already handled by min-cargo threshold)
+4. ~~**Negative work values**~~ (By design — 20% production switch penalty)
+5. ~~**Load-then-unload-0**~~ (Already fixed by `loadedThisTurn` guard)
 
 ## Next Steps
-1. **Phase C: Army-Transport Coordination** (from session-025 plan)
-   - C1: Armies near transport → WaitForTransport not Explore
-   - C2: Transport navigates to army clusters (weighted '$' markers)
-   - C3: Multi-transport coordination (claimed locations)
-   - B4: Prevent re-loading just-unloaded armies
-2. **Phase D: Testing & Validation**
-   - Integration tests for transport delivery to enemy continent
-   - Oscillation detection test
-   - 200-turn auto-play validation
-3. Playtesting, hosting, art assets
+1. Playtesting and gameplay tuning
+2. Hosting / deployment
+3. Art assets (replace placeholder textures)
 
 ## Blockers
 _None_
@@ -70,7 +60,7 @@ _None_
 - Client dev server on port 5174 (port 5173 used by another application)
 - Playwright E2E tests run via `pnpm test:e2e` (auto-starts Vite + server)
 - Two-player E2E join test skipped: lobby doesn't auto-refresh game list
-- 290 total tests: 244 shared + 28 server + 18 E2E (17 pass + 1 skip)
+- 296 total tests: 250 shared + 28 server + 18 E2E (17 pass + 1 skip)
 - Map constants are now mutable `let` — call `configureMapDimensions()` before map generation
 - Lake vs ocean threshold: 5% of map size (300 tiles on standard 100x60 map)
 - Full analysis document: `docs/sessions/session-025-ai-analysis.md`

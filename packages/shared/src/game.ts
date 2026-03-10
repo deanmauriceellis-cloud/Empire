@@ -37,6 +37,7 @@ import {
   waterMoveInfo,
   airMoveInfo,
 } from "./pathfinding.js";
+import { mapContinent } from "./continent.js";
 
 // ─── RNG ────────────────────────────────────────────────────────────────────────
 
@@ -1205,9 +1206,26 @@ function exploreUnit(state: GameState, unit: UnitState, owner: Owner): TurnEvent
       if (objective === null) {
         // Nothing reachable to explore
         if (unit.type === UnitType.Army) {
-          // Army stuck on fully-explored island — wait for transport pickup
-          unit.func = UnitBehavior.WaitForTransport;
-          events.push(...moveArmyTowardCoast(state, unit));
+          // Check if this army is on an enemy continent (has enemy/unowned cities, no own cities).
+          // If so, stay Aggressive — don't request transport pickup from enemy territory.
+          const continent = mapContinent(viewMap, unit.loc, ".");
+          const owner = state.map[unit.loc].terrain === TerrainType.City
+            ? state.cities.find(c => c.loc === unit.loc)?.owner : undefined;
+          let hasOwnCity = false;
+          let hasEnemyCity = false;
+          for (const loc of continent) {
+            const cell = viewMap[loc];
+            if (cell.contents === "O") hasOwnCity = true;
+            if (cell.contents === "X" || cell.contents === "*") hasEnemyCity = true;
+          }
+          if (!hasOwnCity && hasEnemyCity) {
+            // On enemy continent — stay aggressive, don't request transport
+            unit.func = UnitBehavior.Aggressive;
+          } else {
+            // Home/neutral island — wait for transport pickup
+            unit.func = UnitBehavior.WaitForTransport;
+            events.push(...moveArmyTowardCoast(state, unit));
+          }
         } else {
           unit.func = UnitBehavior.None;
         }

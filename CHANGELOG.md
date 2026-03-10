@@ -1,5 +1,26 @@
 # Empire Reborn — Changelog
 
+## v0.22.0 — Session 027 (2026-03-10)
+
+### Fixed
+- **Aggressive→idle→WaitForTransport cycle** (B4) — armies on enemy continents (with enemy/unowned cities, no own cities) now stay Aggressive instead of requesting transport pickup. Prevents infinite load→unload→pickup loop
+- **Idle armies near transports wandering off** (C1) — `assignIdleBehaviors()` now checks for non-full transports within 3 tiles via BFS; assigns WaitForTransport directly instead of Explore→WaitForTransport cycle
+- **Transport production cap bypass** — "keeping Transport" surplus guard now checks `ceil(cities/4)` cap; cities over cap allowed to switch away even with army surplus
+- **Cross-turn transport oscillation** — `prevLocs` field on UnitState tracks last 4 turn-end positions; included in `recentLocs` set to prevent multi-turn ping-pong. Cleared on load/unload (mission change)
+
+### Added
+- **Army cluster weighting for transports** (C2) — `createTTLoadViewMap()` counts loadable armies per water tile; clusters of 2+ get '%' marker (high priority) vs '$' (single army). `ttLoadMoveInfo()` weights '%' over '$'
+- **Multi-transport coordination** (C3) — `claimedPickupLocs` Set shared across transports in `computeAITurn()`. `claimPickupZone()` BFS claims water tiles within 5 steps when a transport commits to a pickup area. `createTTLoadViewMap()` accepts `excludeLocs` to skip claimed tiles
+- **`hasNearbyTransport()`** — BFS from land tile through terrain checking adjacent water for non-full transports within 3 hops
+- **`claimPickupZone()`** — BFS through water claiming '$'/'%' markers within 5 steps of transport location
+- `prevLocs?: Loc[]` on `UnitState` — optional persistent cross-turn position history for transports
+- 8 new tests: 200-turn oscillation detection, transport production cap, B4 enemy continent, C1 near-transport, C2 cluster preference, transport cap guard
+
+### Changed
+- `packages/shared/src/game.ts` — `exploreUnit()` checks continent ownership before setting WaitForTransport; imports `mapContinent` from continent.ts
+- `packages/shared/src/ai.ts` — `aiTransportMove()` accepts `claimedPickupLocs`, saves `prevLocs` at turn end; `moveAIUnit()` passes `claimedPickupLocs` through; `computeAITurn()` creates shared sets
+- `packages/shared/src/types.ts` — `UnitState.prevLocs` added (optional, backwards-compatible)
+
 ## v0.20.0 — Session 020 (2026-03-09)
 
 ### Fixed

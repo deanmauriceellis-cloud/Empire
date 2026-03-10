@@ -123,7 +123,8 @@ function armyLoadMoveInfo(viewMap: ViewMapCell[], loadingTransportLocs: Set<Loc>
 
 // Transport loading: search for armies to pick up ($)
 function ttLoadMoveInfo(): MoveInfo {
-  return waterMoveInfo("$", new Map([["$", 1]]));
+  // '%' = army cluster (2+), '$' = single army; clusters are strongly preferred
+  return waterMoveInfo("%$", new Map([["%", 1], ["$", 2]]));
 }
 
 // Transport exploring: search for open water
@@ -413,19 +414,26 @@ function decideProduction(
 
   // Guard: don't switch away from Transport via ratio rebalance if there's still army surplus.
   // This prevents oscillation where surplus→build transport→overproduced→stop→surplus→repeat.
-  // Use only existing transport UNITS for capacity (not in-production, which inflates the count).
+  // BUT: respect the transport production cap to prevent overbuilding transports.
   if (city.production === UnitType.Transport && canBuildShips) {
-    const waitingArmies = state.units.filter(
-      u => u.owner === aiOwner && u.type === UnitType.Army
-        && u.func === UnitBehavior.WaitForTransport && u.shipId === null,
-    ).length;
-    const existingTransports = state.units.filter(
-      u => u.owner === aiOwner && u.type === UnitType.Transport,
-    ).length;
-    const actualCapacity = existingTransports * 6;
-    if (waitingArmies > actualCapacity) {
-      aiLog(`City #${city.id}: keeping Transport (army surplus: ${waitingArmies} waiting, capacity=${actualCapacity})`);
-      return null;
+    const ownCityCount = state.cities.filter(c => c.owner === aiOwner).length;
+    const maxTransportCities = Math.max(1, Math.ceil(ownCityCount / 4));
+    if (prodCounts[UnitType.Transport] > maxTransportCities) {
+      // Over the cap — allow switching away from transport
+      aiLog(`City #${city.id}: over transport cap (${prodCounts[UnitType.Transport]}/${maxTransportCities}), allowing switch`);
+    } else {
+      const waitingArmies = state.units.filter(
+        u => u.owner === aiOwner && u.type === UnitType.Army
+          && u.func === UnitBehavior.WaitForTransport && u.shipId === null,
+      ).length;
+      const existingTransports = state.units.filter(
+        u => u.owner === aiOwner && u.type === UnitType.Transport,
+      ).length;
+      const actualCapacity = existingTransports * 6;
+      if (waitingArmies > actualCapacity) {
+        aiLog(`City #${city.id}: keeping Transport (army surplus: ${waitingArmies} waiting, capacity=${actualCapacity})`);
+        return null;
+      }
     }
   }
 
@@ -754,6 +762,7 @@ function aiTransportMove(
   aiOwner: Owner,
   viewMap: ViewMapCell[],
   claimedUnitIds: Set<number>,
+  claimedPickupLocs?: Set<Loc>,
 ): PlayerAction[] {
   const actions: PlayerAction[] = [];
   const movesLeft = objMoves(unit) - unit.moved;
@@ -773,7 +782,9 @@ function aiTransportMove(
   aiLog(`  Transport #${unit.id}: loc=${unit.loc} cargo=${projectedCargo}/${capacity} moves=${movesLeft}`);
 
   // Track all positions this turn to detect oscillation (prevents 2+ tile cycles)
-  const recentLocs = new Set<Loc>([currentLoc]);
+  // Include cross-turn history to prevent multi-turn ping-pong
+  const prevLocs = unit.prevLocs || [];
+  const recentLocs = new Set<Loc>([currentLoc, ...prevLocs]);
 
   for (let step = 0; step < movesLeft; step++) {
     if (findUnit(state, unit.id) === undefined) break;
@@ -912,13 +923,17 @@ function aiTransportMove(
 
       // Navigate toward waiting armies or targets (only when empty or still loading)
       if (!deliveringMode) {
-        const loadMap = createTTLoadViewMap(viewMap, state, aiOwner);
+        const loadMap = createTTLoadViewMap(viewMap, state, aiOwner, claimedPickupLocs);
         const target = findMoveToward(loadMap, currentLoc, ttLoadMoveInfo());
         if (target !== null && !recentLocs.has(target)) {
           aiLog(`    Transport #${unit.id}: moving toward armies at ${target}`);
           actions.push({ type: "move", unitId: unit.id, loc: target });
           recentLocs.add(currentLoc);
           currentLoc = target;
+          // Claim pickup zone so other transports seek different clusters
+          if (claimedPickupLocs) {
+            claimPickupZone(loadMap, currentLoc, claimedPickupLocs);
+          }
         } else if (projectedCargo > 0) {
           // Only deliver if we have meaningful cargo (>= 50% capacity) or no loadable armies exist
           const minDeliverCargo = Math.ceil(capacity / 2);
@@ -969,6 +984,15 @@ function aiTransportMove(
         }
       }
     }
+  }
+
+  // Save turn-end position for cross-turn oscillation detection (keep last 4)
+  const newPrevLocs = [currentLoc, ...prevLocs].slice(0, 4);
+  // Clear history when transport loaded/unloaded cargo (mission changed — allow revisiting)
+  if (loadedThisTurn || justUnloaded) {
+    unit.prevLocs = [];
+  } else {
+    unit.prevLocs = newPrevLocs;
   }
 
   aiLog(`    Transport #${unit.id}: turn done, ${actions.length} actions, final loc=${currentLoc}`);
@@ -1304,12 +1328,46 @@ function createUnloadViewMap(
  * Create a view map with waiting armies marked as '$' for transport loading.
  * Marks ALL water tiles adjacent to own coastal armies so the transport can path to them.
  */
+/**
+ * Claim water tiles near a transport's target for multi-transport coordination.
+ * BFS from loc through water, claiming all '$'/'%' markers within ~5 tiles.
+ */
+function claimPickupZone(
+  loadMap: ViewMapCell[],
+  loc: Loc,
+  claimedPickupLocs: Set<Loc>,
+): void {
+  const visited = new Set<Loc>([loc]);
+  let frontier = [loc];
+  for (let depth = 0; depth < 5; depth++) {
+    const next: Loc[] = [];
+    for (const cur of frontier) {
+      for (const adj of getAdjacentLocs(cur)) {
+        if (visited.has(adj)) continue;
+        visited.add(adj);
+        const c = loadMap[adj].contents;
+        if (c === "$" || c === "%") {
+          claimedPickupLocs.add(adj);
+          next.push(adj);
+        } else if (c === ".") {
+          next.push(adj);
+        }
+      }
+    }
+    frontier = next;
+  }
+}
+
 function createTTLoadViewMap(
   viewMap: ViewMapCell[],
   state: GameState,
   aiOwner: Owner,
+  excludeLocs?: Set<Loc>,
 ): ViewMapCell[] {
   const tempMap = viewMap.map(cell => ({ ...cell }));
+
+  // Count loadable armies adjacent to each water tile for cluster weighting
+  const waterArmyCounts = new Map<Loc, number>();
 
   for (const u of state.units) {
     if (u.owner !== aiOwner || u.type !== UnitType.Army || u.shipId !== null) continue;
@@ -1320,9 +1378,17 @@ function createTTLoadViewMap(
     const adjacent = getAdjacentLocs(u.loc);
     for (const adj of adjacent) {
       if (viewMap[adj].contents === ".") {
-        tempMap[adj] = { ...tempMap[adj], contents: "$" };
+        if (excludeLocs && excludeLocs.has(adj)) continue;
+        const count = (waterArmyCounts.get(adj) || 0) + 1;
+        waterArmyCounts.set(adj, count);
       }
     }
+  }
+
+  // Mark water tiles with army-weighted pickup markers
+  // '$' = 1 army, '%' = 2+ armies (clusters get higher BFS priority)
+  for (const [loc, count] of waterArmyCounts) {
+    tempMap[loc] = { ...tempMap[loc], contents: count >= 2 ? "%" : "$" };
   }
 
   return tempMap;
@@ -1462,6 +1528,40 @@ function aiShipMove(
  * - Armies: max 1 sentry per city, rest explore
  * - Ships/fighters: explore
  */
+/**
+ * Check if a non-full transport is within ~3 water tiles of a land location.
+ * Used to shortcut idle armies to WaitForTransport instead of Explore.
+ */
+function hasNearbyTransport(state: GameState, loc: Loc, aiOwner: Owner): boolean {
+  // BFS outward from loc through land tiles, then check adjacent water for transports
+  const visited = new Set<Loc>([loc]);
+  let frontier: Loc[] = [loc];
+  // Search land tiles within 2 steps, then check water neighbors
+  for (let depth = 0; depth < 3; depth++) {
+    const next: Loc[] = [];
+    for (const cur of frontier) {
+      for (const adj of getAdjacentLocs(cur)) {
+        if (visited.has(adj)) continue;
+        visited.add(adj);
+        const terrain = state.map[adj].terrain;
+        if (terrain === TerrainType.Sea) {
+          // Check for non-full transport at this water tile
+          for (const u of state.units) {
+            if (u.owner === aiOwner && u.type === UnitType.Transport
+                && u.loc === adj && u.cargoIds.length < objCapacity(u)) {
+              return true;
+            }
+          }
+        } else {
+          next.push(adj);
+        }
+      }
+    }
+    frontier = next;
+  }
+  return false;
+}
+
 function assignIdleBehaviors(
   state: GameState,
   aiOwner: Owner,
@@ -1505,6 +1605,9 @@ function assignIdleBehaviors(
         // Additional units at city explore
         actions.push({ type: "setBehavior", unitId: unit.id, behavior: UnitBehavior.Explore });
       }
+    } else if (unit.type === UnitType.Army && hasNearbyTransport(state, unit.loc, aiOwner)) {
+      // Army near a non-full transport — go to coast for pickup (skip explore→wait cycle)
+      actions.push({ type: "setBehavior", unitId: unit.id, behavior: UnitBehavior.WaitForTransport });
     } else {
       // Not at a city — explore
       actions.push({ type: "setBehavior", unitId: unit.id, behavior: UnitBehavior.Explore });
@@ -1568,6 +1671,8 @@ export function computeAITurn(
   // 3. Move units in MOVE_ORDER priority
   // Track armies claimed by transports so aiArmyMove doesn't generate conflicting actions
   const claimedUnitIds = new Set<number>();
+  // Track water tiles claimed by transports for pickup — prevents multiple transports competing
+  const claimedPickupLocs = new Set<Loc>();
 
   for (const unitType of MOVE_ORDER) {
     // Skip satellites — they move automatically in executeTurn
@@ -1586,7 +1691,7 @@ export function computeAITurn(
       // Skip units that already have a behavior — let processUnitBehaviors handle them
       if (unit.func !== UnitBehavior.None) continue;
 
-      const moveActions = moveAIUnit(state, unit, aiOwner, viewMap, claimedUnitIds);
+      const moveActions = moveAIUnit(state, unit, aiOwner, viewMap, claimedUnitIds, claimedPickupLocs);
       actions.push(...moveActions);
     }
   }
@@ -1623,12 +1728,13 @@ function moveAIUnit(
   aiOwner: Owner,
   viewMap: ViewMapCell[],
   claimedUnitIds: Set<number>,
+  claimedPickupLocs?: Set<Loc>,
 ): PlayerAction[] {
   switch (unit.type) {
     case UnitType.Army:
       return aiArmyMove(state, unit, aiOwner, viewMap);
     case UnitType.Transport:
-      return aiTransportMove(state, unit, aiOwner, viewMap, claimedUnitIds);
+      return aiTransportMove(state, unit, aiOwner, viewMap, claimedUnitIds, claimedPickupLocs);
     case UnitType.Fighter:
       return aiFighterMove(state, unit, aiOwner, viewMap);
     case UnitType.Patrol:
