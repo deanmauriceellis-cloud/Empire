@@ -10,7 +10,7 @@
 - Full code review completed (session 035) — 6-phase refactor plan below
 
 ## Latest commit
-`8de9c0a` — session 035: transport AI overhaul — patience, army coordination, exploration priority
+`b808e6e` — session 035: transport AI fixes + 6-phase refactoring plan from code design review
 
 ## Completed (session 035)
 - [x] WaitForTransport armies BFS toward nearest non-full transport (not just any coast)
