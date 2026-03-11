@@ -1,17 +1,23 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-UNIFIED Phase 1 complete** — Graphics Foundation implemented
+**PLAN-UNIFIED Phase 2 complete** — Unit Info Panel & Vision
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phase 1 (Graphics Foundation) of expansion plan complete
+- Phase 1 (Graphics Foundation) and Phase 2 (Unit Info & Vision) of expansion plan complete
 - 292 unit/integration tests passing (264 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-UNIFIED.md** is the definitive plan for all future implementation
 
 ## Latest commit
-`2fd43ef` — session 041: add session log, update CHANGELOG and STATE.md
+`ab8d6ae` — session 042: Phase 2 unit info panel & map overlays
+
+## Completed (session 042) — Unit Info Panel & Vision
+- [x] Right-sidebar unit info panel: icon, HP bar, stats, behavior, GoTo ETA, cargo manifest
+- [x] City info in panel: production, progress bar, turns remaining
+- [x] Vision range overlay: blue diamond ring on adjacent tiles
+- [x] GoTo path overlay: animated dashed orange line with target marker
 
 ## Completed (session 041) — Graphics Foundation
 - [x] Multi-depth ocean: deep/coastal/shore textures by adjacent land count
@@ -170,7 +176,7 @@ R1 and R5 can run in parallel (no dependencies). R2 and R3 depend on R1. R6 depe
 
 ## Next Steps (PLAN-UNIFIED phases)
 1. ~~**Phase 1**: Graphics Foundation~~ ✓ (session 041)
-2. **Phase 2**: Unit Info & Vision — right-side info panel, vision/path overlays (1 session)
+2. ~~**Phase 2**: Unit Info & Vision~~ ✓ (session 042)
 3. **Phase 3**: Economy Foundation — resources, deposits, production gating (1-2 sessions)
 4. **Phase 4**: Construction & Buildings — construction unit, mines/farms, city upgrades (1-2 sessions)
 5. **Phase 5**: Economy Review Screen — turn summary dialog, resource bar (1 session)

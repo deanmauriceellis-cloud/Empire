@@ -1,0 +1,58 @@
+Session 042 — 2026-03-10
+Phase 2: Unit Info Panel & Vision (PLAN-UNIFIED)
+
+## Summary
+Implemented Phase 2 of the expansion plan: rich unit/city inspection panel
+in the right sidebar and map overlays for vision range and GoTo paths.
+
+## Changes
+
+### 2A: Unit Info Panel (unitInfoPanel.ts) — NEW
+- Slide-in panel positioned between minimap and action panel in sidebar
+- Unit selection displays:
+  - Large character icon with owner-colored border + name + owner label
+  - Segmented HP bar (green >60%, orange >30%, red <=30%)
+  - Movement remaining / total speed
+  - Terrain type (Land/Sea/Any), attack strength
+  - Range remaining (fighters/satellites only)
+  - Current behavior/orders with color coding
+  - GoTo destination coordinates + ETA (Chebyshev distance / speed)
+  - Embarked ship info (type + ID)
+  - Cargo manifest with unit type characters (transports/carriers)
+  - Grid location coordinates
+- City selection displays:
+  - City icon with owner-colored border
+  - Current production unit type
+  - Progress bar with percentage and turns remaining
+  - Grid location coordinates
+- Both unit and city shown simultaneously when unit is on a city
+
+### 2B: Map Overlays (mapOverlays.ts) — NEW
+- Vision range: translucent blue diamond overlay on all 8 adjacent tiles
+  when any unit is selected, with gentle pulsing animation
+- GoTo path: animated dashed orange line from unit to destination with
+  crawling effect (dash offset animates over time)
+- Target marker: pulsing orange diamond on the GoTo destination tile
+- Uses PixiJS Graphics API, zIndex 6 (above highlights, below fog)
+
+### Integration
+- UIManager.ts: added unitInfo panel to sidebar DOM, exported in interface
+- main.ts: imported MapOverlays, instantiated renderer, added update calls
+  in render loop (after uiState is built)
+- styles.ts: added 143 lines of CSS for info panel layout (header, HP bars,
+  progress bars, cargo grid, stat rows, dividers)
+
+## Files Changed
+- NEW: packages/client/src/ui/unitInfoPanel.ts (197 lines)
+- NEW: packages/client/src/renderer/mapOverlays.ts (119 lines)
+- MOD: packages/client/src/ui/UIManager.ts (+5 lines)
+- MOD: packages/client/src/ui/styles.ts (+143 lines)
+- MOD: packages/client/src/main.ts (+12 lines)
+
+## Tests
+- 292 tests passing (264 shared + 28 server)
+- Client builds clean, no TypeScript errors
+- Manual testing: info panel displays correctly, overlays render on map
+
+## Next
+Phase 3: Economy Foundation — resources, deposits, production gating

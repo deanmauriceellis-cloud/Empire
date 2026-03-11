@@ -1,5 +1,14 @@
 # Empire Reborn — Changelog
 
+## v0.31.0 — Session 042 (2026-03-10)
+
+### UI — Phase 2: Unit Info Panel & Vision (PLAN-UNIFIED)
+- **Unit info panel** — rich right-sidebar panel with unit icon, segmented HP bar, movement/terrain/strength stats, behavior label, GoTo destination + ETA, embarked ship info, cargo manifest
+- **City info panel** — production display with progress bar, turns remaining, owner label
+- **Vision range overlay** — translucent blue diamond ring on adjacent tiles when unit selected, pulsing animation
+- **GoTo path overlay** — animated dashed orange line from unit to destination with crawling dash effect
+- **GoTo target marker** — pulsing orange diamond on destination tile
+
 ## v0.30.0 — Session 041 (2026-03-10)
 
 ### Graphics — Phase 1: Graphics Foundation (PLAN-UNIFIED)
