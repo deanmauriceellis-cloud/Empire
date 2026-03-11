@@ -32,6 +32,10 @@ import {
   canAffordBuilding,
   depositToBuildingType,
   isCityUpgradeType,
+  isDefensiveStructureType,
+  isNavalStructureType,
+  isStructureType,
+  canStructureTarget,
   cityHasUpgradeSlot,
   cityHasUpgradeType,
 } from "./buildings.js";
@@ -69,6 +73,7 @@ import {
   techVisionBonus,
   techCityHealRate,
   techShipsHealAtSea,
+  canBuildStructure,
 } from "./tech.js";
 
 // ─── RNG ────────────────────────────────────────────────────────────────────────
@@ -256,6 +261,268 @@ export function disembarkUnit(state: GameState, unitId: number): void {
   unit.shipId = null;
 }
 
+// ─── Building/Structure Helpers ──────────────────────────────────────────────────
+
+/** Find a completed bridge building at a given location. */
+export function findBridgeAtLoc(state: GameState, loc: Loc): BuildingState | undefined {
+  return state.buildings.find(
+    (b) => b.loc === loc && b.type === BuildingType.Bridge && b.complete,
+  );
+}
+
+/** Find a completed structure at a given location owned by a specific player. */
+export function findStructureAtLoc(state: GameState, loc: Loc, owner?: Owner): BuildingState | undefined {
+  return state.buildings.find(
+    (b) => b.loc === loc && b.complete && isStructureType(b.type) &&
+    (owner === undefined || b.owner === owner),
+  );
+}
+
+/** Find all completed structures of a given owner. */
+export function findOwnerStructures(state: GameState, owner: Owner): BuildingState[] {
+  return state.buildings.filter(
+    (b) => b.owner === owner && b.complete && isStructureType(b.type),
+  );
+}
+
+/**
+ * Destroy a building: remove from state, clear references.
+ * Returns events.
+ */
+export function destroyBuilding(state: GameState, buildingId: number): TurnEvent[] {
+  const idx = state.buildings.findIndex((b) => b.id === buildingId);
+  if (idx === -1) return [];
+
+  const building = state.buildings[idx];
+  const attrs = BUILDING_ATTRIBUTES[building.type];
+
+  // Clear deposit reference if this is a deposit building
+  if (attrs.isDepositBuilding) {
+    const cell = state.map[building.loc];
+    if (cell.depositId !== null) {
+      const deposit = state.deposits[cell.depositId];
+      if (deposit.buildingId === buildingId) {
+        deposit.buildingId = null;
+        deposit.buildingComplete = false;
+        deposit.owner = Owner.Unowned;
+      }
+    }
+  }
+
+  // Clear city upgrade reference if this is a city upgrade
+  if (attrs.isCityUpgrade) {
+    const cell = state.map[building.loc];
+    if (cell.cityId !== null) {
+      const city = state.cities[cell.cityId];
+      city.upgradeIds = city.upgradeIds.filter((id) => id !== buildingId);
+    }
+  }
+
+  // Kill the constructor if still building
+  const events: TurnEvent[] = [];
+  if (building.constructorId !== null) {
+    events.push(...killUnit(state, building.constructorId));
+  }
+
+  // Remove from buildings array
+  state.buildings.splice(idx, 1);
+
+  events.push({
+    type: "structure",
+    loc: building.loc,
+    description: `${attrs.name} was destroyed`,
+    data: { buildingId, buildingType: building.type, owner: building.owner },
+  });
+
+  return events;
+}
+
+/**
+ * Deal damage to a structure. If HP reaches 0, destroy it.
+ * Returns events.
+ */
+export function bombardStructure(
+  state: GameState,
+  attacker: UnitState,
+  building: BuildingState,
+): TurnEvent[] {
+  const events: TurnEvent[] = [];
+  const attAttrs = UNIT_ATTRIBUTES[attacker.type];
+  const bldgAttrs = BUILDING_ATTRIBUTES[building.type];
+  const damage = getEffectiveStrength(state, attacker);
+
+  building.hp -= damage;
+
+  if (building.hp <= 0) {
+    events.push({
+      type: "combat",
+      loc: building.loc,
+      description: `${attAttrs.article} bombarded and destroyed ${bldgAttrs.name}`,
+      data: { winnerId: attacker.id, buildingId: building.id, bombard: true },
+    });
+    events.push(...destroyBuilding(state, building.id));
+  } else {
+    events.push({
+      type: "combat",
+      loc: building.loc,
+      description: `${attAttrs.article} bombarded ${bldgAttrs.name} (${building.hp} HP left)`,
+      data: { attackerId: attacker.id, buildingId: building.id, bombard: true, remainingHp: building.hp },
+    });
+  }
+
+  attacker.moved += 1;
+  return events;
+}
+
+/**
+ * Trigger a mine (land or sea). Deals mine strength to the entering unit.
+ * Mine is destroyed after triggering.
+ */
+export function triggerMine(
+  state: GameState,
+  mine: BuildingState,
+  victim: UnitState,
+): TurnEvent[] {
+  const events: TurnEvent[] = [];
+  const mineAttrs = BUILDING_ATTRIBUTES[mine.type];
+  const victimAttrs = UNIT_ATTRIBUTES[victim.type];
+
+  victim.hits -= mineAttrs.strength;
+
+  if (victim.hits <= 0) {
+    events.push({
+      type: "combat",
+      loc: mine.loc,
+      description: `${victimAttrs.article} hit a ${mineAttrs.name} and was destroyed`,
+      data: { loserId: victim.id, buildingId: mine.id, mine: true },
+    });
+    events.push(...killUnit(state, victim.id));
+  } else {
+    events.push({
+      type: "combat",
+      loc: mine.loc,
+      description: `${victimAttrs.article} hit a ${mineAttrs.name} (${victim.hits} HP left)`,
+      data: { defenderId: victim.id, buildingId: mine.id, mine: true, remainingHp: victim.hits },
+    });
+  }
+
+  // Destroy the mine (single-use)
+  events.push(...destroyBuilding(state, mine.id));
+  return events;
+}
+
+/**
+ * Check and trigger mines at a location for an entering unit.
+ * Called after unit moves to a new tile.
+ */
+export function checkMineTrigger(
+  state: GameState,
+  unit: UnitState,
+): TurnEvent[] {
+  // Find enemy mines at unit's location
+  const mine = state.buildings.find(
+    (b) => b.loc === unit.loc && b.complete && b.owner !== unit.owner &&
+    BUILDING_ATTRIBUTES[b.type].singleUse &&
+    canStructureTarget(b.type, unit.type),
+  );
+  if (!mine) return [];
+  return triggerMine(state, mine, unit);
+}
+
+/**
+ * Auto-attack from all completed structures for a given owner.
+ * Structures with strength > 0 and attackRange fire at nearest valid enemy.
+ * Bunkers (range 0) auto-attack adjacent enemies.
+ */
+export function autoAttackStructures(state: GameState, owner: Owner): TurnEvent[] {
+  const events: TurnEvent[] = [];
+  const structures = findOwnerStructures(state, owner);
+
+  for (const structure of structures) {
+    const attrs = BUILDING_ATTRIBUTES[structure.type];
+    if (attrs.strength <= 0) continue;
+    if (attrs.singleUse) continue; // mines trigger on entry, not auto-attack
+
+    const range = attrs.attackRange === 0 ? 1 : attrs.attackRange;
+
+    // Find nearest valid enemy target within range
+    let bestTarget: UnitState | null = null;
+    let bestDist = INFINITY;
+
+    for (const unit of state.units) {
+      if (unit.owner === owner || unit.shipId !== null) continue;
+      if (!canStructureTarget(structure.type, unit.type)) continue;
+
+      const d = chebyshevDist(state, structure.loc, unit.loc);
+      // Bunkers (attackRange 0) only hit adjacent (d === 1)
+      // Ranged structures hit within range but not at their own tile
+      if (attrs.attackRange === 0) {
+        if (d !== 1) continue;
+      } else {
+        if (d < 1 || d > range) continue;
+      }
+
+      if (d < bestDist) {
+        bestDist = d;
+        bestTarget = unit;
+      }
+    }
+
+    if (bestTarget) {
+      // Deal damage (no return fire, like bombardment)
+      bestTarget.hits -= attrs.strength;
+      if (bestTarget.hits <= 0) {
+        events.push({
+          type: "combat",
+          loc: bestTarget.loc,
+          description: `${attrs.name} destroyed ${UNIT_ATTRIBUTES[bestTarget.type].article}`,
+          data: { buildingId: structure.id, loserId: bestTarget.id, autoAttack: true },
+        });
+        events.push(...killUnit(state, bestTarget.id));
+      } else {
+        events.push({
+          type: "combat",
+          loc: bestTarget.loc,
+          description: `${attrs.name} fired at ${UNIT_ATTRIBUTES[bestTarget.type].article} (${bestTarget.hits} HP left)`,
+          data: { buildingId: structure.id, defenderId: bestTarget.id, autoAttack: true, remainingHp: bestTarget.hits },
+        });
+      }
+    }
+  }
+
+  return events;
+}
+
+/**
+ * Scan vision for all completed structures with visionRadius > 0 (Radar Stations).
+ * Called during turn execution to ensure persistent vision.
+ */
+export function scanStructureVision(state: GameState, owner: Owner): void {
+  for (const building of state.buildings) {
+    if (building.owner !== owner || !building.complete) continue;
+    const attrs = BUILDING_ATTRIBUTES[building.type];
+    if (attrs.visionRadius <= 0) continue;
+    scan(state, owner, building.loc, attrs.visionRadius);
+  }
+}
+
+/**
+ * Collect oil income from completed offshore platforms.
+ * Each platform produces 1 oil per turn.
+ */
+export function collectPlatformIncome(state: GameState, owner: Owner): TurnEvent[] {
+  let oilIncome = 0;
+  for (const building of state.buildings) {
+    if (building.owner !== owner || !building.complete) continue;
+    if (building.type !== BuildingType.OffshorePlatform) continue;
+    oilIncome += 1;
+  }
+  if (oilIncome > 0) {
+    state.resources[owner][ResourceType.Oil] += oilIncome;
+  }
+  return [];
+}
+
 // ─── Vision ─────────────────────────────────────────────────────────────────────
 
 /** Create a fresh (unseen) view map. */
@@ -405,6 +672,12 @@ export function goodLoc(state: GameState, unit: UnitState, loc: Loc): boolean {
   if (unit.type === UnitType.Fighter) {
     const carrier = findNonFullShip(state, UnitType.Carrier, loc, unit.owner);
     if (carrier) return true;
+  }
+
+  // Land units can cross bridges on water tiles
+  if (cell.terrain === TerrainType.Sea) {
+    const bridge = findBridgeAtLoc(state, loc);
+    if (bridge && canTraverse(unit.type, TerrainType.Land)) return true;
   }
 
   return false;
@@ -994,6 +1267,7 @@ export function startBuildOnDeposit(
     buildTime: attrs.buildTime,
     complete: false,
     constructorId: unit.id,
+    hp: 0,
   };
   state.buildings.push(building);
   deposit.buildingId = building.id;
@@ -1080,6 +1354,7 @@ export function startBuildCityUpgrade(
     buildTime: BUILDING_ATTRIBUTES[buildingType].buildTime,
     complete: false,
     constructorId: unit.id,
+    hp: 0,
   };
   state.buildings.push(building);
   city.upgradeIds.push(building.id);
@@ -1139,6 +1414,75 @@ export function tickBuildingConstruction(state: GameState): TurnEvent[] {
   }
 
   return events;
+}
+
+/**
+ * Start building a defensive/naval structure.
+ * Construction unit builds defensive structures on land.
+ * Engineer Boat builds naval structures on water.
+ * Resources are consumed immediately. Returns events.
+ */
+export function startBuildStructure(
+  state: GameState,
+  constructorId: number,
+  buildingType: BuildingType,
+): TurnEvent[] {
+  const unit = findUnit(state, constructorId);
+  if (!unit) return [];
+
+  const attrs = BUILDING_ATTRIBUTES[buildingType];
+  const cell = state.map[unit.loc];
+
+  // Validate builder type vs structure type
+  if (attrs.isDefensiveStructure) {
+    if (unit.type !== UnitType.Construction) return [];
+    // Must be on land (not water, not city)
+    if (cell.terrain !== TerrainType.Land) return [];
+    // No other structure already at this location
+    if (state.buildings.some((b) => b.loc === unit.loc && isStructureType(b.type))) return [];
+  } else if (attrs.isNavalStructure) {
+    if (unit.type !== UnitType.EngineerBoat) return [];
+    // Must be on water
+    if (cell.terrain !== TerrainType.Sea) return [];
+    // No other structure already at this location
+    if (state.buildings.some((b) => b.loc === unit.loc && isStructureType(b.type))) return [];
+  } else {
+    return []; // not a structure type
+  }
+
+  // Tech gating
+  if (!canBuildStructure(state, unit.owner, buildingType)) return [];
+
+  // Check affordability
+  const res = state.resources[unit.owner];
+  if (!canAffordBuilding(res, buildingType, 1)) return [];
+
+  // Consume resources
+  for (let i = 0; i < NUM_RESOURCE_TYPES; i++) {
+    res[i] -= attrs.cost[i];
+  }
+
+  // Create building
+  const building: BuildingState = {
+    id: state.nextBuildingId++,
+    loc: unit.loc,
+    type: buildingType,
+    owner: unit.owner,
+    level: 1,
+    work: 0,
+    buildTime: attrs.buildTime,
+    complete: false,
+    constructorId: unit.id,
+    hp: attrs.maxHp,
+  };
+  state.buildings.push(building);
+
+  return [{
+    type: "building",
+    loc: unit.loc,
+    description: `Construction started: ${attrs.name}`,
+    data: { buildingId: building.id, buildingType, constructorId: unit.id },
+  }];
 }
 
 /**
@@ -1224,6 +1568,10 @@ export function processAction(
       if (!goodLoc(state, unit, action.loc)) break;
       if (unit.moved >= objMoves(unit)) break;
       moveUnit(state, unit, action.loc);
+      // Check for mine triggers at destination
+      if (findUnit(state, action.unitId)) {
+        events.push(...checkMineTrigger(state, unit));
+      }
       break;
     }
 
@@ -1314,6 +1662,15 @@ export function processAction(
       break;
     }
 
+    case "buildStructure": {
+      const unit = findUnit(state, action.unitId);
+      if (!unit || unit.owner !== owner) break;
+      // Construction builds defensive structures, EngineerBoat builds naval structures
+      if (unit.type !== UnitType.Construction && unit.type !== UnitType.EngineerBoat) break;
+      events.push(...startBuildStructure(state, action.unitId, action.buildingType));
+      break;
+    }
+
     case "bombard": {
       const unit = findUnit(state, action.unitId);
       if (!unit || unit.owner !== owner) break;
@@ -1325,6 +1682,16 @@ export function processAction(
       );
       if (target) {
         events.push(...bombardUnit(state, unit, target));
+      }
+      // Also check for enemy structure at target
+      if (!target) {
+        const targetBuilding = state.buildings.find(
+          (b) => b.loc === action.targetLoc && b.owner !== owner && b.complete &&
+          isStructureType(b.type),
+        );
+        if (targetBuilding) {
+          events.push(...bombardStructure(state, unit, targetBuilding));
+        }
       }
       break;
     }
@@ -1507,6 +1874,14 @@ function behaviorMove(
   if (goodLoc(state, unit, targetLoc)) {
     moveUnit(state, unit, targetLoc);
     scan(state, owner, unit.loc);
+    // Check for mine triggers at destination
+    if (findUnit(state, unit.id)) {
+      const mineEvents = checkMineTrigger(state, unit);
+      events.push(...mineEvents);
+      if (!findUnit(state, unit.id)) {
+        return { events, moved: true, died: true };
+      }
+    }
     return { events, moved: true, died: false };
   }
 
@@ -2176,6 +2551,10 @@ export function executeTurn(
   events.push(...processUnitBehaviors(state, Owner.Player1, movedUnits1));
   events.push(...processUnitBehaviors(state, Owner.Player2, movedUnits2));
 
+  // Defensive structure auto-attack (fire at nearby enemies)
+  events.push(...autoAttackStructures(state, Owner.Player1));
+  events.push(...autoAttackStructures(state, Owner.Player2));
+
   // Move satellites (for both players)
   const satellites = state.units.filter((u) => u.type === UnitType.Satellite);
   for (const sat of satellites) {
@@ -2185,6 +2564,10 @@ export function executeTurn(
   // Collect resource income (before production, so new income can fund new builds)
   events.push(...collectResourceIncome(state, Owner.Player1));
   events.push(...collectResourceIncome(state, Owner.Player2));
+
+  // Collect offshore platform income
+  collectPlatformIncome(state, Owner.Player1);
+  collectPlatformIncome(state, Owner.Player2);
 
   // Tick city production (resources consumed when production starts)
   events.push(...tickCityProduction(state, Owner.Player1));
@@ -2196,6 +2579,10 @@ export function executeTurn(
   // Collect tech research from completed city upgrades
   collectTechResearch(state, Owner.Player1);
   collectTechResearch(state, Owner.Player2);
+
+  // Scan vision from structures with visionRadius (Radar Stations)
+  scanStructureVision(state, Owner.Player1);
+  scanStructureVision(state, Owner.Player2);
 
   // Repair ships in port
   repairShips(state, Owner.Player1, movedUnits1);

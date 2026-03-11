@@ -49,6 +49,9 @@ export interface ActionCollector {
   /** Build city upgrade (construction unit at own city). */
   buildCityUpgrade(unitId: number, cityId: number, buildingType: BuildingType): void;
 
+  /** Build a defensive/naval structure (construction unit or engineer boat). */
+  buildStructure(unitId: number, buildingType: BuildingType): void;
+
   /** Bombard a target location with a ranged unit. Returns true if valid. */
   bombardTarget(unitId: number, targetLoc: Loc): boolean;
 
@@ -163,6 +166,13 @@ export function createActionCollector(game: SinglePlayerGame): ActionCollector {
 
     buildCityUpgrade(unitId: number, cityId: number, buildingType: BuildingType): void {
       const action: PlayerAction = { type: "buildCityUpgrade", unitId, cityId, buildingType };
+      actions.push(action);
+      const events = applyAction(action);
+      turnEvents.push(...events);
+    },
+
+    buildStructure(unitId: number, buildingType: BuildingType): void {
+      const action: PlayerAction = { type: "buildStructure", unitId, buildingType };
       actions.push(action);
       const events = applyAction(action);
       turnEvents.push(...events);

@@ -147,7 +147,7 @@ function addDeposit(
 
 describe("building attributes", () => {
   it("has attributes for all building types", () => {
-    expect(BUILDING_ATTRIBUTES).toHaveLength(9);
+    expect(BUILDING_ATTRIBUTES).toHaveLength(19);
   });
 
   it("deposit buildings have correct types", () => {
@@ -341,7 +341,7 @@ describe("build city upgrade", () => {
     // Add an existing complete university
     state.buildings.push({
       id: 0, loc: cityLoc, type: BuildingType.University, owner: Owner.Player1,
-      level: 1, work: 8, buildTime: 8, complete: true, constructorId: null,
+      level: 1, work: 8, buildTime: 8, complete: true, constructorId: null, hp: 0,
     });
     city.upgradeIds = [0];
     state.nextBuildingId = 1;
@@ -395,7 +395,7 @@ describe("build city upgrade", () => {
     // Add a level 2 complete university
     state.buildings.push({
       id: 0, loc: cityLoc, type: BuildingType.University, owner: Owner.Player1,
-      level: 2, work: 6, buildTime: 6, complete: true, constructorId: null,
+      level: 2, work: 6, buildTime: 6, complete: true, constructorId: null, hp: 0,
     });
     city.upgradeIds = [0];
     state.nextBuildingId = 1;
@@ -417,7 +417,7 @@ describe("build city upgrade", () => {
 
     state.buildings.push({
       id: 0, loc: cityLoc, type: BuildingType.University, owner: Owner.Player1,
-      level: 3, work: 8, buildTime: 8, complete: true, constructorId: null,
+      level: 3, work: 8, buildTime: 8, complete: true, constructorId: null, hp: 0,
     });
     city.upgradeIds = [0];
     state.nextBuildingId = 1;
@@ -548,7 +548,7 @@ describe("collectTechResearch", () => {
     const state = createTestState();
     state.buildings.push({
       id: 0, loc: rowColLoc(5, 5), type: BuildingType.University, owner: Owner.Player1,
-      level: 1, work: 8, buildTime: 8, complete: true, constructorId: null,
+      level: 1, work: 8, buildTime: 8, complete: true, constructorId: null, hp: 0,
     });
 
     collectTechResearch(state, Owner.Player1);
@@ -559,7 +559,7 @@ describe("collectTechResearch", () => {
     const state = createTestState();
     state.buildings.push({
       id: 0, loc: rowColLoc(5, 5), type: BuildingType.University, owner: Owner.Player1,
-      level: 2, work: 6, buildTime: 6, complete: true, constructorId: null,
+      level: 2, work: 6, buildTime: 6, complete: true, constructorId: null, hp: 0,
     });
 
     collectTechResearch(state, Owner.Player1);
@@ -570,7 +570,7 @@ describe("collectTechResearch", () => {
     const state = createTestState();
     state.buildings.push({
       id: 0, loc: rowColLoc(5, 5), type: BuildingType.University, owner: Owner.Player1,
-      level: 1, work: 3, buildTime: 8, complete: false, constructorId: 99,
+      level: 1, work: 3, buildTime: 8, complete: false, constructorId: 99, hp: 0,
     });
 
     collectTechResearch(state, Owner.Player1);
@@ -581,7 +581,7 @@ describe("collectTechResearch", () => {
     const state = createTestState();
     state.buildings.push({
       id: 0, loc: rowColLoc(5, 5), type: BuildingType.Shipyard, owner: Owner.Player1,
-      level: 1, work: 8, buildTime: 8, complete: true, constructorId: null,
+      level: 1, work: 8, buildTime: 8, complete: true, constructorId: null, hp: 0,
     });
 
     collectTechResearch(state, Owner.Player1);
@@ -591,9 +591,9 @@ describe("collectTechResearch", () => {
   it("multiple buildings accumulate research", () => {
     const state = createTestState();
     state.buildings.push(
-      { id: 0, loc: rowColLoc(5, 5), type: BuildingType.University, owner: Owner.Player1, level: 1, work: 8, buildTime: 8, complete: true, constructorId: null },
-      { id: 1, loc: rowColLoc(10, 10), type: BuildingType.Hospital, owner: Owner.Player1, level: 2, work: 6, buildTime: 6, complete: true, constructorId: null },
-      { id: 2, loc: rowColLoc(15, 15), type: BuildingType.TechLab, owner: Owner.Player1, level: 3, work: 10, buildTime: 10, complete: true, constructorId: null },
+      { id: 0, loc: rowColLoc(5, 5), type: BuildingType.University, owner: Owner.Player1, level: 1, work: 8, buildTime: 8, complete: true, constructorId: null, hp: 0 },
+      { id: 1, loc: rowColLoc(10, 10), type: BuildingType.Hospital, owner: Owner.Player1, level: 2, work: 6, buildTime: 6, complete: true, constructorId: null, hp: 0 },
+      { id: 2, loc: rowColLoc(15, 15), type: BuildingType.TechLab, owner: Owner.Player1, level: 3, work: 10, buildTime: 10, complete: true, constructorId: null, hp: 0 },
     );
 
     collectTechResearch(state, Owner.Player1);

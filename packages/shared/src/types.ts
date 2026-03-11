@@ -52,6 +52,7 @@ export interface BuildingState {
   buildTime: number;           // total work needed
   complete: boolean;           // true when fully built
   constructorId: number | null; // unit ID of construction unit (null when complete)
+  hp: number;                  // hit points (0 for non-combat buildings, >0 for structures)
 }
 
 // ─── City State ──────────────────────────────────────────────────────────────
@@ -140,6 +141,7 @@ export type PlayerAction =
   | { type: "disembark"; unitId: number }
   | { type: "buildOnDeposit"; unitId: number }
   | { type: "buildCityUpgrade"; unitId: number; cityId: number; buildingType: BuildingType }
+  | { type: "buildStructure"; unitId: number; buildingType: BuildingType }
   | { type: "bombard"; unitId: number; targetLoc: Loc }
   | { type: "endTurn" }
   | { type: "resign" };
@@ -147,7 +149,7 @@ export type PlayerAction =
 // ─── Turn Result ─────────────────────────────────────────────────────────────
 
 export interface TurnEvent {
-  type: "combat" | "capture" | "production" | "death" | "discovery" | "stall" | "income" | "building";
+  type: "combat" | "capture" | "production" | "death" | "discovery" | "stall" | "income" | "building" | "structure";
   loc: Loc;
   description: string;
   data?: Record<string, unknown>;

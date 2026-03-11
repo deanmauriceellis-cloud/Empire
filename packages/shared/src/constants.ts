@@ -240,9 +240,21 @@ export enum BuildingType {
   MilitaryAcademy = 6, // +war research/turn
   Shipyard = 7,       // ship build time reduction
   Airfield = 8,       // fighter range bonus
+  // Defensive structures (built by construction unit on land)
+  Bunker = 9,         // armies inside get +2 defense, auto-attacks adjacent
+  AntiAir = 10,       // attacks fighters/AWACS within 2 tiles
+  CoastalBattery = 11, // attacks ships within 2 tiles
+  RadarStation = 12,  // 5-tile permanent reveal, detects subs within 3
+  ArtilleryFort = 13, // long-range land bombardment, range 3
+  Minefield = 14,     // invisible, damages first enemy to enter, single-use
+  SAMSite = 15,       // anti-air, 3-tile range
+  // Naval structures (built by engineer boat on water)
+  Bridge = 16,        // armies cross water, destroyable
+  SeaMine = 17,       // invisible, damages first ship, single-use
+  OffshorePlatform = 18, // +1 oil/turn, must be adjacent to coast
 }
 
-export const NUM_BUILDING_TYPES = 9;
+export const NUM_BUILDING_TYPES = 19;
 
 /** First 3 are deposit buildings, rest are city upgrades */
 export const DEPOSIT_BUILDING_TYPES: readonly BuildingType[] = [
@@ -254,10 +266,23 @@ export const CITY_UPGRADE_TYPES: readonly BuildingType[] = [
   BuildingType.MilitaryAcademy, BuildingType.Shipyard, BuildingType.Airfield,
 ] as const;
 
+export const DEFENSIVE_STRUCTURE_TYPES: readonly BuildingType[] = [
+  BuildingType.Bunker, BuildingType.AntiAir, BuildingType.CoastalBattery,
+  BuildingType.RadarStation, BuildingType.ArtilleryFort, BuildingType.Minefield,
+  BuildingType.SAMSite,
+] as const;
+
+export const NAVAL_STRUCTURE_TYPES: readonly BuildingType[] = [
+  BuildingType.Bridge, BuildingType.SeaMine, BuildingType.OffshorePlatform,
+] as const;
+
 export const BUILDING_NAMES: readonly string[] = [
   "Mine", "Oil Well", "Textile Farm",
   "University", "Hospital", "Tech Lab",
   "Military Academy", "Shipyard", "Airfield",
+  "Bunker", "Anti-Air Battery", "Coastal Battery",
+  "Radar Station", "Artillery Fort", "Minefield",
+  "SAM Site", "Bridge", "Sea Mine", "Offshore Platform",
 ] as const;
 
 /** Max upgrade slots per city */

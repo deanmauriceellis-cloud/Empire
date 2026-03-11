@@ -159,6 +159,23 @@ export function canProduceUnit(state: GameState, owner: Owner, unitType: UnitTyp
   return true;
 }
 
+// ─── Structure Tech Gating ───────────────────────────────────────────────────
+
+import { BuildingType } from "./constants.js";
+import { STRUCTURE_TECH_REQUIREMENTS } from "./buildings.js";
+
+/** Check if a player has the tech to build a given structure type. */
+export function canBuildStructure(state: GameState, owner: Owner, buildingType: BuildingType): boolean {
+  const reqs = STRUCTURE_TECH_REQUIREMENTS[buildingType];
+  if (!reqs || reqs.length === 0) return true;
+
+  const tech = state.techResearch[owner];
+  for (const req of reqs) {
+    if (getTechLevel(tech[req.track]) < req.level) return false;
+  }
+  return true;
+}
+
 // ─── Effective Unit Stats ─────────────────────────────────────────────────────
 
 import { UNIT_ATTRIBUTES } from "./units.js";

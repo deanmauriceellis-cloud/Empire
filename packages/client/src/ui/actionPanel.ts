@@ -5,7 +5,9 @@ import {
   UNIT_ATTRIBUTES, Owner, UnitType, UnitBehavior,
   objMoves, BuildingType, BUILDING_NAMES,
   CITY_UPGRADE_TYPES, MAX_CITY_UPGRADES,
-  BUILDING_ATTRIBUTES, DepositType,
+  BUILDING_ATTRIBUTES, DepositType, TerrainType,
+  DEFENSIVE_STRUCTURE_TYPES, NAVAL_STRUCTURE_TYPES,
+  isStructureType, canBuildStructure,
 } from "@empire/shared";
 import type { UnitState, GameState } from "@empire/shared";
 
@@ -155,6 +157,56 @@ export function createActionPanel(): ActionPanel {
                       `Upgrade ${BUILDING_NAMES[b.type]} Lv${b.level + 1}`,
                       "",
                       `build-upgrade-${b.type}`,
+                    ));
+                  }
+                }
+              }
+            }
+            // Defensive structures on land tiles (not city, not deposit)
+            if (cell.terrain === TerrainType.Land && cell.cityId === null) {
+              const hasStructureHere = gameState.buildings.some(
+                (b) => b.loc === u.loc && isStructureType(b.type),
+              );
+              if (!hasStructureHere) {
+                for (const sType of DEFENSIVE_STRUCTURE_TYPES) {
+                  if (canBuildStructure(gameState, u.owner, sType)) {
+                    parts.push(btn(
+                      `Build ${BUILDING_NAMES[sType]}`,
+                      "",
+                      `build-structure-${sType}`,
+                    ));
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Engineer Boat context actions
+        if (u.type === UnitType.EngineerBoat) {
+          const isBuilding = gameState.buildings.some(
+            (b) => b.constructorId === u.id && !b.complete,
+          );
+          if (isBuilding) {
+            const building = gameState.buildings.find((b) => b.constructorId === u.id && !b.complete)!;
+            const pct = Math.floor((building.work / building.buildTime) * 100);
+            parts.push(`<div class="section-label">Building</div>`);
+            parts.push(`<div style="color:#4c8;font-size:11px;margin-bottom:4px">` +
+              `${BUILDING_NAMES[building.type]} — ${pct}%</div>`);
+          } else {
+            const cell = gameState.map[u.loc];
+            if (cell.terrain === TerrainType.Sea) {
+              const hasStructureHere = gameState.buildings.some(
+                (b) => b.loc === u.loc && isStructureType(b.type),
+              );
+              if (!hasStructureHere) {
+                parts.push(`<div class="section-label">Build</div>`);
+                for (const sType of NAVAL_STRUCTURE_TYPES) {
+                  if (canBuildStructure(gameState, u.owner, sType)) {
+                    parts.push(btn(
+                      `Build ${BUILDING_NAMES[sType]}`,
+                      "",
+                      `build-structure-${sType}`,
                     ));
                   }
                 }

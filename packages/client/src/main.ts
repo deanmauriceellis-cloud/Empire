@@ -1110,6 +1110,15 @@ async function init() {
             }
           }
         }
+        // Handle build-structure-N actions (defensive/naval structures)
+        if (action.startsWith("build-structure-") && selection.selectedUnitId !== null && mode === "singleplayer") {
+          const buildingType = parseInt(action.replace("build-structure-", ""), 10);
+          if (!isNaN(buildingType)) {
+            collector.buildStructure(selection.selectedUnitId, buildingType);
+            ui.turnFlow.markDone(selection.selectedUnitId);
+            advanceToNextUnit();
+          }
+        }
         break;
     }
   }
