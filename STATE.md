@@ -11,7 +11,7 @@
 - **PLAN-UNIFIED.md** is the definitive plan for all future implementation
 
 ## Latest commit
-`381eeb4` — session 041: Phase 1 graphics foundation — ocean overhaul, detailed unit sprites, enhanced effects
+`2fd43ef` — session 041: add session log, update CHANGELOG and STATE.md
 
 ## Completed (session 041) — Graphics Foundation
 - [x] Multi-depth ocean: deep/coastal/shore textures by adjacent land count
