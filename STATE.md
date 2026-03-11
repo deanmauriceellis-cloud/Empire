@@ -1,17 +1,17 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-KINGDOM Phase 12 complete** — Dynamic Map & Player Join (pre-allocated grid, world expansion, AI strength gradient, spawn protection, world browser info)
+**PLAN-KINGDOM Phase 13 complete** — Accounts & Persistence (auth, user DB, kingdom lifecycle, login UI)
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phases 1-12 of expansion plan complete
-- 701 tests passing (651 shared + 50 server)
+- Phases 1-13 of expansion plan complete
+- 719 tests passing (651 shared + 68 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-KINGDOM.md** is the definitive plan (17 phases: gameplay → kingdom MMO → monetization)
 
 ## Latest commit
-session 056: Phase 12 — Dynamic Map & Player Join
+session 057: Phase 13 — Accounts & Persistence
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
@@ -21,8 +21,24 @@ session 056: Phase 12 — Dynamic Map & Player Join
 - Crown city relocate action not yet implemented (UI button deferred)
 - Multiplayer server doesn't yet send kingdom data to client
 - World mode: monthly reset/season rewards not yet implemented
-- World mode: reconnection uses trust-based playerId (Phase 13 adds JWT auth)
 - Spawn protection enforcement not yet in executeTurn (needs world context in game engine)
+
+## Completed (session 057) — Phase 13: Accounts & Persistence
+- [x] 13A: Authentication — bcrypt hashing, JWT access/refresh tokens, validation
+- [x] 13B: Player Database — users table (case-insensitive unique), kingdoms table, index
+- [x] 13C: REST Endpoints — register, login, refresh, profile (Bearer auth)
+- [x] 13D: WebSocket Auth — authenticate message, token verification, auth_kingdoms
+- [x] 13E: Protected Routes — join_world/reconnect_world require JWT; classic mode unchanged
+- [x] 13F: Kingdom DB Records — created on join, validated on reconnect, status tracking
+- [x] 13G: Client Auth — AuthClient, localStorage persistence, auto-authenticate, token refresh
+- [x] 13H: Login UI — login/register screens, main menu status, world browser reconnect buttons
+- [x] 13I: Protocol — authenticate, authenticated, auth_error, auth_kingdoms, AuthKingdomInfo
+- [x] 18 new tests, 719 total (651 shared + 68 server)
+- [ ] Deferred: OAuth providers (Google, Discord, GitHub)
+- [ ] Deferred: Email verification, password reset
+- [ ] Deferred: Admin tools (kick/ban, force-save)
+- [ ] Deferred: World persistence improvements (zlib, periodic backups)
+- [ ] Deferred: Abandoned kingdom dissolution (30d timeout)
 
 ## Completed (session 056) — Phase 12: Dynamic Map & Player Join
 - [x] 12A: placeKingdomTile() — on-demand kingdom generation with terrain, cities, deposits, player, crown city, vision
@@ -356,8 +372,8 @@ R1 and R5 can run in parallel (no dependencies). R2 and R3 depend on R1. R6 depe
 5. ~~**Phase 10**: Crown City & Kingdom System~~ ✓ (session 053)
 6. ~~**Phase 11**: Kingdom World Server~~ ✓ (sessions 054-055)
 7. ~~**Phase 12**: Dynamic Map & Player Join~~ ✓ (session 056)
-8. **Phase 13**: Accounts & Persistence — auth, player DB, kingdom lifecycle (1-2 sessions, NEXT)
-9. **Phase 14**: Delta Sync & Scaling — efficient updates for 50+ players (1-2 sessions)
+8. ~~**Phase 13**: Accounts & Persistence~~ ✓ (session 057)
+9. **Phase 14**: Delta Sync & Scaling — efficient updates for 50+ players (1-2 sessions, NEXT)
 10. **Phase 15**: Monetization — Stripe, cosmetics, VIP, season pass (2-3 sessions)
 11. **Phase 16**: Movement Trails & Spectacle — visual polish (1 session)
 12. **Phase 17**: Balance, Tuning & Launch — performance, AI, launch prep (1-2 sessions)

@@ -1,5 +1,21 @@
 # Empire Reborn — Changelog
 
+## v0.46.0 — Session 057 (2026-03-11)
+
+### Phase 13: Accounts & Persistence
+- **Authentication**: bcrypt password hashing, JWT access (7d) + refresh (30d) tokens with strict separation
+- **User database**: `users` table with case-insensitive unique usernames, `kingdoms` table linking users to worlds
+- **REST API**: `/api/auth/register`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/me` endpoints
+- **WebSocket auth**: `authenticate` message validates JWT, sends `auth_kingdoms` with active kingdom list
+- **Protected routes**: `join_world` and `reconnect_world` require authentication; classic mode unchanged
+- **Kingdom records**: DB records created on world join, validated on reconnect, status tracked
+- **Client auth**: `AuthClient` with localStorage persistence, auto-authenticate on WS connect, token refresh
+- **Login UI**: Login/Register screens with form validation, error display, Enter key support
+- **Main menu**: Shows logged-in username + logout button; Kingdom World requires login
+- **World browser**: "Your Kingdoms" section with reconnect buttons for existing kingdoms
+- **Protocol**: `authenticate`, `authenticated`, `auth_error`, `auth_kingdoms` message types; `AuthKingdomInfo`
+- **Tests**: 18 new auth tests; 719 total (651 shared + 68 server)
+
 ## v0.45.0 — Session 056 (2026-03-11)
 
 ### Phase 12: Dynamic Map & Player Join

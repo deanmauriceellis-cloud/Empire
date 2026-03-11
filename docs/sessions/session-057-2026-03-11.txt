@@ -1,0 +1,115 @@
+Session 057 — 2026-03-11
+Phase 13: Accounts & Persistence
+
+## Summary
+Implemented user accounts, JWT authentication, kingdom persistence in the database,
+and client login/register UI. Players must now authenticate to access Kingdom World
+mode. Kingdoms are recorded in the database and linked to user accounts for reconnection.
+
+## Changes
+
+### New Files
+- packages/server/src/auth.ts (~90 lines)
+  - bcrypt password hashing (10 rounds)
+  - JWT access tokens (7d) + refresh tokens (30d)
+  - Token verification with access/refresh separation
+  - Username validation (3-24 chars, alphanum + _-)
+  - Password validation (6-128 chars)
+
+- packages/client/src/net/auth.ts (~170 lines)
+  - AuthClient with login, register, logout, authenticateWs
+  - localStorage token persistence (token, refreshToken, username)
+  - Auto-restore session on page load
+  - Token refresh on expiry
+  - Server URL helper for dev/production
+
+- packages/server/src/__tests__/auth.test.ts (~170 lines)
+  - 18 new tests: password hashing, JWT tokens, validation, DB users/kingdoms
+
+### Modified Files
+- packages/server/src/database.ts (+106 lines)
+  - users table: id, username (case-insensitive unique), password_hash, timestamps
+  - kingdoms table: id, user_id, world_id, player_id, kingdom_name, isolation_level, status, timestamps
+  - Index on (user_id, world_id)
+  - UserRow, KingdomRow types
+  - Methods: createUser, getUserByUsername/ById, updateLastLogin
+  - Methods: createKingdom, getActiveKingdom(s), updateKingdomStatus/LastActive
+
+- packages/server/src/index.ts (+189 lines)
+  - WebSocket auth: wsAuth Map tracking authenticated connections
+  - authenticate message handler: verify JWT, lookup user, send auth_kingdoms
+  - AUTH_REQUIRED_TYPES set: join_world, reconnect_world require auth
+  - Auth passed to WorldServer.handleMessage()
+  - POST /api/auth/register — create account, return JWT tokens
+  - POST /api/auth/login — authenticate, return JWT tokens
+  - POST /api/auth/refresh — refresh expired access token
+  - GET /api/auth/me — user profile + active kingdoms (Bearer auth)
+  - CORS: added Authorization to allowed headers
+
+- packages/server/src/WorldServer.ts (+28 lines)
+  - handleMessage() accepts optional auth parameter
+  - handleJoinWorld() accepts auth, creates kingdom DB record on join
+  - handleReconnectWorld() accepts auth, validates kingdom ownership via DB
+  - Logs auth username on join
+
+- packages/shared/src/protocol.ts (+16 lines)
+  - ClientMessage: authenticate { token }
+  - ServerMessage: authenticated, auth_error, auth_kingdoms
+  - AuthKingdomInfo interface: worldId, playerId, kingdomName, status
+
+- packages/client/src/main.ts (+89 lines)
+  - Auth client initialization with serverUrl
+  - Message routing: auth messages handled first
+  - Auto-authenticate WS on connect (restoreSession)
+  - Menu actions: show-login, show-register, logout, login, register, reconnect-kingdom
+  - Login flow: authenticate → world browser
+  - World browser passes kingdoms for reconnection
+
+- packages/client/src/ui/menuScreens.ts (+99 lines)
+  - MenuAction: show-login, show-register, logout, login, register, reconnect-kingdom
+  - showLoginScreen(): login/register form with error display, Enter key support
+  - setLoggedInUser(): track logged-in state
+  - Main menu: shows username + logout, Kingdom World requires login
+  - World browser: "Your Kingdoms" section with reconnect buttons
+  - Auth form click handler with do-login/do-register data-menu actions
+
+- packages/client/src/ui/styles.ts (+75 lines)
+  - .auth-form: flex column layout for inputs
+  - .auth-form input: dark styled inputs with focus accent
+  - .auth-error: red error text
+  - .auth-status: muted login status line
+  - .auth-link: inline link-style button for logout
+  - .kingdoms-list, .kingdom-entry: reconnection list styling
+
+- packages/server/package.json: added bcryptjs, jsonwebtoken + @types
+- pnpm-lock.yaml: updated
+
+## Test Results
+- 651 shared tests passing (unchanged)
+- 68 server tests passing (50 existing + 18 new auth tests)
+- 719 total tests passing
+- Client builds clean
+
+## New Test Breakdown (18 tests)
+- Password Hashing (2): hash+verify, unique salts
+- JWT Tokens (5): create+verify access, reject refresh as access, reject access as refresh, verify refresh, reject invalid
+- Validation (2): username rules, password rules
+- Database Users (5): create+retrieve, case-insensitive unique, get by ID, null for nonexistent, update last_login
+- Database Kingdoms (4): create+retrieve, list active, update status, null for nonexistent
+
+## Architecture Decisions
+- JWT secret auto-generated at startup (override via JWT_SECRET env var)
+- Access and refresh tokens are distinct (can't use one as the other)
+- Username case-insensitive in DB (COLLATE NOCASE)
+- Auth required only for world mode (join/reconnect), classic mode unchanged
+- Kingdom records persist even when worlds are in memory
+- Client stores tokens in localStorage for cross-session persistence
+- Auth error on WS triggers token refresh attempt
+
+## Deferred
+- OAuth providers (Google, Discord, GitHub) — future phase
+- Email verification / password reset
+- Admin tools (kick/ban, force-save) — next sub-phase
+- World persistence improvements (zlib compression, periodic backups)
+- Kingdom lifecycle (abandoned kingdom dissolution after 30d)
+- Season rewards / leaderboard persistence
