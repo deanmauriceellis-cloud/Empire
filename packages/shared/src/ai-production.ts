@@ -1,13 +1,15 @@
 // Empire Reborn — AI Production Strategy
 
 import { Owner, UnitType, UnitBehavior, NUM_UNIT_TYPES } from "./constants.js";
-import { UNIT_ATTRIBUTES } from "./units.js";
+import { UNIT_ATTRIBUTES, canAffordUnit } from "./units.js";
 import type { Loc, ViewMapCell, CityState, UnitState, GameState, PlayerAction } from "./types.js";
 import { getAdjacentLocs } from "./utils.js";
 import { objCapacity } from "./game.js";
 import { mapContinent } from "./continent.js";
 import { VM_WATER, VM_ENEMY_CITY, VM_UNOWNED_CITY, VM_UNEXPLORED } from "./viewmap-chars.js";
 import { aiLog, getRatioTable, isCityCoastal, isCityOnLake } from "./ai-helpers.js";
+import { canProduceUnit } from "./tech.js";
+import { needsConstruction, canAffordProduction } from "./ai-economy.js";
 
 // ─── Step 4.1: AI Production Strategy ──────────────────────────────────────────
 
@@ -42,7 +44,7 @@ export function overproduced(prodCounts: number[], ratio: number[], unitType: Un
  * Find the unit type most needed based on ratio table.
  * Returns the UnitType with the greatest deficit.
  */
-export function needMore(prodCounts: number[], ratio: number[], onLake: boolean): UnitType {
+export function needMore(prodCounts: number[], ratio: number[], onLake: boolean, state?: GameState, aiOwner?: Owner): UnitType {
   let bestType = UnitType.Army;
   let bestDeficit = -Infinity;
   const totalRatio = ratio.reduce((a, b) => a + b, 0);
@@ -52,10 +54,14 @@ export function needMore(prodCounts: number[], ratio: number[], onLake: boolean)
     if (ratio[i] === 0) continue;
     // Inland/lake cities can't build ships — only armies and fighters
     if (onLake && i !== UnitType.Army && i !== UnitType.Fighter) continue;
-    // Never build carriers, satellites, construction, or Phase 7 units (AI economy is Phase 8)
-    if (i === UnitType.Carrier || i === UnitType.Satellite || i === UnitType.Construction) continue;
-    if (i === UnitType.Artillery || i === UnitType.SpecialForces || i === UnitType.AWACS ||
-        i === UnitType.MissileCruiser || i === UnitType.EngineerBoat) continue;
+    // Never build carriers, satellites via ratio table
+    if (i === UnitType.Carrier || i === UnitType.Satellite) continue;
+    // Construction is handled separately (not via ratio table)
+    if (i === UnitType.Construction) continue;
+    // Engineer boats are not yet AI-managed (low value)
+    if (i === UnitType.EngineerBoat) continue;
+    // Tech-gated units: skip if player doesn't have required tech
+    if (state && aiOwner !== undefined && !canProduceUnit(state, aiOwner, i as UnitType)) continue;
 
     const targetFraction = ratio[i] / totalRatio;
     const actualFraction = prodCounts[i] / totalProd;
@@ -112,6 +118,19 @@ export function decideProduction(
   // How far along is current production? (0.0 to 1.0, can be negative during penalty)
   const progress = city.work / currentAttrs.buildTime;
 
+  // Starvation check: if current production is unaffordable and hasn't started yet,
+  // switch to something the AI can actually afford (Army is cheapest at [5,0,5]).
+  // Only apply when work=0 (production hasn't consumed resources yet).
+  if (city.work === 0 && !canAffordUnit(state.resources[aiOwner], city.production)) {
+    // Find cheapest affordable unit type
+    const affordable = [UnitType.Army, UnitType.Fighter, UnitType.Construction]
+      .filter(t => canAffordUnit(state.resources[aiOwner], t));
+    if (affordable.length > 0 && city.production !== affordable[0]) {
+      aiLog(`City #${city.id}: can't afford ${currentAttrs.name}, switching to ${UNIT_ATTRIBUTES[affordable[0]].name} (starvation)`);
+      return affordable[0];
+    }
+  }
+
   // Guard: never switch away from Transport if no transport exists yet.
   // Once a transport exists, allow switching back to armies (especially with few cities).
   if (city.production === UnitType.Transport && prodCounts[UnitType.Transport] <= 1) {
@@ -137,7 +156,7 @@ export function decideProduction(
     if (prodCounts[UnitType.Transport] > maxTransportCities) {
       // Over the cap — force switch away from transport immediately
       const capRatio = getRatioTable(ownCityCount);
-      const capNeeded = needMore(prodCounts, capRatio, !canBuildShips);
+      const capNeeded = needMore(prodCounts, capRatio, !canBuildShips, state, aiOwner);
       if (capNeeded !== UnitType.Transport) {
         aiLog(`City #${city.id}: over transport cap (${prodCounts[UnitType.Transport]}/${maxTransportCities}), forcing switch to ${UNIT_ATTRIBUTES[capNeeded].name}`);
         return capNeeded;
@@ -296,6 +315,25 @@ export function decideProduction(
     }
   }
 
+  // Priority 2a: Build Construction units when economy needs it
+  // Only after we have at least 4 cities and a transport established.
+  // Construction units are fragile (0 str, 1 hp) so only build when safe.
+  if (aiCityCount >= 4 && city.production !== UnitType.Construction) {
+    if (needsConstruction(state, aiOwner) && canAffordProduction(state, aiOwner, UnitType.Construction)) {
+      if (prodCounts[UnitType.Construction] === 0) {
+        // No construction in production — consider starting one
+        const existingConstructors = state.units.filter(
+          u => u.owner === aiOwner && u.type === UnitType.Construction,
+        ).length;
+        const maxConstructors = Math.min(3, Math.max(1, Math.floor(aiCityCount / 4)));
+        if (existingConstructors < maxConstructors && progress < 0.25) {
+          aiLog(`City #${city.id}: switch to Construction (need economy: ${existingConstructors}/${maxConstructors} constructors)`);
+          return UnitType.Construction;
+        }
+      }
+    }
+  }
+
   // Priority 2b: Build more transports when army surplus is overwhelming
   // Each transport carries 6 armies; if wait:transport count far exceeds capacity, add more.
   // Cap: max ceil(cities/4) cities building transports to prevent overproduction.
@@ -354,7 +392,7 @@ export function decideProduction(
     if (existingFighters2 >= maxFighters2) {
       adjustedRatio[UnitType.Fighter] = 0; // suppress fighter production
     }
-    const needed = needMore(prodCounts, adjustedRatio, !canBuildShips);
+    const needed = needMore(prodCounts, adjustedRatio, !canBuildShips, state, aiOwner);
     // Don't switch if we'd switch to the same type we just switched FROM (work penalty wasted)
     if (needed === city.production) return null;
     aiLog(`City #${city.id}: switch from ${currentAttrs.name} to ${UNIT_ATTRIBUTES[needed].name} (ratio rebalance, table=${ratioName}, cities=${aiCityCount})`);

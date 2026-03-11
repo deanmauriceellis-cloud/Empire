@@ -18,6 +18,7 @@ export * from "./ai-production.js";
 export * from "./ai-transport.js";
 export * from "./ai-movement.js";
 export * from "./ai.js";
+export * from "./ai-economy.js";
 export * from "./singleplayer.js";
 export * from "./protocol.js";
 export * from "./diagnostic.js";

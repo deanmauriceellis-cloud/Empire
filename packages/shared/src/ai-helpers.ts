@@ -60,17 +60,20 @@ export function aiVLog(...args: unknown[]): void {
 
 // ─── Production Ratio Tables ───────────────────────────────────────────────────
 // Index by UnitType: [Army, Fighter, Patrol, Destroyer, Submarine, Transport, Carrier, Battleship, Satellite, Construction, Artillery, SpecialForces, AWACS, MissileCruiser, EngineerBoat]
+// Construction is handled specially in decideProduction (not by ratio table).
+// New Phase 7 units (Artillery, SpecForces, AWACS, MissileCruiser, EngineerBoat) are
+// added to ratios at mid/late game tiers where they become available via tech.
 
 /** 2–3 cities: fighter-heavy early game */
 const RATIO_EARLY = [50, 20, 0, 0, 0, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 /** 4–10 cities: introduce patrol boats and submarines for naval presence */
 const RATIO_1 = [50, 10, 15, 5, 5, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-/** 11–20 cities: full naval mix with destroyers */
-const RATIO_2 = [70, 15, 15, 15, 10, 40, 0, 5, 0, 0, 0, 0, 0, 0, 0];
-/** 21–30 cities: heavier naval, battleships */
-const RATIO_3 = [90, 20, 20, 20, 15, 50, 0, 15, 0, 0, 0, 0, 0, 0, 0];
-/** >30 cities: full fleet */
-const RATIO_4 = [110, 25, 25, 25, 20, 60, 0, 15, 0, 0, 0, 0, 0, 0, 0];
+/** 11–20 cities: artillery and AWACS enter the mix */
+const RATIO_2 = [60, 15, 15, 15, 10, 40, 0, 5, 0, 0, 10, 0, 5, 0, 0];
+/** 21–30 cities: special forces and heavier naval */
+const RATIO_3 = [75, 20, 20, 20, 15, 50, 0, 15, 0, 0, 15, 10, 5, 5, 0];
+/** >30 cities: full fleet with missile cruisers */
+const RATIO_4 = [90, 25, 25, 25, 20, 60, 0, 15, 0, 0, 20, 15, 8, 10, 0];
 
 export function getRatioTable(cityCount: number): number[] {
   if (cityCount <= 3) return RATIO_EARLY;

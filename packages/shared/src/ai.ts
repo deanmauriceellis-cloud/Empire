@@ -28,6 +28,13 @@ import {
 import { aiProduction } from "./ai-production.js";
 import { aiTransportMove } from "./ai-transport.js";
 import { aiArmyMove, aiFighterMove, aiShipMove } from "./ai-movement.js";
+import {
+  aiConstructionMove,
+  aiArtilleryMove,
+  aiMissileCruiserMove,
+  aiEngineerBoatMove,
+  shouldSurrenderEconomic,
+} from "./ai-economy.js";
 
 // ─── Re-exports ──────────────────────────────────────────────────────────────────
 // Preserve the public API — consumers import from ai.ts
@@ -104,6 +111,8 @@ function assignIdleBehaviors(
     if (unit.type === UnitType.Satellite) continue;
     // Transports must stay idle (func=None) so aiTransportMove handles them each turn
     if (unit.type === UnitType.Transport) continue;
+    // Construction units are managed by aiConstructionMove — don't assign explore
+    if (unit.type === UnitType.Construction) continue;
     if (unitsWithActions.has(unit.id)) continue;
 
     // Check if this unit is at one of our cities
@@ -117,7 +126,8 @@ function assignIdleBehaviors(
         || unit.type === UnitType.Submarine || unit.type === UnitType.Carrier
         || unit.type === UnitType.Battleship || unit.type === UnitType.MissileCruiser
         || unit.type === UnitType.EngineerBoat;
-      if (unit.type === UnitType.Fighter || unit.type === UnitType.AWACS || isShip) {
+      const isAir = unit.type === UnitType.Fighter || unit.type === UnitType.AWACS;
+      if (isAir || isShip || unit.type === UnitType.Artillery || unit.type === UnitType.SpecialForces) {
         actions.push({ type: "setBehavior", unitId: unit.id, behavior: UnitBehavior.Explore });
       } else {
         const currentSentries = sentryCounts.get(unit.loc) ?? 0;
@@ -226,7 +236,7 @@ export function computeAITurn(
   // 4. Assign behaviors to idle units (no objectives found by AI movement)
   assignIdleBehaviors(state, aiOwner, actions);
 
-  // 5. Check for surrender
+  // 5. Check for surrender (includes economic hopelessness)
   const aiCities = state.cities.filter(c => c.owner === aiOwner).length;
   const aiArmies = state.units.filter(u => u.owner === aiOwner && u.type === UnitType.Army).length;
   const enemyOwner = aiOwner === Owner.Player1 ? Owner.Player2 : Owner.Player1;
@@ -240,6 +250,9 @@ export function computeAITurn(
     aiCities < enemyCities / 5 &&
     aiArmies < enemyArmies / 5
   ) {
+    actions.push({ type: "resign" });
+  } else if (shouldSurrenderEconomic(state, aiOwner)) {
+    aiLog(`  Surrendering: economic hopelessness`);
     actions.push({ type: "resign" });
   }
 
@@ -271,11 +284,25 @@ function moveAIUnit(
 ): PlayerAction[] {
   switch (unit.type) {
     case UnitType.Army:
+    case UnitType.SpecialForces: // invisible army — uses same movement logic
       return aiArmyMove(state, unit, aiOwner, viewMap);
     case UnitType.Transport:
       return aiTransportMove(state, unit, aiOwner, viewMap, claimedUnitIds, claimedPickupLocs);
     case UnitType.Fighter:
+    case UnitType.AWACS: // AWACS uses fighter movement (no attack, just explore)
       return aiFighterMove(state, unit, aiOwner, viewMap);
+    case UnitType.Construction:
+      return aiConstructionMove(state, unit, aiOwner, viewMap);
+    case UnitType.Artillery:
+      return aiArtilleryMove(state, unit, aiOwner, viewMap);
+    case UnitType.MissileCruiser: {
+      // Try bombard first, then fall through to ship movement
+      const bombardActions = aiMissileCruiserMove(state, unit, aiOwner, viewMap);
+      if (bombardActions.length > 0) return bombardActions;
+      return aiShipMove(state, unit, aiOwner, viewMap);
+    }
+    case UnitType.EngineerBoat:
+      return aiEngineerBoatMove(state, unit, aiOwner, viewMap);
     case UnitType.Patrol:
     case UnitType.Destroyer:
     case UnitType.Submarine:
