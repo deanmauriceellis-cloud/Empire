@@ -1,0 +1,248 @@
+Session 040 — 2026-03-10
+========================
+
+## Summary
+Major design session: created comprehensive unified expansion plan combining graphics overhaul (PLAN-A) with full 4X economic/defensive warfare system (PLAN-B) into PLAN-UNIFIED.md. No code changes — pure design and architecture planning. This session produced the complete blueprint for transforming Empire Reborn from a military conquest game into a full 4X strategy game with resource economy, construction, technology research, defensive fortifications, ranged bombardment, bridges, minefields, and 6 new unit types.
+
+## Conversation Context
+User requested a complete visual reimagining of the game, then pivoted to also designing a full economic expansion. The session evolved through several stages:
+1. Graphics research — analyzed all current rendering code, PixiJS v8 capabilities
+2. PLAN-A created — ocean overhaul, unit graphics, info panels, vision overlays
+3. PLAN-B created — resource economy, construction units, tech trees, city upgrades
+4. Design debate — balance analysis, AI strategy, turn flow, defensive warfare
+5. PLAN-UNIFIED.md — merged both plans into 10-phase executable plan
+
+Key user decisions made during design:
+- Construction units DESTROYED when killed (not captured) — makes them precious
+- Buildings CAPTURED when enemy takes the tile — creates high-value targets
+- Captured cities REVERT to captor's tech level — no inherited bonuses
+- Turn end is MANUAL (Enter key) — triggers Economy Review Screen
+- Opponent economy INVISIBLE (fog of war only, debug toggle for dev)
+- Auto-AI for BOTH players from turn 1 — with manual click override
+- River maps should support defensive gameplay — bridges, fortifications, ranged combat
+
+## Design Documents Created
+
+### PLAN-A.md — Graphics Overhaul (Quick Wins)
+**File**: `/home/witchdoctor/Development/Empire/PLAN-A.md`
+
+5 sections covering visual improvements using PixiJS v8 advanced features:
+1. **Ocean Overhaul**: Multi-layer water (deep navy → coastal teal → shore foam), animated wave lines, depth based on land adjacency count
+2. **Unit Graphics Revolution**: Detailed procedural sprites for all 9 unit types (army=shield, fighter=swept wings, battleship=turrets, etc.), player color with accent markings, directional facing, movement trails
+3. **Unit Info Panel**: Right-side slide-in panel on click — HP, behavior, destination, fuel, cargo, inline commands, vision range overlay, GoTo path drawing
+4. **Vision & Awareness**: Vision range overlay (soft ring), destination path (dotted line), explore frontier indicators
+5. **Atmosphere & Polish**: GlowFilter selection (GPU), blend mode ADD for explosions, enhanced particles (more per effect, longer trails, lingering smoke)
+
+Technical notes: PixiJS v8.6.0 supports BlurFilter, GlowFilter, DisplacementFilter, ColorMatrixFilter, NoiseFilter, blend modes (ADD/MULTIPLY/SCREEN) — currently NONE are used. All textures are basic Graphics→generateTexture. Massive untapped capability.
+
+### PLAN-B.md — Economic & Development Expansion
+**File**: `/home/witchdoctor/Development/Empire/PLAN-B.md`
+
+7-part analysis document covering:
+1. **Gameplay Loop Transformation**: Human becomes commander-in-chief (strategic decisions) while AI handles tactical unit movement for both players
+2. **Balance Analysis**: Resource exhaustion is the natural balance mechanism — rush players burn seed money and stall, economy players sustain
+3. **Resource Math**: 150 ore/100 oil/150 textile starting (not 1000 — too generous), resource gating prevents spam
+4. **AI Economic Strategy**: Simple heuristics (1 construction per 4 cities, nearest deposit, fixed upgrade priority) — AI doesn't need to be smart, just consistent
+5. **End-of-Turn Dialog**: Tabbed review screen (Events, Resources, Cities, Tech, Construction)
+6. **Data Model**: DepositState, BuildingState, PlayerResources, new enums, new PlayerAction types
+7. **Implementation Phases**: E1-E6 across 7-9 sessions
+
+Key design decisions documented: linear tech scaling (not exponential — prevents snowball), buildings attached to cities (not arbitrary tiles — AI can handle fixed slots), construction units consumed on completion (like Civ settlers).
+
+### PLAN-UNIFIED.md — Complete Expansion Plan (Final)
+**File**: `/home/witchdoctor/Development/Empire/PLAN-UNIFIED.md`
+
+The definitive 10-phase plan merging graphics + economy + defensive warfare. Contains:
+
+#### Complete Unit Catalog (15 units total)
+
+**Existing 9 units** (rebalanced with resource costs):
+| Unit | Char | Str | HP | Build | Ore | Oil | Textile |
+|------|------|-----|----|-------|-----|-----|---------|
+| Army | A | 1 | 1 | 5 | 5 | 0 | 5 |
+| Fighter | F | 1 | 1 | 10 | 15 | 10 | 0 |
+| Patrol | P | 1 | 1 | 15 | 10 | 5 | 0 |
+| Destroyer | D | 1 | 3 | 25 | 20 | 10 | 0 |
+| Submarine | S | 3 | 2 | 25 | 25 | 15 | 0 |
+| Transport | T | 1 | 1 | 25 | 15 | 10 | 5 |
+| Carrier | C | 1 | 8 | 35 | 30 | 20 | 5 |
+| Battleship | B | 2 | 10 | 45 | 40 | 25 | 0 |
+| Satellite | Z | 0 | 1 | 50 | 20 | 5 | 10 |
+
+**6 new units**:
+| Unit | Char | Terrain | Spd | Str | HP | Build | Ore | Oil | Txt | Unlock | Key Ability |
+|------|------|---------|-----|-----|----|-------|-----|-----|-----|--------|-------------|
+| Construction | E | Land | 1 | 0 | 1 | 10 | 10 | 0 | 5 | — | Builds all structures. Consumed on completion. Destroyed if killed. |
+| Artillery | R | Land | 1 | 3 | 2 | 20 | 25 | 10 | 0 | War 2 | BOMBARDS 2 tiles away. Cannot melee. Ranged only. |
+| Special Forces | X | Land | 2 | 2 | 1 | 15 | 15 | 5 | 10 | War 3 | INVISIBLE until adjacent. Speed 2 (faster army). |
+| Missile Cruiser | M | Sea | 2 | 4 | 6 | 40 | 35 | 30 | 0 | War 4 + Elec 3 | BOMBARDS 3 tiles (land or sea). Ultimate fire support. |
+| AWACS | W | Any | 6 | 0 | 1 | 20 | 20 | 15 | 0 | Elec 2 | REVEALS 5-tile radius. No attack. Recon plane. |
+| Engineer Boat | G | Sea | 2 | 0 | 1 | 15 | 15 | 5 | 5 | Sci 2 | Builds Bridges and Sea Mines on water. Naval construction. |
+
+#### Complete Structure Catalog (10 structures)
+
+**Defensive Structures (built by Construction Unit on land)**:
+| Structure | Unlock | Build | Ore | Oil | HP | Str | Range | Effect |
+|-----------|--------|-------|-----|-----|----|-----|-------|--------|
+| Bunker | — | 4 | 15 | 0 | 5 | 2 | Adj | Armies inside get +2 defense. Auto-attacks adjacent enemies. |
+| Anti-Air Battery | Sci 3 | 6 | 40 | 30 | 5 | 3 | 2 | Attacks fighters/AWACS within 2 tiles. |
+| Coastal Battery | Sci 4 | 8 | 50 | 40 | 8 | 4 | 2 | Attacks ships within 2 tiles. River/shore denial. |
+| Radar Station | Elec 2 | 6 | 30 | 20 | 3 | 0 | — | Reveals 5-tile radius permanently. Detects subs within 3. |
+| Artillery Fort | War 3 | 10 | 60 | 30 | 10 | 5 | 3 | Long-range land bombardment. Dominates chokepoints. |
+| Minefield | War 1 | 3 | 10 | 5 | — | 2 | — | INVISIBLE. Damages first enemy to enter. Single-use. |
+| SAM Site | Elec 4 | 8 | 50 | 40 | 6 | 5 | 3 | Anti-air, 3-tile range. Shuts down airspace. |
+
+**Naval Structures (built by Engineer Boat on water)**:
+| Structure | Unlock | Build | Ore | Oil | HP | Effect |
+|-----------|--------|-------|-----|-----|----|--------|
+| Bridge | Sci 2 | 6 | 30 | 10 | 5 | Allows armies to cross 1 water tile. Destroyable chokepoint. |
+| Sea Mine | War 1 | 2 | 10 | 5 | — | INVISIBLE. Str 3 attack on first ship to enter. Single-use. |
+| Offshore Platform | Sci 3 | 8 | 40 | 20 | 4 | Oil deposit on water. +1 oil/turn. Must be adj. to existing oil deposit. |
+
+#### City Upgrades (6 types, max 4 slots per city, 3 levels each)
+
+| Upgrade | Unlock | Build | Ore | Oil | Txt | Output | Lv2 Bonus | Lv3 Bonus |
+|---------|--------|-------|-----|-----|-----|--------|-----------|-----------|
+| University | — | 8 | 30 | 0 | 20 | +1 sci/turn | +2/turn | +3/turn |
+| Hospital | Sci 1 | 8 | 20 | 0 | 30 | +1 health/turn | +2, units start +1 HP | +3, heals 2 HP/turn |
+| Tech Lab | Sci 1 | 10 | 40 | 20 | 0 | +1 elec/turn | +2/turn | +3, local radar |
+| Military Academy | Sci 3 | 10 | 30 | 30 | 0 | +1 war res/turn | +2, units +1 str | +3, units +2 str |
+| Shipyard | Sci 2 | 8 | 40 | 20 | 10 | Ship build -20% | -30%, repair +1 | -40%, Missile Cruiser |
+| Airfield | Sci 2 | 8 | 30 | 20 | 10 | Fighter range +8 | +16, refuel AWACS | +24, build AWACS |
+
+#### Tech Trees (4 tracks, 5 levels each)
+
+**Science Track** (from Universities):
+- Lv1 (10): Unlock Hospital & Tech Lab
+- Lv2 (30): +1 vision range all units. Unlock Engineer Boat, Bridge, Shipyard, Airfield
+- Lv3 (60): Unlock Military Academy, Anti-Air Battery, Offshore Platform
+- Lv4 (100): Unlock Coastal Battery. Construction +1 speed
+- Lv5 (150): All buildings +3 HP. Second construction queue slot
+
+**Health Track** (from Hospitals):
+- Lv1 (10): Heal 2 HP/turn in own cities
+- Lv2 (30): Army max HP 1→2
+- Lv3 (60): All land units +1 max HP
+- Lv4 (100): Ships heal 1 HP/turn at sea
+- Lv5 (150): All units +1 max HP
+
+**Electronics Track** (from Tech Labs):
+- Lv1 (10): +1 vision range ships
+- Lv2 (30): Unlock AWACS. Subs visible when adjacent
+- Lv3 (60): Unlock Missile Cruiser (also War 4). +2 fighter range
+- Lv4 (100): Unlock SAM Site. Satellite range +100
+- Lv5 (150): Intel: see all enemy units on explored tiles
+
+**War Research Track** (from Military Academies):
+- Lv1 (10): Army str 1→2. Unlock Minefield, Sea Mine
+- Lv2 (30): All ship str +1. Unlock Artillery
+- Lv3 (60): Fighter str 1→2. Unlock Special Forces, Artillery Fort
+- Lv4 (100): All units +1 str. Unlock Missile Cruiser (also Elec 3)
+- Lv5 (150): All units +1 str (cumulative)
+
+#### New Bombard Mechanic
+- Units/structures with range > 1 use BOMBARD action (ranged attack, no return damage)
+- Cannot capture cities (only melee armies can)
+- Costs 1 move point per shot
+- Structures auto-bombard during behavior phase
+- Units that bombard: Artillery (2), Missile Cruiser (3), Anti-Air (2), Coastal Battery (2), Artillery Fort (3), SAM Site (3)
+
+#### Resource System
+- 3 natural resources: Ore, Oil, Textile (from map deposits via mines/wells/farms)
+- 4 derived resources: Science, Health, Electronics, War Research (from city upgrades)
+- Starting: 150 ore, 100 oil, 150 textile, 0 derived
+- Resources consumed when production STARTS — city stalls if can't afford
+- ~20 deposits per standard map (~7 each type), fair placement near both players
+
+#### Turn Flow
+1. PLANNING PHASE: Player explores map, clicks units/cities, adjusts behaviors
+2. Player presses ENTER → Economy Review Screen (mandatory, tabbed: Events/Resources/Cities/Tech/Construction/Buildings)
+3. Player makes strategic decisions (production, construction orders, tech review)
+4. Player confirms → EXECUTION PHASE: AI moves all units (both players), combat resolves, resources tick, tech recalculates
+5. Next turn
+
+#### River Dynamics
+Rivers become strategic chokepoints with defensive structures:
+- Bridges allow army crossing but are destroyable
+- Coastal Batteries deny naval passage (range 2 covers river width)
+- Artillery Forts bombard across river (range 3)
+- Minefields on banks punish amphibious landings
+- Sea Mines block transport approaches
+- Anti-Air denies fighter recon
+- Breaking a fortified river requires combined arms: Artillery to shell defenses, Special Forces to infiltrate, AWACS for intel, Missile Cruiser for fire support, OR flank around via undefended crossing
+
+#### Implementation Phases
+| Phase | Sessions | Deliverable |
+|-------|----------|-------------|
+| 1: Graphics Foundation | 1-2 | Ocean overhaul, detailed unit sprites, GPU effects |
+| 2: Unit Info & Vision | 1 | Right-side info panel, vision/path overlays |
+| 3: Economy Foundation | 1-2 | Resources, deposits, production gating |
+| 4: Construction & Buildings | 1-2 | Construction unit, mines/farms, city upgrades, building levels |
+| 5: Economy Review Screen | 1 | Turn summary dialog, resource bar, city upgrade UI |
+| 6: Tech System | 1-2 | Tech trees, bonuses, unit/building unlocks |
+| 7: Bombard & Defenses | 1-2 | Ranged combat, fortifications, bridges, mines |
+| 8: AI Economy & Strategy | 2-3 | AI construction, deposit claiming, defense placement |
+| 9: Movement Trails & Atmosphere | 1 | Contrails, wakes, dust, combat spectacle |
+| 10: Balance & Testing | 1-2 | Tuning, integration tests, AI competence |
+| TOTAL | 11-18 | Complete 4X transformation |
+
+#### Architecture: New Files Planned
+```
+shared/src/economy.ts         — Resource calcs, costs, tech bonuses (~300 lines)
+shared/src/buildings.ts        — Building attributes, upgrade paths, defense stats (~200 lines)
+shared/src/ai-economy.ts      — AI construction/economy decisions (~400 lines)
+shared/src/ai-combat.ts       — AI bombard targeting, defense placement (~300 lines)
+client/src/ui/turnSummary.ts   — Economy review screen (~300 lines)
+client/src/ui/techPanel.ts     — Tech tree display (~200 lines)
+client/src/ui/resourceBar.ts   — Top bar resources (~100 lines)
+client/src/ui/unitInfoPanel.ts — Right-side unit detail panel (~250 lines)
+client/src/ui/constructionPanel.ts — Construction task queue UI (~150 lines)
+client/src/renderer/trails.ts  — Movement trail effects (~150 lines)
+```
+
+#### Architecture: Files That Stay Unchanged
+- `shared/pathfinding.ts` — All navigation uses existing BFS
+- `shared/continent.ts` — No changes
+- `shared/ai-transport.ts` — Transport AI unchanged
+- `client/core/app.ts`, `camera.ts`, `iso/coords.ts` — Core rendering unchanged
+- `client/net/` — Protocol auto-handles new action types
+- `server/database.ts` — JSON serialization handles new state
+
+## Important Design Decisions & Rationale
+
+### Why 150 Starting Resources (Not 1000)
+User originally proposed 1000 of each. Analysis showed 1000 ore = 200 armies funded, making economy irrelevant for 500+ turns. 150 creates pressure by turn 40-50, forcing deposit investment. Math: 150 ore / 5 per army = 30 armies from seed. With 2 cities producing armies every 2.5 turns, seed runs out around turn 75.
+
+### Why Linear Tech Scaling (Not Exponential 1/2/4/8)
+User proposed exponential growth. Analysis showed level 7 = 128 points/turn from a single building — game-breaking snowball. Linear scaling (each level costs N×10 more, gives steady +1 bonus) keeps games competitive. Max level 5 = 150 accumulated points.
+
+### Why Buildings Attach to Cities (Not Arbitrary Tiles)
+User proposed buildings anywhere. Analysis showed infinite placement options create AI nightmare. City upgrade slots (max 4) give AI clear decisions and make captured cities more valuable.
+
+### Why Construction Units Destroyed (Not Captured)
+User decision. Makes construction units "gold" — precious, hard to replace (10 turns build time, costs 10 ore + 5 textile). Creates escort gameplay (send army with your engineer).
+
+### Why Auto-AI for Both Players
+Key gameplay transformation: human becomes general, not sergeant. AI handles all unit movement via existing behavior system (Explore, Aggressive, GoTo, etc.). Human controls strategy: what to build, where to invest, which units to redirect. Click override preserved for tactical intervention.
+
+### Why Bombard Cannot Capture Cities
+Prevents artillery/missile cruiser from winning the game alone. You MUST have armies on the ground to capture cities. Ranged units soften defenses; armies take territory. Creates combined-arms gameplay.
+
+### Why River Dynamics Matter
+River War maps with defensive structures create "fortress Europe" gameplay: building a fortified river line is defensive strategy, breaking it requires combined arms and tech investment. This is the design goal — moving away from "spam armies and attack" into strategic depth.
+
+## Test Results
+No code changes this session — all 292 tests (264 shared + 28 server) remain passing from session 039.
+
+## Files Created
+- `PLAN-A.md` — Graphics overhaul plan (131 lines)
+- `PLAN-B.md` — Economic expansion analysis (601 lines)
+- `PLAN-UNIFIED.md` — Merged 10-phase executable plan (full unit/structure/tech catalog)
+
+## Files Modified
+- (none — design session only)
+
+## Next Steps
+- Begin Phase 1 (Graphics Foundation) in next session
+- Ocean overhaul and detailed unit sprites are first implementation targets
+- PLAN-UNIFIED.md is the definitive reference for all future implementation sessions

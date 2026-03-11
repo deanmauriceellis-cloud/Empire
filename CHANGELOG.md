@@ -1,5 +1,19 @@
 # Empire Reborn — Changelog
 
+## v0.29.0 — Session 040 (2026-03-10)
+
+### Design — Unified Expansion Plan
+- **PLAN-A.md** — Graphics overhaul: ocean waves/shore foam, detailed procedural unit sprites, GlowFilter selection, unit info panel, vision overlays, enhanced particles
+- **PLAN-B.md** — Economic expansion analysis: resource system (ore/oil/textile), construction units, deposits, city upgrades, tech trees, AI economic strategy, balance math
+- **PLAN-UNIFIED.md** — Merged 10-phase executable plan (11-18 sessions estimated)
+- **6 new unit types designed**: Construction (E), Artillery (R), Special Forces (X), Missile Cruiser (M), AWACS (W), Engineer Boat (G)
+- **10 structures designed**: Bunker, Anti-Air Battery, Coastal Battery, Radar Station, Artillery Fort, Minefield, SAM Site, Bridge, Sea Mine, Offshore Platform
+- **6 city upgrades designed**: University, Hospital, Tech Lab, Military Academy, Shipyard, Airfield (3 levels each, max 4 per city)
+- **4 tech tracks designed**: Science, Health, Electronics, War Research (5 levels each, linear scaling)
+- **Bombard mechanic**: ranged combat (2-3 tiles), no return damage, cannot capture cities
+- **River defensive warfare**: bridges, fortifications, minefields transform River War maps into strategic chess
+- **Key decisions**: construction units destroyed (not captured), buildings captured, linear tech (not exponential), auto-AI with manual override, 150/100/150 starting resources
+
 ## v0.28.0 — Session 039 (2026-03-10)
 
 ### Added

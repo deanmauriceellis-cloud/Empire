@@ -1,23 +1,30 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Refactoring (Phase R1–R6)** — Code design review → phased refactor
+**Expansion Planning** — PLAN-UNIFIED.md: 10-phase graphics + economy + defensive warfare transformation
 
 ## Status
-- All 12 phases complete + gameplay polish + debug tools + AI overhaul
+- All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
 - 292 unit/integration tests passing (264 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
-- Full code review completed (session 035) — 6-phase refactor plan below
+- **PLAN-UNIFIED.md** is the definitive plan for all future implementation
 
 ## Latest commit
-`1dbd2a5` — session 039: River War map type, river-smart transport AI
+`pending` — session 040: design session (PLAN-A, PLAN-B, PLAN-UNIFIED)
+
+## Completed (session 040) — Design Only
+- [x] PLAN-A.md — Graphics overhaul plan (ocean, unit sprites, info panel, vision overlays, GPU effects)
+- [x] PLAN-B.md — Economic expansion analysis (resources, construction, tech trees, AI strategy, balance)
+- [x] PLAN-UNIFIED.md — Merged 10-phase executable plan with complete unit/structure/tech catalogs
+- [x] Design decisions finalized: construction destroyed, buildings captured, linear tech, auto-AI, manual override
+- [x] 6 new unit types designed: Construction, Artillery, Special Forces, Missile Cruiser, AWACS, Engineer Boat
+- [x] 10 defensive/naval structures designed: Bunker, Anti-Air, Coastal Battery, Radar, Artillery Fort, Minefield, SAM, Bridge, Sea Mine, Offshore Platform
+- [x] 6 city upgrades designed: University, Hospital, Tech Lab, Military Academy, Shipyard, Airfield (3 levels each)
+- [x] 4 tech tracks designed: Science, Health, Electronics, War Research (5 levels each)
+- [x] Bombard mechanic designed: ranged combat for artillery/cruiser/defenses
+- [x] River defensive warfare dynamics designed
 
 ## Completed (session 039)
-- [x] River War map type — two landmasses split by wide river, tributaries (80-95% to edge), islands, balanced cities
-- [x] River-smart transport AI — boost shoreline/island city priority, empty transports return to own shore first
-- [x] Click debug logging fix — unconditional [Click] log output
-- [x] Cleaned up unused AI helpers (isInTributary, directionTowardRiver)
-- [x] 9 new river map tests, all 292 tests passing (264 shared + 28 server), client builds clean
 
 ## Completed (session 038)
 - [x] War Stats dialog panel — battle tracking with unit types, casualties, clickable locations, filters
@@ -151,10 +158,17 @@
 ### Execution Order
 R1 and R5 can run in parallel (no dependencies). R2 and R3 depend on R1. R6 depends on R2/R3. R4 is last (depends on stable shared API).
 
-## Next Steps (post-refactor)
-1. Continue playtesting
-2. Hosting / deployment
-3. Art assets (replace placeholder textures)
+## Next Steps (PLAN-UNIFIED phases)
+1. **Phase 1**: Graphics Foundation — ocean overhaul, detailed unit sprites, GPU effects (1-2 sessions)
+2. **Phase 2**: Unit Info & Vision — right-side info panel, vision/path overlays (1 session)
+3. **Phase 3**: Economy Foundation — resources, deposits, production gating (1-2 sessions)
+4. **Phase 4**: Construction & Buildings — construction unit, mines/farms, city upgrades (1-2 sessions)
+5. **Phase 5**: Economy Review Screen — turn summary dialog, resource bar (1 session)
+6. **Phase 6**: Tech System — tech trees, bonuses, unit/building unlocks (1-2 sessions)
+7. **Phase 7**: Bombard & Defenses — ranged combat, fortifications, bridges, mines (1-2 sessions)
+8. **Phase 8**: AI Economy & Strategy — AI construction, deposit claiming, defense placement (2-3 sessions)
+9. **Phase 9**: Movement Trails & Atmosphere — contrails, wakes, combat spectacle (1 session)
+10. **Phase 10**: Balance & Testing — tuning, integration, AI competence (1-2 sessions)
 
 ## Blockers
 _None_

@@ -351,3 +351,22 @@
 ### 12.1: Unit Tests — 90% coverage on shared package
 ### 12.2: Integration Tests — 2 AIs play 100 turns, save/load round-trip
 ### 12.3: E2E Tests — Playwright for critical paths, perf benchmarks
+
+---
+
+## Expansion Plan (Session 040+)
+
+**See `PLAN-UNIFIED.md` for the definitive 10-phase expansion plan.**
+
+Combines graphics overhaul + resource economy + defensive warfare + tech trees into a complete 4X transformation. Key additions:
+
+- **6 new unit types**: Construction, Artillery, Special Forces, Missile Cruiser, AWACS, Engineer Boat
+- **10 defensive/naval structures**: Bunker, Anti-Air, Coastal Battery, Radar, Artillery Fort, Minefield, SAM, Bridge, Sea Mine, Offshore Platform
+- **6 city upgrades** (3 levels each): University, Hospital, Tech Lab, Military Academy, Shipyard, Airfield
+- **4 tech tracks** (5 levels each): Science, Health, Electronics, War Research
+- **Bombard mechanic**: ranged combat (2-3 tiles)
+- **Resource economy**: ore/oil/textile from deposits, production gating, construction units
+- **Auto-AI** for both players with manual override
+- **Economy Review Screen**: mandatory end-of-turn strategic dashboard
+
+Supporting design documents: `PLAN-A.md` (graphics), `PLAN-B.md` (economy analysis)
