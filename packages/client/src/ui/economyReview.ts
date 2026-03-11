@@ -21,12 +21,18 @@ import {
   getActiveTechBonuses,
   getNextLevelPreview,
   pointsToNextLevel,
+  getCrownCityId,
+  isTributary,
+  getOverlord,
+  getTributaries,
+  getPlayerName,
+  TRIBUTE_RATE,
 } from "@empire/shared";
 import type { GameState, TurnEvent } from "@empire/shared";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type Tab = "events" | "resources" | "cities" | "tech" | "construction" | "buildings";
+type Tab = "events" | "resources" | "cities" | "tech" | "construction" | "buildings" | "kingdom";
 
 export interface EconomyReview {
   readonly element: HTMLDivElement;
@@ -79,6 +85,7 @@ export function createEconomyReview(): EconomyReview {
     { key: "tech", label: "Tech" },
     { key: "construction", label: "Construction" },
     { key: "buildings", label: "Buildings" },
+    { key: "kingdom", label: "Kingdom" },
   ];
 
   const tabButtons = new Map<Tab, HTMLButtonElement>();
@@ -141,6 +148,7 @@ export function createEconomyReview(): EconomyReview {
       case "tech": renderTech(s, o); break;
       case "construction": renderConstruction(s, o); break;
       case "buildings": renderBuildings(s, o); break;
+      case "kingdom": renderKingdom(s, o); break;
     }
   }
 
@@ -488,6 +496,67 @@ export function createEconomyReview(): EconomyReview {
     content.innerHTML = rows.join("");
   }
 
+  // ─── Kingdom Tab ──────────────────────────────────────────────────────────
+
+  function renderKingdom(s: GameState, o: Owner): void {
+    if (!s.kingdoms || !s.kingdoms[o]) {
+      content.innerHTML = `<div class="er-empty">No kingdom data</div>`;
+      return;
+    }
+
+    const kingdom = s.kingdoms[o];
+    const rows: string[] = [];
+
+    // Crown city info
+    const crownId = kingdom.crownCityId;
+    if (crownId >= 0 && crownId < s.cities.length) {
+      const crownCity = s.cities[crownId];
+      const col = locCol(crownCity.loc);
+      const row = locRow(crownCity.loc);
+      rows.push(
+        `<div class="er-section-header" style="color:#ffd700">\u2655 Crown City</div>` +
+        `<div class="er-row">City #${crownId} at (${col}, ${row})</div>` +
+        `<div class="er-row" style="color:#aaa">+50% production, +3 defense, +2 heal/turn, 4-tile vision</div>`
+      );
+    } else {
+      rows.push(`<div class="er-section-header" style="color:#ff4444">No Crown City!</div>`);
+    }
+
+    // Tributary status
+    if (isTributary(s, o)) {
+      const overlordId = getOverlord(s, o)!;
+      const overlordName = getPlayerName(s, overlordId);
+      rows.push(
+        `<div class="er-section-header" style="color:#ff8844; margin-top:8px">Tributary Status</div>` +
+        `<div class="er-row">Paying <span style="color:#ff6644">${Math.round(kingdom.tributeRate * 100)}%</span> tribute to <span style="color:#ff8844">${overlordName}</span></div>` +
+        `<div class="er-row" style="color:#aaa">Rebel: build more military than your overlord to break free</div>`
+      );
+    }
+
+    // Tributaries (kingdoms paying us)
+    const tributaries = getTributaries(s, o);
+    if (tributaries.length > 0) {
+      rows.push(`<div class="er-section-header" style="color:#44cc88; margin-top:8px">Tributaries (${tributaries.length})</div>`);
+      for (const tid of tributaries) {
+        const tName = getPlayerName(s, tid);
+        const tCities = s.cities.filter(c => c.owner === tid).length;
+        rows.push(
+          `<div class="er-row"><span style="color:#44cc88">${tName}</span> — ${tCities} cities, paying ${Math.round(TRIBUTE_RATE * 100)}% tribute</div>`
+        );
+      }
+    }
+
+    // Independent status
+    if (!isTributary(s, o) && tributaries.length === 0) {
+      rows.push(
+        `<div class="er-section-header" style="color:#44cc88; margin-top:8px">Status</div>` +
+        `<div class="er-row">Independent kingdom — no tributary relationships</div>`
+      );
+    }
+
+    content.innerHTML = rows.join("");
+  }
+
   // ─── Keyboard handler ─────────────────────────────────────────────────────
 
   function onKeyDown(e: KeyboardEvent): void {
@@ -499,7 +568,7 @@ export function createEconomyReview(): EconomyReview {
     }
     // Tab switching with number keys
     const num = parseInt(e.key);
-    if (num >= 1 && num <= 6) {
+    if (num >= 1 && num <= tabs.length) {
       e.preventDefault();
       e.stopPropagation();
       switchTab(tabs[num - 1].key);

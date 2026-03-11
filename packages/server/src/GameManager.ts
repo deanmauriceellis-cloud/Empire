@@ -31,6 +31,7 @@ import {
   isOnBoard,
   createPlayerInfo,
   initAllPlayerData,
+  initKingdoms,
 } from "@empire/shared";
 import type {
   ClientMessage,
@@ -195,6 +196,7 @@ export class GameManager {
       buildings: [],
       nextBuildingId: 0,
       techResearch: {},
+      kingdoms: {},
     };
 
     // Initialize per-player data (viewMaps, resources, tech)
@@ -207,6 +209,9 @@ export class GameManager {
       state.cities[cityId].owner = playerId as any;
       scan(state, playerId, state.cities[cityId].loc);
     }
+
+    // Initialize kingdoms — starting cities become crown cities
+    initKingdoms(state, mapResult.startingCities);
 
     // Set up WebSocket connections — only human creator initially
     // AI players don't get WS entries (they're managed server-side)

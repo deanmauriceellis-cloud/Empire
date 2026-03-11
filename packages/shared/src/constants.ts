@@ -319,6 +319,29 @@ export const STARTING_ORE = 150;
 export const STARTING_OIL = 100;
 export const STARTING_TEXTILE = 150;
 
+// ─── Kingdom Constants ────────────────────────────────────────────────────
+
+/** Default tribute rate (30% of income paid to overlord). */
+export const TRIBUTE_RATE = 0.3;
+
+/** Crown city production speed bonus (50% faster — work ticks 1.5x). */
+export const CROWN_PRODUCTION_BONUS = 0.5;
+
+/** Crown city defense bonus (+3 effective strength for defenders in crown city). */
+export const CROWN_DEFENSE_BONUS = 3;
+
+/** Crown city healing bonus (+2 HP per turn for units in the crown city). */
+export const CROWN_HEAL_BONUS = 2;
+
+/** Crown city permanent vision radius (tiles). */
+export const CROWN_VISION_RADIUS = 4;
+
+/** Crown city garrison bonus (attacker strength penalty when attacking a crown). */
+export const CROWN_GARRISON_BONUS = 5;
+
+/** Cooldown in turns before a player can relocate their crown city. */
+export const CROWN_RELOCATE_COOLDOWN = 50;
+
 // ─── Map Size Presets ───────────────────────────────────────────────────────
 
 export interface MapSizePreset {

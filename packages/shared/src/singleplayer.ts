@@ -9,6 +9,7 @@ import { generateMap } from "./mapgen.js";
 import { initViewMap, scan, executeTurn } from "./game.js";
 import { computeAITurn } from "./ai.js";
 import { createPlayerInfo, initAllPlayerData } from "./player.js";
+import { initKingdoms } from "./kingdom.js";
 
 export interface SinglePlayerGame {
   state: GameState;
@@ -69,6 +70,7 @@ export function createSinglePlayerGame(configOverrides?: Partial<GameConfig>): S
     buildings: [],
     nextBuildingId: 0,
     techResearch: {},
+    kingdoms: {},
   };
 
   // Initialize per-player data (viewMaps, resources, tech)
@@ -83,6 +85,9 @@ export function createSinglePlayerGame(configOverrides?: Partial<GameConfig>): S
     // Initial vision scan
     scan(state, playerId, state.cities[cityId].loc);
   }
+
+  // Initialize kingdoms — starting cities become crown cities
+  initKingdoms(state, mapResult.startingCities);
 
   let isGameOver = false;
   let winner: PlayerId | null = null;

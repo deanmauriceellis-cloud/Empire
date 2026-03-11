@@ -54,6 +54,7 @@ function createFullGameState(seed: number): GameState {
     buildings: [],
     nextBuildingId: 0,
     techResearch: { [Owner.Unowned]: [0,0,0,0], [Owner.Player1]: [0,0,0,0], [Owner.Player2]: [0,0,0,0] },
+    kingdoms: {},
     players: [
       { id: 1, name: "Player 1", color: 0x00cc00, isAI: false, status: "active" as const },
       { id: 2, name: "Player 2", color: 0xcc0000, isAI: true, status: "active" as const },
@@ -285,6 +286,7 @@ describe("Integration: AI vs AI", () => {
       buildings: [],
       nextBuildingId: 0,
       techResearch: { [Owner.Unowned]: [0,0,0,0], [Owner.Player1]: [0,0,0,0], [Owner.Player2]: [0,0,0,0] },
+      kingdoms: {},
       players: [
         { id: 1, name: "Player 1", color: 0x00cc00, isAI: false, status: "active" as const },
         { id: 2, name: "Player 2", color: 0xcc0000, isAI: true, status: "active" as const },

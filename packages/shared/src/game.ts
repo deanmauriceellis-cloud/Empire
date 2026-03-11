@@ -22,6 +22,7 @@ import {
   BuildingType,
   DepositType,
   NUM_TECH_TYPES,
+  CROWN_PRODUCTION_BONUS,
 } from "./constants.js";
 import { UNIT_ATTRIBUTES, canTraverse, UNIT_COSTS, canAffordUnit } from "./units.js";
 import {
@@ -75,6 +76,17 @@ import {
   techShipsHealAtSea,
   canBuildStructure,
 } from "./tech.js";
+import {
+  isOwnCrownCity,
+  hasCrownProductionBonus,
+  getCrownDefenseBonus,
+  getCrownHealBonus,
+  getCrownGarrisonBonus,
+  handleCrownCapture,
+  collectTributeIncome,
+  processRebellions,
+  scanCrownVision,
+} from "./kingdom.js";
 
 // ─── RNG ────────────────────────────────────────────────────────────────────────
 
@@ -837,13 +849,24 @@ export function attackCity(
   const oldOwner = city.owner;
   const attackerOwner = attacker.owner;
 
-  if (gameRandom(state) < 0.5) {
+  // Crown cities are harder to capture: garrison bonus reduces capture chance
+  const oldOwnerId = oldOwner as number;
+  const garrisonBonus = oldOwnerId !== 0
+    ? getCrownGarrisonBonus(state, oldOwnerId, city.loc)
+    : 0;
+  // Base 50% capture chance, reduced by 5% per garrison bonus point (min 10%)
+  const captureChance = Math.max(0.10, 0.5 - garrisonBonus * 0.05);
+  const wasCrown = oldOwnerId !== 0 && isOwnCrownCity(state, cityId);
+
+  if (gameRandom(state) < captureChance) {
     // Capture!
     events.push({
       type: "capture",
       loc: city.loc,
-      description: `${UNIT_ATTRIBUTES[attacker.type].article} captured a city!`,
-      data: { attackerOwner, oldOwner, cityId },
+      description: wasCrown
+        ? `${UNIT_ATTRIBUTES[attacker.type].article} captured a Crown City!`
+        : `${UNIT_ATTRIBUTES[attacker.type].article} captured a city!`,
+      data: { attackerOwner, oldOwner, cityId, wasCrown },
     });
 
     // Kill all enemy armies at the city, transfer ships
@@ -870,6 +893,11 @@ export function attackCity(
     city.owner = attackerOwner;
     city.work = 0;
     city.production = UnitType.Army; // default to army
+
+    // Handle crown city capture — vassalage, tribute, etc.
+    if (wasCrown && oldOwnerId !== 0) {
+      events.push(...handleCrownCapture(state, cityId, oldOwnerId, attackerOwner));
+    }
   } else {
     events.push({
       type: "combat",
@@ -904,9 +932,10 @@ export function attackUnit(
   const attAttrs = UNIT_ATTRIBUTES[attacker.type];
   const defAttrs = UNIT_ATTRIBUTES[defender.type];
 
-  // Use tech-boosted strength for combat
+  // Use tech-boosted strength for combat + crown defense bonus
   const attStrength = getEffectiveStrength(state, attacker);
-  const defStrength = getEffectiveStrength(state, defender);
+  const defStrength = getEffectiveStrength(state, defender)
+    + (state.kingdoms ? getCrownDefenseBonus(state, defender.owner, defender.loc) : 0);
 
   // Alternating combat rounds
   while (attacker.hits > 0 && defender.hits > 0) {
@@ -1111,6 +1140,11 @@ export function tickCityProduction(
 
     city.work += 1;
 
+    // Crown city production bonus: +50% speed via bonus work tick every 2nd turn
+    if (state.kingdoms && hasCrownProductionBonus(state, city.id) && state.turn % 2 === 0) {
+      city.work += 1;
+    }
+
     const buildTime = UNIT_ATTRIBUTES[city.production].buildTime;
     if (city.work >= buildTime) {
       // Produce the unit with city's default behavior for this type
@@ -1216,8 +1250,9 @@ export function repairShips(
     const inOwnCity = cell.cityId !== null && state.cities[cell.cityId].owner === owner;
 
     if (inOwnCity) {
-      // Heal in port: use tech city heal rate
-      unit.hits = Math.min(unit.hits + techCityHealRate(healthLevel), effectiveMax);
+      // Heal in port: use tech city heal rate + crown heal bonus
+      const crownHeal = state.kingdoms ? getCrownHealBonus(state, owner, unit.loc) : 0;
+      unit.hits = Math.min(unit.hits + techCityHealRate(healthLevel) + crownHeal, effectiveMax);
     } else if (healAtSea) {
       // Health 4: ships heal 1 HP/turn at sea
       unit.hits = Math.min(unit.hits + 1, effectiveMax);
@@ -2612,6 +2647,11 @@ export function executeTurn(
     collectPlatformIncome(state, player.id);
   }
 
+  // Collect tribute from vassals (after normal income, before production)
+  if (state.kingdoms) {
+    events.push(...collectTributeIncome(state));
+  }
+
   // Tick city production for all players
   for (const player of postResignActive) {
     events.push(...tickCityProduction(state, player.id));
@@ -2628,6 +2668,16 @@ export function executeTurn(
   // Scan vision from structures for all players
   for (const player of postResignActive) {
     scanStructureVision(state, player.id);
+  }
+
+  // Scan vision from crown cities
+  if (state.kingdoms) {
+    scanCrownVision(state, scan);
+  }
+
+  // Process rebellions (tributaries with more military than overlord auto-revolt)
+  if (state.kingdoms) {
+    events.push(...processRebellions(state));
   }
 
   // Repair ships in port for all players

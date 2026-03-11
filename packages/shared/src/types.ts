@@ -40,6 +40,17 @@ export interface PlayerInfo {
   status: "active" | "defeated" | "resigned";
 }
 
+// ─── Kingdom State ──────────────────────────────────────────────────────────
+
+/** Kingdom state for a player — crown city, territory, and tributary relationships. */
+export interface KingdomState {
+  playerId: PlayerId;
+  crownCityId: number;                // city ID of the capital (crown city)
+  tributeTarget: PlayerId | null;     // if vassal, who they pay tribute to (null = independent)
+  tributaries: PlayerId[];            // kingdoms paying tribute to this player
+  tributeRate: number;                // fraction of income paid as tribute (0.3 = 30%)
+}
+
 // ─── Deposit State ───────────────────────────────────────────────────────────
 
 export interface DepositState {
@@ -142,6 +153,9 @@ export interface GameState {
 
   // Tech research accumulation per player [science, health, electronics, war] (keyed by PlayerId)
   techResearch: Record<number, number[]>;
+
+  // Kingdom state per player (keyed by PlayerId)
+  kingdoms: Record<number, KingdomState>;
 }
 
 // ─── Player Actions ──────────────────────────────────────────────────────────
@@ -164,7 +178,7 @@ export type PlayerAction =
 // ─── Turn Result ─────────────────────────────────────────────────────────────
 
 export interface TurnEvent {
-  type: "combat" | "capture" | "production" | "death" | "discovery" | "stall" | "income" | "building" | "structure";
+  type: "combat" | "capture" | "production" | "death" | "discovery" | "stall" | "income" | "building" | "structure" | "crown" | "tribute";
   loc: Loc;
   description: string;
   data?: Record<string, unknown>;

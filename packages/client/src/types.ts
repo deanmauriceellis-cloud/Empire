@@ -34,6 +34,7 @@ export interface RenderableState {
   mapWidth: number;
   mapHeight: number;
   owner: Owner;
+  crownCityLocs: Set<number>; // locations of crown cities (for minimap/tilemap rendering)
 }
 
 // ─── Selection State ────────────────────────────────────────────────────────

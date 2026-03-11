@@ -1,7 +1,7 @@
 // Empire Reborn — Game State Bridge
 // Adapts SinglePlayerGame (full GameState) to RenderableState for the renderer.
 
-import { Owner, TerrainType, type SinglePlayerGame } from "@empire/shared";
+import { Owner, TerrainType, type SinglePlayerGame, isCrownCity } from "@empire/shared";
 import type { RenderableState, RenderableTile, RenderableCity } from "../types.js";
 
 /**
@@ -60,6 +60,16 @@ export function buildRenderableState(game: SinglePlayerGame, playerOwner: Owner 
   // Visible deposits (only seen tiles)
   const visibleDeposits = state.deposits.filter((d) => viewMap[d.loc].seen >= 0);
 
+  // Crown city locations (for minimap rendering)
+  const crownCityLocs = new Set<number>();
+  if (state.kingdoms) {
+    for (const city of state.cities) {
+      if (isCrownCity(state, city.id) && viewMap[city.loc].seen >= 0) {
+        crownCityLocs.add(city.loc);
+      }
+    }
+  }
+
   return {
     turn: state.turn,
     tiles,
@@ -70,5 +80,6 @@ export function buildRenderableState(game: SinglePlayerGame, playerOwner: Owner 
     mapWidth: state.config.mapWidth,
     mapHeight: state.config.mapHeight,
     owner,
+    crownCityLocs,
   };
 }

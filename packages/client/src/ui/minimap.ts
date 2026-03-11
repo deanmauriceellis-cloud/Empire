@@ -179,6 +179,22 @@ export function createMinimap(camera: Camera): Minimap {
 
       ctx.putImageData(imgData, 0, 0);
 
+      // Draw crown city markers (gold diamond, 3x3 pixels)
+      if (state.crownCityLocs && state.crownCityLocs.size > 0) {
+        ctx.fillStyle = "#ffd700";
+        for (const loc of state.crownCityLocs) {
+          const cx = locCol(loc) * SCALE + SCALE / 2;
+          const cy = locRow(loc) * SCALE + SCALE / 2;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - 2);
+          ctx.lineTo(cx + 2, cy);
+          ctx.lineTo(cx, cy + 2);
+          ctx.lineTo(cx - 2, cy);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+
       // Draw viewport rectangle
       const halfW = vw / 2 / cam.zoom;
       const halfH = vh / 2 / cam.zoom;

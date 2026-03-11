@@ -10,6 +10,7 @@ import {
   getEffectiveMaxHp, getEffectiveStrength, getEffectiveSpeed,
   getEffectiveFighterRange, getEffectiveSatelliteRange,
   getPlayerColor, UNOWNED,
+  isOwnCrownCity, isTributary, getOverlord,
 } from "@empire/shared";
 import type { UnitState, CityState, GameState } from "@empire/shared";
 
@@ -255,12 +256,21 @@ export function createUnitInfoPanel(): UnitInfoPanel {
             parts.push(`<div class="info-divider"></div>`);
           }
 
+          const isCrown = gameState.kingdoms && isOwnCrownCity(gameState, city.id);
           parts.push(`<div class="info-header">`);
-          parts.push(`<div class="info-icon info-city-icon" style="border-color:${ownerColor(city.owner)}">C</div>`);
+          parts.push(`<div class="info-icon info-city-icon" style="border-color:${ownerColor(city.owner)}">${isCrown ? "\u2655" : "C"}</div>`);
           parts.push(`<div class="info-title">`);
-          parts.push(`<div class="info-name">City #${city.id}</div>`);
+          parts.push(`<div class="info-name">${isCrown ? "\u2655 Crown City" : "City"} #${city.id}</div>`);
           parts.push(`<div class="info-owner" style="color:${ownerColor(city.owner)}">${ownerLabel}</div>`);
           parts.push(`</div></div>`);
+
+          // Crown city bonuses indicator
+          if (isCrown) {
+            parts.push(`<div class="info-row">`);
+            parts.push(`<span class="info-label" style="color:#ffd700">Crown</span>`);
+            parts.push(`<span class="info-value" style="color:#ffd700">+50% prod, +3 def, +2 heal, 4-tile vision</span>`);
+            parts.push(`</div>`);
+          }
 
           // Production
           parts.push(`<div class="info-row">`);

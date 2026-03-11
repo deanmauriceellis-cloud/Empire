@@ -205,6 +205,7 @@ export function createMultiplayerGame(
         mapWidth: config.mapWidth,
         mapHeight: config.mapHeight,
         owner,
+        crownCityLocs: new Set<number>(), // TODO: server needs to send kingdom data
       };
     },
 

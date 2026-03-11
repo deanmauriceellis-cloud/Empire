@@ -51,6 +51,7 @@ function createTestState(): GameState {
     buildings: [],
     nextBuildingId: 0,
     techResearch: { [Owner.Unowned]: [0,0,0,0], [Owner.Player1]: [0,0,0,0], [Owner.Player2]: [0,0,0,0] },
+    kingdoms: {},
   };
 
   const [city1Id, city2Id] = mapResult.startingCities;
