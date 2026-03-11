@@ -1,5 +1,22 @@
 # Empire Reborn — Changelog
 
+## v0.38.0 — Session 049 (2026-03-11)
+
+### Phase 7A: New Units & Bombard Mechanic
+- **5 new unit types**: Artillery (R), Special Forces (X), AWACS (W), Missile Cruiser (M), Engineer Boat (G)
+- **Bombard mechanic**: ranged damage without return fire, Chebyshev distance check, 1 move cost per shot
+- **Artillery**: land, speed 1, str 3, hp 2, bombard range 2 tiles, cannot melee (War 2 unlock)
+- **Special Forces**: land, speed 2, str 2, hp 1, invisible on enemy viewMap unless adjacent (War 3 unlock)
+- **AWACS**: air, speed 6, str 0, hp 1, fuel range 48, 5-tile vision reveal radius (Electronics 2 unlock)
+- **Missile Cruiser**: sea, speed 2, str 4, hp 6, bombard range 3 tiles (War 4 + Electronics 3 unlock)
+- **Engineer Boat**: sea, speed 2, str 0, hp 1, future bridge/mine builder (Science 2 unlock)
+- **Tech gating**: city panel shows locked units as disabled when player lacks required tech
+- **Unit info panel**: shows bombard range, stealth status, vision radius for new units
+- **Action panel**: bombard info for ranged units, wait-for-transport for special forces
+- **Client**: procedural sprites for all 5 new unit types, bombardTarget action collector method
+- **AI**: safely skips new units (Phase 8 adds AI construction/economy), ratio tables extended
+- 42 new tests (bombard.test.ts), 465 total (437 shared + 28 server)
+
 ## v0.37.0 — Session 048 (2026-03-11)
 
 ### Kingdom MMO Master Plan

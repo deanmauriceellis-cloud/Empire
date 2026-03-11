@@ -1,21 +1,35 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-KINGDOM Phase 7 next** — Bombard & Defenses
+**PLAN-KINGDOM Phase 7B next** — Defensive & Naval Structures (Bunker, Anti-Air, Coastal Battery, etc.)
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phases 1-6 of expansion plan complete (Graphics, Unit Info, Economy, Construction & Buildings, Economy Review, Tech System)
-- 423 tests passing (395 shared + 28 server)
+- Phases 1-6 of expansion plan complete + Phase 7A (new units + bombard)
+- 465 tests passing (437 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-KINGDOM.md** is the definitive plan (17 phases: gameplay → kingdom MMO → monetization)
 
 ## Latest commit
-session 048: Kingdom MMO master plan (PLAN-KINGDOM.md)
+session 049: Phase 7A — 5 new units, bombard mechanic, tech gating, invisibility, AWACS vision
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
 - Armies adjacent to capturable neutral cities not always attacking (pre-existing)
+
+## Completed (session 049) — Phase 7A: New Units & Bombard
+- [x] 5 new UnitType enums: Artillery(10), SpecialForces(11), AWACS(12), MissileCruiser(13), EngineerBoat(14)
+- [x] UnitAttributes: attackRange, visionRadius, invisible fields added
+- [x] Bombard mechanic: bombardUnit(), canBombard(), chebyshevDist(), processAction bombard
+- [x] Artillery: ranged-only (cannot melee), bombard range 2
+- [x] Special Forces: invisible on enemy viewMap, revealed when adjacent
+- [x] AWACS: 5-tile vision radius, fuel range 48, refuels like fighters
+- [x] Missile Cruiser: bombard range 3, War4+Elec3 unlock
+- [x] Engineer Boat: placeholder for bridge/mine building (Phase 7B)
+- [x] Tech gating: UNIT_TECH_REQUIREMENTS filled, city panel shows locked units
+- [x] Client: 5 new procedural sprites, bombardTarget action, bombard/stealth/vision in UI panels
+- [x] AI: safely skips new units, ratio tables extended to 15
+- [x] 42 new tests, 465 total passing
 
 ## Completed (session 048) — Kingdom MMO Master Plan
 - [x] Architecture analysis: identified all 2-player hardcoded assumptions
@@ -247,7 +261,7 @@ R1 and R5 can run in parallel (no dependencies). R2 and R3 depend on R1. R6 depe
 
 ## Next Steps (PLAN-KINGDOM phases)
 1. ~~**Phase 1-6**: Graphics, UI, Economy, Construction, Review, Tech~~ ✓ (sessions 041-047)
-2. **Phase 7**: Bombard & Defenses — 5 new units, 10 structures, ranged combat (1-2 sessions)
+2. **Phase 7A**: ~~New Units & Bombard~~ ✓ (session 049) | **Phase 7B**: Defensive Structures — 7 land + 3 naval (next session)
 3. **Phase 8**: AI Economy & Strategy — AI construction, defense placement (2-3 sessions)
 4. **Phase 9**: N-Player Foundation — dynamic ownership, N-player turns (1-2 sessions)
 5. **Phase 10**: Crown City & Kingdoms — capitals, territory, win condition (1-2 sessions)

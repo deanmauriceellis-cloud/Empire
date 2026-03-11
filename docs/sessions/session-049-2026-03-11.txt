@@ -1,0 +1,112 @@
+Session 049 — 2026-03-11
+Phase 7A: New Units & Bombard Mechanic
+
+GOAL: Implement Phase 7 (Bombard & Defenses) from PLAN-KINGDOM. Split into sub-phases:
+- 7A: New unit types + bombard mechanic (this session)
+- 7B: Defensive & naval structures (next session)
+- 7C: Graphics polish — projectile animations, range overlays (future)
+
+COMPLETED:
+
+1. New Unit Types (constants.ts, units.ts)
+   - Artillery (R, type=10): land, spd 1, str 3, hp 2, buildTime 20, cost [25,10,0], attackRange 2
+   - Special Forces (X, type=11): land, spd 2, str 2, hp 1, buildTime 15, cost [15,5,10], invisible
+   - AWACS (W, type=12): air, spd 6, str 0, hp 1, buildTime 20, cost [20,15,0], range 48, visionRadius 5
+   - Missile Cruiser (M, type=13): sea, spd 2, str 4, hp 6, buildTime 40, cost [35,30,0], attackRange 3
+   - Engineer Boat (G, type=14): sea, spd 2, str 0, hp 1, buildTime 15, cost [15,5,5]
+   - NUM_UNIT_TYPES: 10 → 15
+   - UNIT_TYPE_CHARS: "AFPDSTCBZE" → "AFPDSTCBZERXWMG"
+   - MOVE_ORDER: extended to 15, new units interleaved logically
+
+2. UnitAttributes Extension (units.ts)
+   - 3 new fields: attackRange (0=melee only), visionRadius (0=standard), invisible (boolean)
+   - All existing units: attackRange=0, visionRadius=0, invisible=false
+   - Compact formatting for all 15 unit entries
+
+3. Bombard Mechanic (game.ts, types.ts)
+   - New PlayerAction: { type: "bombard"; unitId: number; targetLoc: Loc }
+   - bombardUnit(): deals attacker's effective strength as damage, no return fire, costs 1 move
+   - canBombard(): validates attackRange > 0, moves remaining, 1 < chebyshevDist <= attackRange
+   - chebyshevDist(): Chebyshev distance between two map locations
+   - processAction: new "bombard" case finds enemy at target, calls bombardUnit
+   - Artillery melee prevention: "attack" action blocked for artillery (must use bombard)
+   - Non-combat units (str 0): "attack" action blocked for AWACS, EngineerBoat, etc.
+
+4. Special Forces Invisibility (game.ts)
+   - updateViewCell: invisible enemy units appear as terrain (not unit char) on viewMap
+   - Exception: revealed when scanning player has own unit adjacent (hasAdjacentOwnUnit helper)
+   - Own invisible units always visible on own viewMap
+
+5. AWACS Vision (game.ts)
+   - scan() call in moveUnit uses UNIT_ATTRIBUTES[].visionRadius as extra scan range
+   - createUnit: scans with visionRadius on creation
+   - AWACS range=48 fuel, refueled in cities/carriers like fighters (executeTurn)
+   - fighterFuelCheck extended to handle AWACS (kill on fuel exhaustion, return to base)
+
+6. Tech Gating (tech.ts)
+   - UNIT_TECH_REQUIREMENTS filled: Artillery=War2, SpecForces=War3, AWACS=Elec2,
+     EngineerBoat=Sci2, MissileCruiser=War4+Elec3
+   - techMaxHpBonus: Health 3 now includes Artillery, SpecialForces (land units)
+   - techStrengthBonus: War 2 ships includes MissileCruiser, EngineerBoat
+   - techVisionBonus: Elec 1 ships includes MissileCruiser, EngineerBoat
+
+7. AI Updates (ai.ts, ai-production.ts, ai-helpers.ts)
+   - Ratio tables: extended from 10 to 15 entries (zeros for new units — Phase 8 adds AI)
+   - needMore(): skips Artillery, SpecialForces, AWACS, MissileCruiser, EngineerBoat
+   - assignIdleBehaviors: isShip check includes MissileCruiser, EngineerBoat
+   - moveAIUnit: new types fall through to default (no-op) — Phase 8 adds handlers
+
+8. Client Updates
+   - placeholders.ts: 5 new procedural sprites (cannon, masked figure, radar plane, missile ship, crane boat)
+   - generateAssets: texture loop extended to UnitType.EngineerBoat
+   - actionCollector.ts: bombardTarget() method, canBombard import, artillery melee prevention in moveUnit
+   - actionPanel.ts: bombard range display for ranged units, SpecialForces wait-for-transport
+   - unitInfoPanel.ts: bombard range, stealth indicator, vision radius display
+   - cityPanel.ts: lockedTypes parameter, disabled/[LOCKED] for tech-gated units
+   - main.ts: getLockedUnitTypes() helper, canProduceUnit import, passed to cityPanel.open()
+
+9. Other Fixes
+   - continent.ts: createUnitCounts extended for 15 types (TS Record<UnitType, number>)
+   - constants.test.ts: updated for 15 unit types
+   - units.test.ts: updated count, canTraverse loop to EngineerBoat
+
+10. Tests (bombard.test.ts)
+    - new unit attributes (5 tests): verify all stats for each new unit
+    - unit tech requirements (7 tests): verify lock/unlock for each new unit + existing units
+    - chebyshevDist (3 tests): same loc, adjacent, distance 2
+    - canBombard (6 tests): valid range, adjacent rejection, out-of-range, non-ranged, out-of-moves, cruiser
+    - bombardUnit (5 tests): damage calc, kill target, no movement, move cost, no return damage
+    - processAction bombard (4 tests): valid, wrong owner, adjacent, no target
+    - artillery melee (1 test): melee attack blocked
+    - special forces invisibility (3 tests): terrain on enemy scan, revealed adjacent, visible to owner
+    - AWACS vision (3 tests): visionRadius, reveals far tiles, fuel range
+    - non-combat units (2 tests): AWACS/EngineerBoat cannot melee
+    - tech bonuses for new units (4 tests): War strength on artillery/cruiser, Health HP on artillery/specops
+
+FILES CHANGED: 18
+  packages/shared/src/constants.ts — 5 new UnitType enums, NUM_UNIT_TYPES=15, MOVE_ORDER
+  packages/shared/src/types.ts — bombard PlayerAction
+  packages/shared/src/units.ts — 5 UNIT_ATTRIBUTES, costs, attack lists, 3 new fields
+  packages/shared/src/tech.ts — UNIT_TECH_REQUIREMENTS, bonus updates
+  packages/shared/src/game.ts — bombardUnit, canBombard, chebyshevDist, invisibility, AWACS vision
+  packages/shared/src/continent.ts — createUnitCounts for 15 types
+  packages/shared/src/ai-helpers.ts — ratio tables 15 entries
+  packages/shared/src/ai-production.ts — skip new units
+  packages/shared/src/ai.ts — isShip/isAir checks for new types
+  packages/shared/src/__tests__/constants.test.ts — updated expectations
+  packages/shared/src/__tests__/units.test.ts — updated expectations
+  packages/shared/src/__tests__/bombard.test.ts — 42 new tests (NEW FILE)
+  packages/client/src/assets/placeholders.ts — 5 new sprites
+  packages/client/src/game/actionCollector.ts — bombardTarget, melee prevention
+  packages/client/src/main.ts — getLockedUnitTypes, canProduceUnit
+  packages/client/src/ui/actionPanel.ts — bombard info, specops transport
+  packages/client/src/ui/cityPanel.ts — lockedTypes tech gating
+  packages/client/src/ui/unitInfoPanel.ts — bombard, stealth, vision display
+
+TESTS: 465 total (437 shared + 28 server), all passing
+CLIENT BUILD: clean
+
+NEXT SESSION:
+- Phase 7B: Defensive structures (Bunker, Anti-Air, Coastal Battery, Radar, Artillery Fort, Minefield, SAM)
+- Phase 7B: Naval structures (Bridge, Sea Mine, Offshore Platform)
+- Phase 7C: Bombard projectile animation, range overlay highlight, structure sprites
