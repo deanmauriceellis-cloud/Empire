@@ -770,6 +770,27 @@ const CSS = `
   color: var(--color-text-bright);
 }
 
+/* ─── Economy Review Button ────────────────────────────────────────────── */
+
+#economy-review-btn {
+  pointer-events: auto;
+  background: rgba(var(--color-accent-rgb), 0.15);
+  border: 1px solid var(--color-border-dim);
+  color: var(--color-accent-light);
+  padding: 3px 10px;
+  cursor: pointer;
+  font-family: var(--ui-font);
+  font-size: 12px;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+
+#economy-review-btn:hover {
+  background: rgba(var(--color-accent-rgb), 0.3);
+  border-color: var(--color-accent-hex);
+  color: var(--color-text-bright);
+}
+
 /* ─── War Stats Panel ──────────────────────────────────────────────────── */
 
 #war-stats-panel {

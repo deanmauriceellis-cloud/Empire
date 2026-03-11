@@ -36,8 +36,11 @@ type Tab = "events" | "resources" | "cities" | "tech" | "construction" | "buildi
 
 export interface EconomyReview {
   readonly element: HTMLDivElement;
+  readonly button: HTMLButtonElement;
   /** Show the review screen. Returns a promise that resolves when user confirms. */
   open(state: GameState, owner: Owner, events: TurnEvent[]): Promise<void>;
+  /** Toggle open/close without blocking. Uses last-known state. */
+  toggle(state: GameState, owner: Owner, events: TurnEvent[]): void;
   /** Close without confirming (e.g. if game ends). */
   forceClose(): void;
   readonly isOpen: boolean;
@@ -102,11 +105,17 @@ export function createEconomyReview(): EconomyReview {
   const content = document.createElement("div");
   content.className = "er-content";
 
-  // Confirm button
+  // Confirm button (hidden when opened via toggle)
   const confirmBtn = document.createElement("button");
   confirmBtn.className = "er-confirm-btn";
   confirmBtn.innerHTML = `Confirm &amp; Execute Turn →`;
   confirmBtn.addEventListener("click", () => confirm());
+
+  // HUD button for toggling
+  const button = document.createElement("button");
+  button.id = "economy-review-btn";
+  button.textContent = "Economy";
+  // Click handler wired externally via toggle()
 
   // Assemble
   element.appendChild(header);
@@ -579,6 +588,7 @@ export function createEconomyReview(): EconomyReview {
 
   return {
     element,
+    button,
 
     get isOpen(): boolean {
       return isOpen;
@@ -591,6 +601,7 @@ export function createEconomyReview(): EconomyReview {
       isOpen = true;
 
       turnLabel.textContent = `Turn ${state.turn}`;
+      confirmBtn.style.display = "";
       element.classList.add("visible");
 
       // Default to events tab if there are events, otherwise resources
@@ -599,6 +610,23 @@ export function createEconomyReview(): EconomyReview {
       return new Promise<void>((resolve) => {
         resolvePromise = resolve;
       });
+    },
+
+    toggle(state: GameState, owner: Owner, events: TurnEvent[]): void {
+      if (isOpen) {
+        confirm();
+        return;
+      }
+      currentState = state;
+      currentOwner = owner;
+      currentEvents = events;
+      isOpen = true;
+
+      turnLabel.textContent = `Turn ${state.turn}`;
+      confirmBtn.style.display = "none"; // hide confirm button in toggle mode
+      element.classList.add("visible");
+
+      switchTab(activeTab);
     },
 
     forceClose(): void {

@@ -7,6 +7,7 @@ export interface HUD {
   readonly topBar: HTMLDivElement;
   readonly bottomBar: HTMLDivElement;
   setWarStatsButton(btn: HTMLButtonElement): void;
+  setEconomyButton(btn: HTMLButtonElement): void;
   update(state: UIState): void;
 }
 
@@ -27,6 +28,10 @@ export function createHUD(): HUD {
     bottomBar,
 
     setWarStatsButton(btn: HTMLButtonElement): void {
+      topBar.insertBefore(btn, topContent);
+    },
+
+    setEconomyButton(btn: HTMLButtonElement): void {
       topBar.insertBefore(btn, topContent);
     },
 

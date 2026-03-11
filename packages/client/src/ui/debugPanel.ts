@@ -22,9 +22,13 @@ export function createDebugPanel(): DebugPanel {
   const flags: DebugFlags = {
     revealMap: false,
     aiOmniscient: false,
-    playerAI: false,
-    diagLog: false,
+    playerAI: true,
+    diagLog: true,
   };
+
+  // Enable AI logging immediately since diagLog defaults to on
+  setAIDebugLog(true);
+  setAIVerboseLog(true);
 
   function render(): void {
     element.innerHTML =

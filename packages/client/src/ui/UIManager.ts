@@ -58,8 +58,9 @@ export function createUIManager(camera: Camera, storeActions?: StorePanelActions
     onClose: () => { store.close(); },
   });
 
-  // Wire war stats button into HUD top bar
+  // Wire war stats and economy buttons into HUD top bar
   hud.setWarStatsButton(warStats.button);
+  hud.setEconomyButton(economyReview.button);
 
   // Build sidebar
   const sidebar = document.createElement("div");

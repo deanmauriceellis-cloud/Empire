@@ -103,6 +103,20 @@ async function init() {
   // ─── UI ───────────────────────────────────────────────────────────────
   const ui = createUIManager(camera);
 
+  // Wire economy review button
+  ui.economyReview.button.addEventListener("click", () => {
+    if (!gameStarted) return;
+    if (mode === "singleplayer") {
+      ui.economyReview.toggle(game.state, playerOwner, [...(collector?.turnEvents ?? [])]);
+    } else if (mode === "world") {
+      const vs = wc.visibleState;
+      if (vs && wc.owner != null) ui.economyReview.toggle(vs as any, wc.owner, []);
+    } else if (mode === "multiplayer") {
+      const vs = mp.visibleState;
+      if (vs && mp.owner != null) ui.economyReview.toggle(vs as any, mp.owner, []);
+    }
+  });
+
   const selection: SelectionState = {
     selectedUnitId: null,
     selectedCityId: null,
@@ -553,7 +567,7 @@ async function init() {
   function startSinglePlayer(options?: GameSetupOptions): void {
     mode = "singleplayer";
     const configOverrides: Partial<GameConfig> = {
-      numPlayers: 6, // 1 human + 5 AI kingdoms
+      numPlayers: 2, // 1 human (with AI assist) + 1 AI
     };
     if (options) {
       configOverrides.mapWidth = options.mapSize.width;
@@ -1139,10 +1153,9 @@ async function init() {
 
   // ─── End Turn ─────────────────────────────────────────────────────────
 
-  async function handleEndTurn(): Promise<void> {
+  function handleEndTurn(): void {
+    if (ui.economyReview.isOpen) ui.economyReview.forceClose();
     if (mode === "singleplayer") {
-      // Show economy review screen first, then execute turn on confirm
-      await ui.economyReview.open(game.state, playerOwner, [...collector.turnEvents]);
       audio.playTurnEnd();
       handleSinglePlayerEndTurn();
     } else if (mode === "multiplayer") {
@@ -1218,7 +1231,10 @@ async function init() {
     lastEventCount = 0;
     audio.playTurnStart();
     ui.turnFlow.startTurn(game.state);
-    ui.turnFlow.nextUnit(game.state, camera);
+    if (!ui.debug.flags.playerAI) {
+      // Only auto-focus camera when human is controlling units
+      ui.turnFlow.nextUnit(game.state, camera);
+    }
     if (ui.turnFlow.currentUnitId !== null) {
       selection.selectedUnitId = ui.turnFlow.currentUnitId;
       selection.selectedCityId = null;
