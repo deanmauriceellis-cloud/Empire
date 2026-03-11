@@ -1,21 +1,42 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-KINGDOM Phase 7B next** — Defensive & Naval Structures (Bunker, Anti-Air, Coastal Battery, etc.)
+**PLAN-KINGDOM Phase 8 next** — AI Economy & Strategy (AI construction, defense placement, resource awareness)
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phases 1-6 of expansion plan complete + Phase 7A (new units + bombard)
-- 465 tests passing (437 shared + 28 server)
+- Phases 1-7 of expansion plan complete (7A new units + 7B defensive/naval structures)
+- 538 tests passing (510 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-KINGDOM.md** is the definitive plan (17 phases: gameplay → kingdom MMO → monetization)
 
 ## Latest commit
-session 049: Phase 7A — 5 new units, bombard mechanic, tech gating, invisibility, AWACS vision
+session 050: Phase 7B — 10 defensive & naval structures, auto-attack, mines, bridges
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
 - Armies adjacent to capturable neutral cities not always attacking (pre-existing)
+- Structure sprites not yet rendered on tilemap (visual polish deferred)
+- Economy review tabs not yet updated for structures
+
+## Completed (session 050) — Phase 7B: Defensive & Naval Structures
+- [x] 10 new BuildingType enums: Bunker(9), AntiAir(10), CoastalBattery(11), RadarStation(12), ArtilleryFort(13), Minefield(14), SAMSite(15), Bridge(16), SeaMine(17), OffshorePlatform(18)
+- [x] Extended BuildingAttributes: maxHp, strength, attackRange, invisible, singleUse, visionRadius, targetAir/Sea/Land
+- [x] STRUCTURE_TECH_REQUIREMENTS: tech gating for all 10 structures
+- [x] startBuildStructure(): Construction builds defensive on land, EngineerBoat builds naval on water
+- [x] destroyBuilding(): removes structure, clears deposit/city/constructor references
+- [x] bombardStructure(): deal damage via bombard action, destroy at HP 0
+- [x] triggerMine()/checkMineTrigger(): mines trigger on enemy unit entry, single-use consumed
+- [x] autoAttackStructures(): Bunker(adjacent), AntiAir/Coastal(2 tiles), ArtFort/SAM(3 tiles)
+- [x] scanStructureVision(): Radar Station 5-tile persistent vision each turn
+- [x] collectPlatformIncome(): Offshore Platform +1 oil/turn
+- [x] Bridge traversal: land units cross water tiles with completed bridges via goodLoc()
+- [x] Bombard action targets structures when no unit present at location
+- [x] BuildingState.hp field added to all buildings (0 for non-structures)
+- [x] canBuildStructure() tech gating in tech.ts
+- [x] Client: action panel build buttons for Construction (defensive) and EngineerBoat (naval)
+- [x] Client: actionCollector.buildStructure(), main.ts build-structure-N handler
+- [x] 73 new tests, 510 total shared passing
 
 ## Completed (session 049) — Phase 7A: New Units & Bombard
 - [x] 5 new UnitType enums: Artillery(10), SpecialForces(11), AWACS(12), MissileCruiser(13), EngineerBoat(14)
@@ -261,8 +282,8 @@ R1 and R5 can run in parallel (no dependencies). R2 and R3 depend on R1. R6 depe
 
 ## Next Steps (PLAN-KINGDOM phases)
 1. ~~**Phase 1-6**: Graphics, UI, Economy, Construction, Review, Tech~~ ✓ (sessions 041-047)
-2. **Phase 7A**: ~~New Units & Bombard~~ ✓ (session 049) | **Phase 7B**: Defensive Structures — 7 land + 3 naval (next session)
-3. **Phase 8**: AI Economy & Strategy — AI construction, defense placement (2-3 sessions)
+2. ~~**Phase 7A**: New Units & Bombard~~ ✓ (session 049) | ~~**Phase 7B**: Defensive Structures~~ ✓ (session 050)
+3. **Phase 8**: AI Economy & Strategy — AI construction, defense placement (2-3 sessions, NEXT)
 4. **Phase 9**: N-Player Foundation — dynamic ownership, N-player turns (1-2 sessions)
 5. **Phase 10**: Crown City & Kingdoms — capitals, territory, win condition (1-2 sessions)
 6. **Phase 11**: Tick-Based Server — timer turns, offline AI, shields (1 session)

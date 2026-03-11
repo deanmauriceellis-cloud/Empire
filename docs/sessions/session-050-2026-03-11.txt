@@ -1,0 +1,70 @@
+Session 050 — 2026-03-11
+Phase 7B: Defensive & Naval Structures
+
+OBJECTIVE:
+Implement 10 defensive and naval structures with full combat mechanics,
+completing the Bombard & Defenses phase from PLAN-KINGDOM.
+
+CHANGES:
+
+1. constants.ts
+   - Added 10 BuildingType enums: Bunker(9) through OffshorePlatform(18)
+   - NUM_BUILDING_TYPES: 9 → 19
+   - DEFENSIVE_STRUCTURE_TYPES and NAVAL_STRUCTURE_TYPES arrays
+   - Extended BUILDING_NAMES array to 19 entries
+
+2. types.ts
+   - BuildingState: added hp field (number)
+   - PlayerAction: added buildStructure variant
+   - TurnEvent: added "structure" event type
+
+3. buildings.ts
+   - Extended BuildingAttributes interface: maxHp, strength, attackRange,
+     invisible, singleUse, visionRadius, targetAir/Sea/Land
+   - 10 new BUILDING_ATTRIBUTES entries with full combat stats
+   - STRUCTURE_TECH_REQUIREMENTS map
+   - New helpers: isDefensiveStructureType, isNavalStructureType, isStructureType,
+     canStructureTarget, isAirUnit, isSeaUnit, isLandUnit
+
+4. tech.ts
+   - canBuildStructure() function for tech gating
+   - Imports STRUCTURE_TECH_REQUIREMENTS from buildings.ts
+
+5. game.ts (387 lines added)
+   - findBridgeAtLoc, findStructureAtLoc, findOwnerStructures helpers
+   - destroyBuilding(): removes from state, clears deposit/city/constructor refs
+   - bombardStructure(): deal damage, destroy at HP 0
+   - triggerMine(): mine deals strength damage to victim, consumed
+   - checkMineTrigger(): find and trigger enemy mine at unit's location
+   - autoAttackStructures(): all structures fire at nearest valid enemy each turn
+   - scanStructureVision(): radar station persistent vision scan
+   - collectPlatformIncome(): offshore platform +1 oil/turn
+   - startBuildStructure(): Construction builds defensive, EngineerBoat builds naval
+   - goodLoc(): bridge traversal for land units on water tiles
+   - processAction: buildStructure case, bombard targets structures
+   - moveUnit: mine trigger check after movement (processAction + behaviorMove)
+   - executeTurn: autoAttackStructures, collectPlatformIncome, scanStructureVision
+
+6. Client changes
+   - actionCollector.ts: buildStructure() method
+   - actionPanel.ts: build buttons for Construction (defensive) and EngineerBoat (naval)
+   - main.ts: build-structure-N action handler
+
+7. Tests
+   - structures.test.ts: 73 new tests covering attributes, targeting, building,
+     tech gating, construction tick, destruction, bombardment, mines, auto-attack,
+     bridges, radar vision, platform income, process action, executeTurn integration
+   - buildings.test.ts: updated all BuildingState objects with hp:0, length check 9→19
+
+DEFERRED (visual polish):
+- Procedural sprites for structure rendering on tilemap
+- Structure info in unit info panel
+- Economy review tab updates for structures
+
+TEST RESULTS:
+- Shared: 510 tests passing (was 437)
+- Server: 28 tests passing
+- Client: builds clean
+- Total: 538 tests (was 465)
+
+NEXT: Phase 8 — AI Economy & Strategy

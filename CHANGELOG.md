@@ -1,5 +1,22 @@
 # Empire Reborn — Changelog
 
+## v0.39.0 — Session 050 (2026-03-11)
+
+### Phase 7B: Defensive & Naval Structures
+- **7 defensive structures** (built by Construction on land): Bunker, Anti-Air Battery, Coastal Battery, Radar Station, Artillery Fort, Minefield, SAM Site
+- **3 naval structures** (built by Engineer Boat on water): Bridge, Sea Mine, Offshore Platform
+- **Auto-attack**: Bunker (adjacent land), Anti-Air (2-tile air), Coastal Battery (2-tile sea), Artillery Fort (3-tile land), SAM Site (3-tile air) — fires each turn during behavior phase
+- **Mine mechanics**: Minefield/Sea Mine invisible, single-use, trigger on enemy entry dealing strength damage, consumed after trigger
+- **Bridge traversal**: land units cross water tiles via completed bridges (goodLoc check)
+- **Radar Station**: 5-tile persistent vision radius scanned each turn
+- **Offshore Platform**: +1 oil/turn income
+- **Structure destruction**: structures have HP, can be bombarded/attacked, destroyed when HP reaches 0
+- **Tech gating**: Bunker (none), Minefield/SeaMine (War 1), Radar/Bridge (Elec 2/Sci 2), AntiAir/Platform (Sci 3), CoastalBattery (Sci 4), ArtilleryFort (War 3), SAM (Elec 4)
+- **BuildingState.hp**: new field for all buildings (0 for non-structures)
+- **Client UI**: action panel shows structure build buttons for Construction and Engineer Boat
+- **processAction**: handles buildStructure, bombard now targets structures when no unit present
+- 73 new tests (structures.test.ts), 538 total (510 shared + 28 server)
+
 ## v0.38.0 — Session 049 (2026-03-11)
 
 ### Phase 7A: New Units & Bombard Mechanic
