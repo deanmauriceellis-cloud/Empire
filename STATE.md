@@ -1,17 +1,30 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-UNIFIED Phase 2 complete** — Unit Info Panel & Vision
+**PLAN-UNIFIED Phase 3 complete** — Economy Foundation (needs visual debugging)
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phase 1 (Graphics Foundation) and Phase 2 (Unit Info & Vision) of expansion plan complete
-- 292 unit/integration tests passing (264 shared + 28 server)
+- Phases 1-3 of expansion plan complete (Graphics, Unit Info, Economy)
+- 323 tests passing (295 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-UNIFIED.md** is the definitive plan for all future implementation
 
 ## Latest commit
-`ab8d6ae` — session 042: Phase 2 unit info panel & map overlays
+`f36e3e8` — session 043: Phase 3 Economy Foundation
+
+## Known Issues
+- Visual issues reported on first test of Phase 3 — needs debugging session 044
+
+## Completed (session 043) — Economy Foundation
+- [x] ResourceType, DepositType enums, UNIT_COSTS table
+- [x] DepositState, depositId on MapCell, resources/deposits on GameState
+- [x] placeDeposits() in mapgen: fair, balanced, height-based, deterministic
+- [x] Resources consumed on production start, city stalls if insufficient
+- [x] collectResourceIncome() — +3/turn from completed deposit buildings
+- [x] Deposit textures (mountain/derrick/plant), HUD resource display
+- [x] Minimap deposit dots, cost display in city panel and unit info panel
+- [x] 31 new economy tests
 
 ## Completed (session 042) — Unit Info Panel & Vision
 - [x] Right-sidebar unit info panel: icon, HP bar, stats, behavior, GoTo ETA, cargo manifest

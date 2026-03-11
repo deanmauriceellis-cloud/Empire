@@ -1,5 +1,21 @@
 # Empire Reborn — Changelog
 
+## v0.32.0 — Session 043 (2026-03-10)
+
+### Economy — Phase 3: Economy Foundation (PLAN-UNIFIED)
+- **Resource system** — Ore, Oil, Textile stockpiles per player; starting resources 150/100/150
+- **Unit resource costs** — all 9 unit types have [ore, oil, textile] costs (Army 5/0/5 through Battleship 40/25/0)
+- **Production gating** — resources consumed when production starts (work 0→1); city stalls with event if insufficient
+- **Map deposits** — ore veins, oil wells, textile farms placed during mapgen (~1 per 3-4 cities); fair distribution near each player, contested middle; height-based type assignment
+- **Resource income** — completed deposit buildings generate +3/turn of their resource type
+- **Deposit graphics** — procedural tile icons (mountain/derrick/plant) with gentle pulse animation
+- **HUD resource display** — Ore/Oil/Txt counts in top bar with color-coded labels
+- **Minimap deposits** — colored dots (brown=ore, dark=oil, green=textile)
+- **City panel costs** — resource cost shown on production buttons
+- **Unit info costs** — resource cost in city section of info panel
+- **31 new economy tests** — costs, affordability, gating, stalls, income, deposit placement, serialization
+- Known: visual issues reported, needs debugging
+
 ## v0.31.0 — Session 042 (2026-03-10)
 
 ### UI — Phase 2: Unit Info Panel & Vision (PLAN-UNIFIED)

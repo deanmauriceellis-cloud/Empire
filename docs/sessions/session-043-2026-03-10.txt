@@ -1,0 +1,92 @@
+Session 043 — 2026-03-10
+Phase 3: Economy Foundation
+
+SUMMARY
+Implemented the full economy data model, map deposit placement, resource-gated
+production, per-turn income, and client-side graphics (deposit rendering, HUD
+resource display, minimap dots, cost display in panels).
+
+NOTE: User reported visual issues on first test — needs debugging in session 044.
+
+CHANGES (24 files, +1167 lines)
+
+Shared — Data Model (3A):
+- constants.ts: ResourceType enum (Ore, Oil, Textile), DepositType enum
+  (OreVein, OilWell, TextileFarm), DEPOSIT_NAMES, DEPOSIT_RESOURCE,
+  DEPOSIT_INCOME (3/turn), STARTING_ORE (150), STARTING_OIL (100),
+  STARTING_TEXTILE (150)
+- types.ts: DepositState interface (id, loc, type, owner, buildingComplete),
+  depositId added to MapCell, resources/deposits/nextDepositId added to
+  GameState, TurnEvent expanded with "stall" and "income" types
+- units.ts: UNIT_COSTS table [ore, oil, textile] for all 9 unit types,
+  getUnitCost(), canAffordUnit() helpers
+
+Shared — Map Generation (3B):
+- mapgen.ts: placeDeposits() — density ~1 per 3-4 cities, fair placement
+  with equal types near each player start, contested deposits in middle,
+  height-based type assignment (ore=mountains, oil=lowlands, textile=mid),
+  works on standard and river maps, deterministic with seed
+- MapGenerationResult extended with deposits field
+- Both generateStandardMap and generateRiverMap call placeDeposits
+
+Shared — Resource Mechanics (3C):
+- game.ts: tickCityProduction() modified — resources consumed when production
+  starts (work 0→1), city stalls with "stall" event if can't afford,
+  resources NOT consumed during retooling penalty (work < 0)
+- game.ts: collectResourceIncome() — completed deposit buildings generate
+  DEPOSIT_INCOME per turn per resource type, emits "income" event
+- executeTurn: income collected before production tick
+
+Shared — Tests:
+- economy.test.ts: 31 new tests — unit costs, canAffordUnit, production
+  gating (consume on start, not on subsequent ticks, stall, resume, multi-city,
+  stalled doesn't block others, completion spawns unit, retooling penalty),
+  income (completed deposit, incomplete, unowned, each type, stacking),
+  deposit placement (count, land tiles, unowned, map references, type balance,
+  determinism, river maps), serialization round-trip
+
+Server:
+- GameManager.ts: resources/deposits/nextDepositId in game state init,
+  uses mapResult.deposits, imports STARTING_* constants
+- database.test.ts: GameState test helper updated with new fields
+
+Client — Types:
+- types.ts: RenderableTile extended with depositType/depositOwner/depositComplete,
+  RenderableState extended with deposits[] and resources[], UIState extended
+  with resources[], AssetBundle extended with deposits Map
+
+Client — Bridge:
+- bridge.ts: buildRenderableState populates deposit fields from game state,
+  filters visible deposits, passes player resources
+- multiplayer.ts: stub fields (TODO: server visibility filtering)
+
+Client — Graphics:
+- placeholders.ts: makeDepositTexture() — 3 procedural deposit icons:
+  ore (overlapping mountain triangles with snow cap), oil (dark pool + derrick),
+  textile (leaf cluster), generated in generateAssets()
+- constants.ts: DEPOSIT_ORE/OIL/TEXTILE colors added to COLORS
+- tilemap.ts: depositContainer (zIndex 3), depositPool sprite pooling,
+  getDepositSprite/getDepositTexture methods, deposit overlay rendering
+  with gentle pulse animation in tile loop
+
+Client — UI:
+- hud.ts: resource display in top bar (Ore/Oil/Txt with colored labels)
+- styles.ts: CSS for .resources, .res-ore/.res-oil/.res-txt with ::before
+  color-coded labels
+- minimap.ts: deposit dots rendered before units (brown=ore, dark=oil, green=textile)
+- cityPanel.ts: resource cost shown on production buttons (e.g., "5o/5t")
+- unitInfoPanel.ts: resource cost row in city section (colored ore/oil/txt)
+- main.ts: resources passed to UIState in all 3 build paths
+
+TEST RESULTS
+- 295 shared tests (264 existing + 31 new economy)
+- 28 server tests
+- 323 total, all passing
+- Client builds clean (tsc + vite)
+
+COMMIT
+f36e3e8 session 043: Phase 3 Economy Foundation — resources, deposits, production gating
+
+KNOWN ISSUES
+- User reported visual issues on first test — needs investigation
+- Multiplayer: deposits/resources not yet sent via server visibility filter (stubbed)
