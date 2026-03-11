@@ -1,0 +1,82 @@
+Session 056 — 2026-03-11
+Phase 12: Dynamic Map & Player Join
+
+COMPLETED
+─────────
+12A: Kingdom Tile Generation
+  - Extracted placeKingdomTile() for on-demand kingdom creation
+  - Each tile generated with terrain, cities, deposits, player registration, crown city, initial vision
+  - Self-contained: 5-8 cities, 3-4 deposits per tile
+
+12B: Distance Selection
+  - findAvailableKingdom() now triggers auto-expansion when no AI kingdoms available at preferred ring
+  - Falls back to nearest available ring, then expands if room exists
+
+12C: World Map Expansion
+  - Pre-allocated grid: map dimensions based on maxRadius (default 5 → 11x11 = 121 kingdoms)
+  - Only initialRadius rings populated at creation; rest is ocean
+  - expandWorldToRing(): deterministic expansion using seeded RNG
+  - No index remapping needed — ocean cells ready for new tiles
+  - populatedRadius tracks current expansion state
+  - expansionSeed on WorldState for deterministic expansion across sessions
+
+12D: AI Kingdom Population & Strength Gradient
+  - aiStartingArmies(): origin=5, ring1=3, ring2=2, ring3+=1
+  - aiStartingTech(): origin=[15,10,10,15], ring1=[5,3,3,5], ring2+=none
+  - aiStartingResourceBonus(): origin=[200,150,200], ring1=[50,30,50], ring2+=none
+  - Creates natural difficulty gradient: center=hard, edges=easy
+
+12E: World Browser Info
+  - getWorldRingInfo(): per-ring slot counts (total/AI/human), descriptions
+  - RingInfo type in protocol, WorldSummary.rings optional field
+  - Ring descriptions for UI display
+
+12F: Spawn Protection
+  - SPAWN_PROTECTION_TICKS = 100 constant
+  - KingdomTile.spawnProtectionEndTick set on claimKingdom(world, tile, name, currentTick)
+  - isSpawnProtected(), isBlockedBySpawnProtection(), getKingdomTileAtLoc() query functions
+  - TickInfo.spawnProtectionTicks sent to client
+  - AI kingdoms don't get spawn protection
+
+12G: Cross-Kingdom Mechanics
+  - Seamless map — units move freely across tile boundaries (already worked, no game logic boundaries)
+  - Protection functions available for server-side enforcement
+
+FILES CHANGED
+─────────────
+packages/shared/src/world-map.ts        — Major rewrite: pre-allocated grid, placeKingdomTile, expandWorldToRing, AI gradient, spawn protection, ring info
+packages/shared/src/constants.ts        — SPAWN_PROTECTION_TICKS, WORLD_MAX_RADIUS
+packages/shared/src/protocol.ts         — WorldSummary.rings, TickInfo.spawnProtectionTicks
+packages/server/src/WorldServer.ts      — Spawn protection in join/tick info, ring info in world list, expansion seed persistence
+packages/shared/src/__tests__/world-map.test.ts — 30 new tests (60 total)
+
+TESTS
+─────
+30 new tests:
+  - 4 ringSlotCount
+  - 2 pre-allocated grid / populatedRadius
+  - 6 expandWorldToRing (add ring, terrain, no-op, clamp, deterministic, viewMaps)
+  - 3 AI strength gradient (armies, tech, resources)
+  - 2 spawn protection on claim
+  - 7 spawn protection queries (isSpawnProtected, getKingdomTileAtLoc, isBlockedBySpawnProtection)
+  - 3 getWorldRingInfo
+  - 1 auto-expand on findAvailableKingdom
+  - 2 spawnProtectionEndTick defaults
+
+701 total (651 shared + 50 server), all passing
+23 test files, 0 failures
+
+ARCHITECTURE NOTES
+──────────────────
+- Pre-allocation strategy avoids the index remapping problem: all location indices (city.loc, unit.loc, deposit.loc, building.loc, viewMap indices) stay stable because the map dimensions never change after creation
+- Map sized for maxRadius (11x11 grid = ~1244x1244 tiles = ~1.5M cells) — acceptable memory for the target 100-player scale
+- Expansion is deterministic: same expansionSeed + same expansion order = same kingdoms, enabling save/load consistency
+- placeKingdomTile handles all per-player initialization inline: player registration, resources, tech, viewMap, kingdom state, crown city, starting units, vision scan
+- AI strength gradient makes center kingdoms genuinely dangerous (5 armies + war/science tech + resource stockpile) while outer rings match human start conditions
+
+DEFERRED
+────────
+- Server-side spawn protection enforcement in executeTurn (Phase 14 — needs world context in game engine)
+- World browser UI rendering of ring selection (client visual polish)
+- Procedural sprites for spawn shield visual (client rendering)
+- Kingdom tile interior water features (terrain variety — quality of life)
