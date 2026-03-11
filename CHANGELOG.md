@@ -1,5 +1,12 @@
 # Empire Reborn — Changelog
 
+## v0.33.0 — Session 044 (2026-03-10)
+
+### Economy Fixes
+- **Passive city income** — each owned city generates +2 ore, +1 oil, +2 textile per turn (scales with expansion)
+- **Retool stall bug fix** — cities with negative work (retool penalty) no longer false-stall on affordability check
+- Verified: 0 stalls across 171-turn and 132-turn test games (was 1808 stalls before fix)
+
 ## v0.32.0 — Session 043 (2026-03-10)
 
 ### Economy — Phase 3: Economy Foundation (PLAN-UNIFIED)

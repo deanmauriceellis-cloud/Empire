@@ -1,0 +1,54 @@
+Session 044 — 2026-03-10
+========================
+
+## Focus
+Economy debugging — fix death spiral (all cities stalling) and negative work bug.
+
+## Diagnosis
+Reviewed game-debug.log from a 165-turn game:
+- Starting turn ~44, cities begin stalling due to insufficient resources
+- By turn ~146, 16 cities stalling every single turn for both players
+- Root cause: no resource income without construction units (Phase 4 not yet built)
+- Secondary bug: cities with negative work (retool penalty) were hitting
+  affordability check every turn instead of just ticking through retooling
+
+## Changes
+
+### Fix B: Passive City Income
+- Added CITY_INCOME = [2, 1, 2] constant (ore, oil, textile per city per turn)
+- Modified collectResourceIncome() to add passive income from owned cities
+  before collecting deposit income
+- 1 city = +2 ore, +1 oil, +2 textile/turn
+- Scales with expansion: 5 cities = +10/+5/+10, 26 cities = +52/+26/+52
+- Keeps deposits meaningful for expensive units (battleships, carriers)
+
+### Fix C: Retool Stall Bug
+- tickCityProduction() had `if (city.work <= 0)` catching negative work values
+- Cities with negative work (from production switches) were hitting the
+  affordability check and stalling even though they're just retooling
+- Fix: separate retool phase (work < 0 → just increment, continue) from
+  production start (work === 0 → check affordability, consume resources)
+- Also removed redundant `if (city.work === 0)` guard inside the block since
+  the outer condition now guarantees work === 0
+
+### Test Updates
+- Updated "resources consumed during turn execution" test to account for
+  passive city income (+2 ore offset)
+- Rewrote "income collected before production" test to use only passive income
+  (no deposits) — verifies city stalls correctly with insufficient passive income
+
+## Verification
+- 323 tests passing (295 shared + 28 server)
+- Tested new game: 171 turns, ZERO stalls (was 1808 stalls in old game)
+- Healthy progression: P1 grew to 26 cities/160 units by T171
+- Full unit diversity: armies, fighters, transports, patrol boats, destroyers,
+  submarines, battleship in production
+- Second test game (100x60 map): 132 turns, zero stalls, both players expanding
+
+## Pre-existing Issues Noted (not addressed)
+- Fighter stacking at base cities (known issue)
+- Armies adjacent to capturable neutral cities not always attacking
+- P1 expansion can be slow on large maps
+
+## Commit
+29ba321 — session 044: fix economy death spiral — passive city income + retool stall bug

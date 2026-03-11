@@ -1,7 +1,7 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-UNIFIED Phase 3 complete** — Economy Foundation (needs visual debugging)
+**PLAN-UNIFIED Phase 3 complete** — Economy Foundation (debugged & working)
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
@@ -11,10 +11,16 @@
 - **PLAN-UNIFIED.md** is the definitive plan for all future implementation
 
 ## Latest commit
-`f36e3e8` — session 043: Phase 3 Economy Foundation
+`29ba321` — session 044: fix economy death spiral — passive city income + retool stall bug
 
 ## Known Issues
-- Visual issues reported on first test of Phase 3 — needs debugging session 044
+- Fighter stacking at base cities (pre-existing)
+- Armies adjacent to capturable neutral cities not always attacking (pre-existing)
+
+## Completed (session 044) — Economy Debugging
+- [x] Passive city income: CITY_INCOME [2,1,2] per owned city per turn
+- [x] Retool stall bug fix: negative work ticks without affordability check
+- [x] Verified: 0 stalls across multiple test games (was 1808 stalls)
 
 ## Completed (session 043) — Economy Foundation
 - [x] ResourceType, DepositType enums, UNIT_COSTS table
