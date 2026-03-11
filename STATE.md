@@ -10,7 +10,7 @@
 - Full code review completed (session 035) — 6-phase refactor plan below
 
 ## Latest commit
-`pending` — session 039: River War map type, river-smart transport AI
+`1dbd2a5` — session 039: River War map type, river-smart transport AI
 
 ## Completed (session 039)
 - [x] River War map type — two landmasses split by wide river, tributaries (80-95% to edge), islands, balanced cities
