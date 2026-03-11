@@ -17,6 +17,8 @@ export type ClientMessage =
   | { type: "action"; gameId: string; action: ClientAction }
   | { type: "end_turn"; gameId: string }
   | { type: "resign"; gameId: string }
+  // Auth messages
+  | { type: "authenticate"; token: string }
   // World mode messages
   | { type: "create_world"; config?: Partial<WorldConfig> }
   | { type: "join_world"; worldId: string; preferredRing?: number; playerName?: string }
@@ -47,6 +49,10 @@ export type ServerMessage =
   | { type: "player_disconnected"; gameId: string }
   | { type: "player_reconnected"; gameId: string }
   | { type: "error"; message: string }
+  // Auth messages
+  | { type: "authenticated"; userId: number; username: string }
+  | { type: "auth_error"; message: string }
+  | { type: "auth_kingdoms"; kingdoms: AuthKingdomInfo[] }
   // World mode messages
   | { type: "world_created"; worldId: string }
   | { type: "world_joined"; worldId: string; owner: Owner; kingdom: KingdomTilePos }
@@ -75,6 +81,16 @@ export interface VisibleCity {
   owner: Owner;
   production: UnitType | null;     // null if enemy city (hidden)
   work: number | null;             // null if enemy city (hidden)
+}
+
+// ─── Auth Types ───────────────────────────────────────────────────────────
+
+/** Kingdom info sent after authentication for reconnection. */
+export interface AuthKingdomInfo {
+  worldId: string;
+  playerId: number;
+  kingdomName: string;
+  status: string;
 }
 
 // ─── World Mode Types ──────────────────────────────────────────────────────

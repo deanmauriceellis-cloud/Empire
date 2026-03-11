@@ -509,6 +509,81 @@ const CSS = `
   color: var(--color-text);
 }
 
+/* ─── Auth ──────────────────────────────────────────────────────────────── */
+
+#menu-screen .auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 280px;
+  margin: 0 auto 16px;
+}
+
+#menu-screen .auth-form input {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--color-text-dim);
+  color: var(--color-text-bright);
+  font-family: var(--ui-font);
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: 4px;
+  outline: none;
+}
+
+#menu-screen .auth-form input:focus {
+  border-color: var(--color-accent);
+}
+
+#menu-screen .auth-error {
+  color: var(--color-red);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+#menu-screen .auth-status {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-bottom: 16px;
+}
+
+#menu-screen .auth-link {
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  font-family: var(--ui-font);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+#menu-screen .auth-link:hover {
+  color: var(--color-accent-light);
+}
+
+#menu-screen .kingdoms-list {
+  width: 400px;
+  margin: 12px auto;
+  text-align: left;
+}
+
+#menu-screen .kingdoms-list h3 {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+}
+
+#menu-screen .kingdom-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
 /* ─── Connection Status ──────────────────────────────────────────────────── */
 
 #menu-screen .conn-status {

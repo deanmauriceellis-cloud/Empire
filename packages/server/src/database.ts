@@ -25,6 +25,26 @@ export interface SavedGameSummary {
   updatedAt: string;
 }
 
+export interface UserRow {
+  id: number;
+  username: string;
+  password_hash: string;
+  created_at: string;
+  last_login: string;
+}
+
+export interface KingdomRow {
+  id: number;
+  user_id: number;
+  world_id: string;
+  player_id: number;
+  kingdom_name: string;
+  isolation_level: string;
+  status: string;
+  joined_at: string;
+  last_active: string;
+}
+
 // ─── Database ────────────────────────────────────────────────────────────────
 
 export class GameDatabase {
@@ -54,6 +74,34 @@ export class GameDatabase {
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       )
+    `);
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL COLLATE NOCASE,
+        password_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        last_login TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS kingdoms (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        world_id TEXT NOT NULL,
+        player_id INTEGER NOT NULL,
+        kingdom_name TEXT NOT NULL,
+        isolation_level TEXT NOT NULL DEFAULT 'middle',
+        status TEXT NOT NULL DEFAULT 'active',
+        joined_at TEXT NOT NULL DEFAULT (datetime('now')),
+        last_active TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_kingdoms_user_world ON kingdoms(user_id, world_id)
     `);
   }
 
@@ -103,6 +151,64 @@ export class GameDatabase {
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }));
+  }
+
+  // ─── Users ─────────────────────────────────────────────────────────────────
+
+  createUser(username: string, passwordHash: string): number {
+    const stmt = this.db.prepare(
+      "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+    );
+    const result = stmt.run(username, passwordHash);
+    return result.lastInsertRowid as number;
+  }
+
+  getUserByUsername(username: string): UserRow | null {
+    return (this.db.prepare("SELECT * FROM users WHERE username = ?").get(username) as UserRow | undefined) ?? null;
+  }
+
+  getUserById(id: number): UserRow | null {
+    return (this.db.prepare("SELECT * FROM users WHERE id = ?").get(id) as UserRow | undefined) ?? null;
+  }
+
+  updateLastLogin(userId: number): void {
+    this.db.prepare("UPDATE users SET last_login = datetime('now') WHERE id = ?").run(userId);
+  }
+
+  // ─── Kingdoms ─────────────────────────────────────────────────────────────
+
+  createKingdom(
+    userId: number,
+    worldId: string,
+    playerId: number,
+    kingdomName: string,
+    isolationLevel: string,
+  ): number {
+    const stmt = this.db.prepare(
+      "INSERT INTO kingdoms (user_id, world_id, player_id, kingdom_name, isolation_level) VALUES (?, ?, ?, ?, ?)",
+    );
+    const result = stmt.run(userId, worldId, playerId, kingdomName, isolationLevel);
+    return result.lastInsertRowid as number;
+  }
+
+  getActiveKingdom(userId: number, worldId: string): KingdomRow | null {
+    return (this.db.prepare(
+      "SELECT * FROM kingdoms WHERE user_id = ? AND world_id = ? AND status = 'active'",
+    ).get(userId, worldId) as KingdomRow | undefined) ?? null;
+  }
+
+  getActiveKingdomsForUser(userId: number): KingdomRow[] {
+    return this.db.prepare(
+      "SELECT * FROM kingdoms WHERE user_id = ? AND status = 'active' ORDER BY last_active DESC",
+    ).all(userId) as KingdomRow[];
+  }
+
+  updateKingdomStatus(kingdomId: number, status: string): void {
+    this.db.prepare("UPDATE kingdoms SET status = ?, last_active = datetime('now') WHERE id = ?").run(status, kingdomId);
+  }
+
+  updateKingdomLastActive(kingdomId: number): void {
+    this.db.prepare("UPDATE kingdoms SET last_active = datetime('now') WHERE id = ?").run(kingdomId);
   }
 
   // ─── Lifecycle ─────────────────────────────────────────────────────────────

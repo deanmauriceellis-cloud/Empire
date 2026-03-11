@@ -46,6 +46,7 @@ import { createUIManager } from "./ui/UIManager.js";
 import { createConnection, getWebSocketUrl, type ConnectionState } from "./net/connection.js";
 import { createMultiplayerGame, fetchLobbyGames, type MultiplayerGame } from "./net/multiplayer.js";
 import { createWorldClient, type WorldClient } from "./net/worldClient.js";
+import { createAuthClient, getServerUrl, type AuthClient } from "./net/auth.js";
 import { createAudioManager, type AudioManager } from "./audio/AudioManager.js";
 import type { SelectionState, UIState, TileHighlight, RenderableState } from "./types.js";
 import type { TickInfo, WorldSummary } from "@empire/shared";
@@ -130,12 +131,18 @@ async function init() {
     onStateChange(state) {
       connState = state;
       ui.menus.updateConnectionStatus(state);
-      if (state === "connected" && mode === "none") {
-        // Refresh lobby on connect
-        refreshLobby();
+      if (state === "connected") {
+        // Authenticate WebSocket if we have a token
+        authClient.restoreSession(conn);
+        if (mode === "none") {
+          // Refresh lobby on connect
+          refreshLobby();
+        }
       }
     },
     onMessage(msg) {
+      // Route auth messages first
+      if (authClient.handleServerMessage(msg)) return;
       mp.handleMessage(msg);
       wc.handleMessage(msg);
     },
@@ -280,7 +287,7 @@ async function init() {
     },
 
     onWorldList(worlds) {
-      ui.menus.showWorldBrowser(worlds, connState);
+      ui.menus.showWorldBrowser(worlds, connState, authClient.kingdoms);
     },
 
     onReconnectFailed(worldId, reason) {
@@ -295,6 +302,34 @@ async function init() {
       console.error("World error:", message);
     },
   });
+
+  // ─── Auth Client ──────────────────────────────────────────────────────
+
+  const serverUrl = location.port === "5174"
+    ? `http://${location.hostname}:3001`
+    : getServerUrl();
+
+  const authClient: AuthClient = createAuthClient(serverUrl, {
+    onLogin(userId, username) {
+      console.log(`Logged in as ${username} (id: ${userId})`);
+      ui.menus.setLoggedInUser(username);
+    },
+    onLogout() {
+      console.log("Logged out");
+      ui.menus.setLoggedInUser(null);
+    },
+    onKingdoms(kingdoms) {
+      console.log(`Active kingdoms: ${kingdoms.length}`);
+    },
+    onError(message) {
+      console.error("Auth error:", message);
+    },
+  });
+
+  // Restore username from localStorage if available
+  if (authClient.username) {
+    ui.menus.setLoggedInUser(authClient.username);
+  }
 
   // ─── Start World Game ───────────────────────────────────────────────
 
@@ -326,9 +361,6 @@ async function init() {
   // ─── Fetch World List ──────────────────────────────────────────────────
 
   async function fetchWorldList(): Promise<WorldSummary[]> {
-    const serverUrl = location.port === "5174"
-      ? `http://${location.hostname}:3001`
-      : "";
     try {
       const res = await fetch(`${serverUrl}/api/worlds`);
       if (!res.ok) return [];
@@ -1430,13 +1462,21 @@ async function init() {
         refreshLobby();
       } else if (menuAction === "create-online") {
         ui.menus.showGameSetup("multiplayer");
+      } else if (menuAction === "show-login") {
+        ui.menus.showLoginScreen("login");
+      } else if (menuAction === "show-register") {
+        ui.menus.showLoginScreen("register");
+      } else if (menuAction === "logout") {
+        authClient.logout();
+        ui.menus.setLoggedInUser(null);
+        ui.menus.showMainMenu();
       } else if (menuAction === "world-browser") {
         // Connect and show world browser
         if (connState === "disconnected") {
           conn.connect();
         }
         fetchWorldList().then(worlds => {
-          ui.menus.showWorldBrowser(worlds, connState);
+          ui.menus.showWorldBrowser(worlds, connState, authClient.kingdoms);
         });
       } else if (menuAction === "create-world") {
         ui.menus.showWorldSetup();
@@ -1462,12 +1502,43 @@ async function init() {
         }
         mp.reset();
         mp.joinGame(menuAction.gameId);
+      } else if (typeof menuAction === "object" && menuAction.type === "login") {
+        authClient.login(menuAction.username, menuAction.password).then(ok => {
+          if (ok) {
+            // After login, authenticate WS and go to world browser
+            if (connState === "disconnected") conn.connect();
+            else authClient.authenticateWs(conn);
+            fetchWorldList().then(worlds => {
+              ui.menus.showWorldBrowser(worlds, connState, authClient.kingdoms);
+            });
+          } else {
+            ui.menus.showLoginScreen("login", "Invalid username or password");
+          }
+        });
+      } else if (typeof menuAction === "object" && menuAction.type === "register") {
+        authClient.register(menuAction.username, menuAction.password).then(ok => {
+          if (ok) {
+            if (connState === "disconnected") conn.connect();
+            else authClient.authenticateWs(conn);
+            fetchWorldList().then(worlds => {
+              ui.menus.showWorldBrowser(worlds, connState, authClient.kingdoms);
+            });
+          } else {
+            ui.menus.showLoginScreen("register", "Registration failed — username may be taken");
+          }
+        });
+      } else if (typeof menuAction === "object" && menuAction.type === "reconnect-kingdom") {
+        if (connState !== "connected") {
+          conn.connect();
+        }
+        wc.reset();
+        wc.reconnectWorld(menuAction.worldId, menuAction.playerId);
       } else if (typeof menuAction === "object" && menuAction.type === "join-world") {
         if (connState !== "connected") {
           conn.connect();
         }
         wc.reset();
-        wc.joinWorld(menuAction.worldId, menuAction.ring, "Player");
+        wc.joinWorld(menuAction.worldId, menuAction.ring, authClient.username || "Player");
       } else if (typeof menuAction === "object" && menuAction.type === "start-world") {
         if (connState !== "connected") {
           conn.connect();

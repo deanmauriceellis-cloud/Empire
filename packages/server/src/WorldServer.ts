@@ -85,13 +85,13 @@ export class WorldServer {
 
   // ─── Message Routing ───────────────────────────────────────────────────
 
-  handleMessage(ws: WebSocket, msg: ClientMessage): boolean {
+  handleMessage(ws: WebSocket, msg: ClientMessage, auth?: { userId: number; username: string }): boolean {
     switch (msg.type) {
       case "create_world":
         this.handleCreateWorld(ws, msg.config);
         return true;
       case "join_world":
-        this.handleJoinWorld(ws, msg.worldId, msg.preferredRing, msg.playerName);
+        this.handleJoinWorld(ws, msg.worldId, msg.preferredRing, msg.playerName, auth);
         return true;
       case "world_action":
         this.handleWorldAction(ws, msg.worldId, msg.action);
@@ -103,7 +103,7 @@ export class WorldServer {
         this.handleLeaveWorld(ws, msg.worldId);
         return true;
       case "reconnect_world":
-        this.handleReconnectWorld(ws, (msg as any).worldId, (msg as any).playerId);
+        this.handleReconnectWorld(ws, (msg as any).worldId, (msg as any).playerId, auth);
         return true;
       case "list_worlds":
         this.send(ws, { type: "world_list", worlds: this.getWorldList() });
@@ -162,6 +162,7 @@ export class WorldServer {
     worldId: string,
     preferredRing?: number,
     playerName?: string,
+    auth?: { userId: number; username: string },
   ): void {
     const activeWorld = this.worlds.get(worldId);
     if (!activeWorld) {
@@ -214,7 +215,14 @@ export class WorldServer {
       activeWorld.disconnectTimers.delete(playerId);
     }
 
-    console.log(`[World] Player ${playerId} joined world ${worldId} at ring ${tile.ring} (${tile.pos.row},${tile.pos.col})`);
+    // Record kingdom in database if authenticated
+    if (auth && this.db) {
+      const name = playerName || auth.username;
+      const ringLabel = tile.ring === 0 ? "center" : tile.ring === 1 ? "inner" : tile.ring === 2 ? "middle" : "outer";
+      this.db.createKingdom(auth.userId, worldId, playerId, name, ringLabel);
+    }
+
+    console.log(`[World] Player ${playerId} joined world ${worldId} at ring ${tile.ring} (${tile.pos.row},${tile.pos.col})${auth ? ` (user: ${auth.username})` : ""}`);
 
     // Send join confirmation
     this.send(ws, {
@@ -230,7 +238,7 @@ export class WorldServer {
 
   // ─── Reconnection ─────────────────────────────────────────────────────
 
-  handleReconnectWorld(ws: WebSocket, worldId: string, playerId: number): void {
+  handleReconnectWorld(ws: WebSocket, worldId: string, playerId: number, auth?: { userId: number; username: string }): void {
     const activeWorld = this.worlds.get(worldId);
     if (!activeWorld) {
       this.send(ws, { type: "reconnect_failed", worldId, reason: "World not found" });
@@ -242,6 +250,16 @@ export class WorldServer {
     if (existing) {
       this.send(ws, { type: "error", message: "Already connected to a world" });
       return;
+    }
+
+    // Verify ownership via DB if authenticated
+    if (auth && this.db) {
+      const kingdom = this.db.getActiveKingdom(auth.userId, worldId);
+      if (!kingdom || kingdom.player_id !== playerId) {
+        this.send(ws, { type: "reconnect_failed", worldId, reason: "Kingdom not found for this account" });
+        return;
+      }
+      this.db.updateKingdomLastActive(kingdom.id);
     }
 
     const state = activeWorld.world.gameState;
