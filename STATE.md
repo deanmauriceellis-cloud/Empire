@@ -1,17 +1,17 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-KINGDOM Phase 13 complete** — Accounts & Persistence (auth, user DB, kingdom lifecycle, login UI)
+**PLAN-KINGDOM Phase 14 complete** — Delta Sync & Scaling (efficient state delivery for MMO scale)
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phases 1-13 of expansion plan complete
-- 719 tests passing (651 shared + 68 server)
+- Phases 1-14 of expansion plan complete
+- 756 tests passing (683 shared + 73 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-KINGDOM.md** is the definitive plan (17 phases: gameplay → kingdom MMO → monetization)
 
 ## Latest commit
-session 057: Phase 13 — Accounts & Persistence
+session 058: Phase 14 — Delta Sync & Scaling
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
@@ -22,6 +22,28 @@ session 057: Phase 13 — Accounts & Persistence
 - Multiplayer server doesn't yet send kingdom data to client
 - World mode: monthly reset/season rewards not yet implemented
 - Spawn protection enforcement not yet in executeTurn (needs world context in game engine)
+
+## Completed (session 058) — Phase 14: Delta Sync & Scaling
+- [x] 14A: Change Tracking — TurnDelta types, PreTurnSnapshot, snapshotPreTurn(), computeDelta()
+- [x] 14A: Tracks unit moves/creation/destruction/HP, city captures/production, building changes, resource/tech deltas
+- [x] 14B: Per-Player Filtering — filterDeltaWithState() filters deltas by player visibility (viewMap)
+- [x] 14B: Own units/resources/tech always included; enemy units only if currently visible
+- [x] 14C: Lazy Visibility — viewMap snapshots only computed for connected players, not AI/offline
+- [x] 14C: computeViewMapDelta() computes cell-level viewMap changes between ticks
+- [x] 14D: State Compression — gzip compression for messages > 50KB (full state on join/reconnect)
+- [x] 14D: Client DecompressionStream for transparent gzip decompression of binary WebSocket messages
+- [x] 14E: Connection Management — WebSocket heartbeat (30s ping/pong), auto-disconnect on timeout
+- [x] 14E: Recent delta ring buffer (last 10 ticks) stored per world for reconnection
+- [x] 14F: Client delta application — applyDeltaToVisibleState() patches cached VisibleGameState
+- [x] 14F: WorldServer sends tick_delta instead of tick_result + world_state per tick
+- [x] 14F: Full world_state only sent on join/reconnect (not after every tick)
+- [x] New file: shared/src/delta.ts (~400 lines) — delta types, snapshot, compute, filter, apply
+- [x] Protocol: tick_delta message type with FilteredDelta payload
+- [x] Client: worldClient handles tick_delta, connection.ts handles binary gzip messages
+- [x] 37 new tests (32 shared delta + 5 server delta), 756 total (683 shared + 73 server)
+- [ ] Deferred: Binary protocol (MessagePack/protobuf) for further compression
+- [ ] Deferred: Backpressure detection (skip deltas, send full state for slow clients)
+- [ ] Deferred: Performance benchmarking at 100+ player scale
 
 ## Completed (session 057) — Phase 13: Accounts & Persistence
 - [x] 13A: Authentication — bcrypt hashing, JWT access/refresh tokens, validation

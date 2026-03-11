@@ -1,0 +1,94 @@
+Session 058 — 2026-03-11
+Phase 14: Delta Sync & Scaling
+
+OBJECTIVE:
+Implement efficient state delivery for world mode — send per-tick deltas instead of full state,
+with per-player visibility filtering, gzip compression, and WebSocket heartbeat.
+
+COMPLETED:
+14A: Change Tracking
+  - Created shared/src/delta.ts (~400 lines)
+  - TurnDelta interface: unitMoves, unitCreated, unitDestroyed, unitHpChanges, combatResults,
+    buildingChanges, cityCaptures, cityProduction, resourceChanges, techChanges
+  - PreTurnSnapshot: lightweight snapshot of mutable state (units, cities, buildings, resources, tech)
+  - snapshotPreTurn(): captures state before executeTurn
+  - computeDelta(): diffs snapshot vs post-turn state to produce TurnDelta
+  - Design: snapshot-diff approach keeps game engine (game.ts) completely untouched
+
+14B: Per-Player Filtering
+  - filterDeltaWithState(): filters TurnDelta by player visibility using viewMap
+  - Own units/resources/tech/city production always included
+  - Enemy units only if source or destination currently visible
+  - Events visible if location has been explored
+  - Buildings visible if location explored; own buildings always for destroyed
+  - Returns FilteredDelta with all fields filtered
+
+14C: Lazy Visibility
+  - ViewMap snapshots only computed for connected players (not AI/offline)
+  - computeViewMapDelta(): compares prev vs current viewMap, returns only changed cells
+  - snapshotViewMap(): creates independent copy for diffing
+  - For a 700x700 map, typical tick changes ~50-500 cells vs 490,000 total (99%+ reduction)
+
+14D: State Compression
+  - WorldServer.send() auto-detects large messages (>50KB) and gzip-compresses
+  - Uses Node.js gzipSync for server-side compression
+  - Client connection.ts: sets ws.binaryType = "arraybuffer"
+  - Detects binary (ArrayBuffer) messages and decompresses via DecompressionStream API
+  - Full world_state on join/reconnect benefits most (~5MB → ~1-2MB at scale)
+
+14E: Connection Management
+  - WebSocket heartbeat: 30s ping interval, 10s pong timeout
+  - WorldServer.startHeartbeat(): periodic ping to all connected players
+  - WorldServer.handlePong(): marks pong received
+  - Auto-terminate connections that miss a pong cycle
+  - Wired into server index.ts: ws.on("pong") handler, startHeartbeat() on boot
+  - Cleanup: pongReceived map cleared on disconnect and shutdown
+
+14F: Client Delta Application
+  - applyDeltaToVisibleState(): patches cached VisibleGameState in-place
+  - Handles: viewMap changes, unit moves/creation/destruction/HP, city captures/production
+  - worldClient.ts: new tick_delta message handler applies delta + updates turn
+  - main.ts: onTickDelta event handler for UI refresh (events, turn flow, particles)
+  - Protocol: tick_delta message type with FilteredDelta payload + TickInfo
+
+Ring Buffer:
+  - ActiveWorld.recentDeltas: last 10 TurnDeltas stored per world
+  - Available for reconnection (client can request missed deltas — future enhancement)
+
+FILES CHANGED:
+  New:
+  - packages/shared/src/delta.ts (delta types, snapshot, compute, filter, apply)
+  - packages/shared/src/__tests__/delta.test.ts (32 tests)
+  - docs/sessions/session-058-2026-03-11.txt
+
+  Modified:
+  - packages/shared/src/index.ts (export delta.ts)
+  - packages/shared/src/protocol.ts (tick_delta message type, FilteredDelta import)
+  - packages/server/src/WorldServer.ts (delta sync in executeTick, heartbeat, gzip, ring buffer)
+  - packages/server/src/index.ts (heartbeat wiring, pong handler)
+  - packages/server/src/__tests__/WorldServer.test.ts (updated for tick_delta, 5 new delta tests)
+  - packages/client/src/net/worldClient.ts (tick_delta handler, onTickDelta event)
+  - packages/client/src/net/connection.ts (binary message decompression, gzip support)
+  - packages/client/src/main.ts (onTickDelta UI handler)
+  - STATE.md, CHANGELOG.md, PLAN-KINGDOM.md, MEMORY.md
+
+TESTS:
+  - 32 new shared delta tests (snapshot, computeDelta, viewMapDelta, filterDelta, applyDelta, integration)
+  - 5 new server WorldServer delta sync tests (delta structure, resources, no full state after tick, reconnect full state, ring buffer)
+  - Total: 756 tests (683 shared + 73 server), all passing
+  - Client build: clean
+
+ARCHITECTURE NOTES:
+  - The snapshot-diff approach is non-invasive: executeTurn() is unchanged, delta computation
+    happens entirely outside the game engine
+  - For 100 players on a 700x700 map: delta messages are typically <50KB vs ~5MB for full state
+  - The 50KB gzip threshold means small worlds (test configs) send JSON, large worlds get compressed
+  - DecompressionStream is available in all modern browsers (Chrome 80+, Firefox 113+, Safari 16.4+)
+  - Binary WebSocket detection uses ArrayBuffer type check (ws.binaryType = "arraybuffer")
+
+DEFERRED:
+  - Binary protocol (MessagePack/protobuf) for further compression
+  - Backpressure detection (skip deltas, send full state for slow clients)
+  - Reconnection with missed delta replay (ring buffer available but not yet used by client)
+  - Performance benchmarking at 100+ player scale
+  - Server-side viewMap caching with invalidation

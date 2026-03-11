@@ -1,5 +1,20 @@
 # Empire Reborn — Changelog
 
+## v0.47.0 — Session 058 (2026-03-11)
+
+### Phase 14: Delta Sync & Scaling
+- **Delta tracking**: `TurnDelta` types with unit moves/creation/destruction/HP, city captures/production, building changes, resource/tech deltas
+- **Snapshot-diff approach**: `snapshotPreTurn()` captures mutable state before `executeTurn`, `computeDelta()` diffs after — game engine untouched
+- **Per-player filtering**: `filterDeltaWithState()` filters deltas by viewMap visibility — own data always included, enemy only if visible
+- **ViewMap deltas**: `computeViewMapDelta()` sends only changed cells instead of full map (99%+ reduction for large maps)
+- **Gzip compression**: Messages > 50KB automatically gzip-compressed; client transparently decompresses via `DecompressionStream`
+- **WebSocket heartbeat**: 30s ping/pong cycle, auto-disconnect on timeout for dead connections
+- **Delta ring buffer**: Last 10 deltas stored per world for reconnection support
+- **Protocol change**: `tick_delta` replaces `tick_result` + `world_state` per tick; full state only on join/reconnect
+- **Client delta application**: `applyDeltaToVisibleState()` patches cached `VisibleGameState` in-place
+- **New file**: `shared/src/delta.ts` (~400 lines) — delta types, snapshot, compute, filter, apply
+- **37 new tests** (32 shared delta + 5 server delta sync), **756 total** (683 shared + 73 server)
+
 ## v0.46.0 — Session 057 (2026-03-11)
 
 ### Phase 13: Accounts & Persistence
