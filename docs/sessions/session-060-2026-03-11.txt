@@ -1,0 +1,65 @@
+Session 060 — 2026-03-11
+Phase 16: Movement Trails & Spectacle
+
+OBJECTIVE
+Implement visual polish: movement trails, directional facing, enhanced combat effects, and crown city glow.
+
+CHANGES
+
+1. Movement Trails (16A)
+   - Fighter/AWACS: white contrail particles (fading smoke, CONTRAIL_LIFE=0.8s)
+   - Ships (all 8 types): V-shaped wake spray behind vessel (WAKE_SPREAD=0.6 rad)
+   - Army/Construction/Artillery: brown dust puff particles (DUST_LIFE=0.5s)
+   - Special Forces: no trail (invisible movement, by design)
+   - Throttled via TRAIL_EMIT_INTERVAL (60ms) to prevent particle spam
+   - Unit type categorization: AIR_UNITS, SHIP_UNITS, LAND_UNITS sets in units.ts
+   - UnitRenderer tracks lastTrailTime per sprite, calls ParticleSystem emitters
+
+2. Directional Facing (16B)
+   - Track movement dx per frame in UnitRenderer
+   - Flip sprite.scale.x based on movement direction (facingX: -1 or 1)
+   - Persists facing between movements (units stay facing last direction)
+
+3. Combat Spectacle (16C)
+   - emitBombardArc(): 6-step parabolic particle path + impact explosion
+   - emitNavalCombat(): blue-white water spray + foam + explosion overlay
+   - emitCrownCapture(): 24 gold particles starburst + captor color ring + upward sparkles
+   - emitShieldEffect(): 4 expanding blue translucent rings
+   - Crown event handler in main.ts: type="crown" triggers gold shatter + 1.0 shake
+
+4. Kingdom Atmosphere (16D)
+   - New CrownGlowRenderer class (crownGlow.ts, ~75 lines)
+   - 3-layer golden halo: outer (r=18, 0.3a), inner (r=9, 0.4a), core (r=3.6, 0.5a)
+   - Pulsing alpha (sin wave, CROWN_GLOW_PULSE_SPEED=1.5)
+   - Breathing scale (1.0 ± 0.05)
+   - Dynamic: creates/removes glows as crown cities change
+   - Rendered at zIndex=2 (above tiles, below highlights)
+   - Wired into main render loop between tilemap and highlights
+
+FILES MODIFIED
+- packages/client/src/constants.ts — +16 lines (trail + crown glow constants)
+- packages/client/src/main.ts — +12 lines (CrownGlowRenderer import, wiring, crown event)
+- packages/client/src/renderer/particles.ts — +148 lines (7 new emitters)
+- packages/client/src/renderer/units.ts — +50 lines (trail + facing logic)
+
+FILES CREATED
+- packages/client/src/renderer/crownGlow.ts — 75 lines (crown glow overlay)
+
+TESTS
+- 706 shared tests passing (no changes to shared code)
+- 98 server tests passing
+- Client builds clean
+- Phase 16 is visual-only: all existing tests pass unmodified
+
+ARCHITECTURE NOTES
+- ParticleSystem: 7 new public emitters, all use existing pooling infrastructure
+- UnitRenderer: late-bind ParticleSystem via setParticles() (avoids circular deps)
+- CrownGlowRenderer: manages Graphics pool per crown city location
+- No shared code changes — all client-side visual polish
+- Trail emission uses world-space coordinates from UnitRenderer lerp, not grid coords
+
+DEFERRED
+- Territory borders: subtle colored lines at territory edges (needs territory system)
+- Shield dome: translucent bubble over protected territory (needs per-tile shield data)
+- Building activity animations (animated details on active buildings)
+- Fighter banking on turns (rotation rather than just flip)

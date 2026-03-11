@@ -1,17 +1,17 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-KINGDOM Phase 15 complete** — Monetization System (Stripe, cosmetics, VIP, store UI)
+**PLAN-KINGDOM Phase 16 complete** — Movement Trails & Spectacle (visual polish)
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phases 1-15 of expansion plan complete
+- Phases 1-16 of expansion plan complete
 - 804 tests passing (706 shared + 98 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-KINGDOM.md** is the definitive plan (17 phases: gameplay → kingdom MMO → monetization)
 
 ## Latest commit
-session 059: Phase 15 — Monetization System
+session 060: Phase 16 — Movement Trails & Spectacle
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
@@ -22,6 +22,21 @@ session 059: Phase 15 — Monetization System
 - Multiplayer server doesn't yet send kingdom data to client
 - World mode: monthly reset/season rewards not yet implemented
 - Spawn protection enforcement not yet in executeTurn (needs world context in game engine)
+
+## Completed (session 060) — Phase 16: Movement Trails & Spectacle
+- [x] 16A: Movement trails — fighter contrails (white fading smoke), ship wakes (V-shaped water spray), army dust puffs (brown particles), no trail for Special Forces
+- [x] 16A: Trail throttling via TRAIL_EMIT_INTERVAL (60ms), unit type categorization (AIR_UNITS, SHIP_UNITS, LAND_UNITS sets)
+- [x] 16B: Directional facing — sprites flip horizontally based on movement direction (facingX tracking per unit)
+- [x] 16C: Bombard projectile arc emitter (parabolic 6-step path + impact explosion)
+- [x] 16C: Naval combat effect (water spray + foam + explosion overlay)
+- [x] 16C: Crown capture golden starburst (24 gold particles + captor color ring + upward sparkles)
+- [x] 16C: Shield activation/deactivation effect (expanding blue rings)
+- [x] 16D: CrownGlowRenderer — golden pulsing halo on crown cities (3-layer glow, breathing scale)
+- [x] 16D: Crown capture event handling in main.ts (dramatic 1.0 intensity shake)
+- [x] New file: client/src/renderer/crownGlow.ts (~75 lines)
+- [x] Modified: particles.ts (+7 new emitters, ~150 lines), units.ts (trails+facing, ~50 lines)
+- [x] Constants: TRAIL_EMIT_INTERVAL, CONTRAIL_LIFE/SIZE, WAKE_LIFE/SPREAD, DUST_LIFE/SIZE, CROWN_GLOW_*
+- [x] All 804 tests passing (706 shared + 98 server), client builds clean
 
 ## Completed (session 059) — Phase 15: Monetization System
 - [x] 15A: Store Infrastructure — Stripe integration (lazy import, checkout sessions, webhooks), purchase ledger, entitlement system
@@ -305,8 +320,8 @@ R1 and R5 can run in parallel (no dependencies). R2 and R3 depend on R1. R6 depe
 8. ~~**Phase 13**: Accounts & Persistence~~ ✓ (session 057)
 9. ~~**Phase 14**: Delta Sync & Scaling~~ ✓ (session 058)
 10. ~~**Phase 15**: Monetization System~~ ✓ (session 059)
-11. **Phase 16**: Movement Trails & Spectacle — visual polish (1 session, NEXT)
-12. **Phase 17**: Balance, Tuning & Launch — performance, AI, launch prep (1-2 sessions)
+11. ~~**Phase 16**: Movement Trails & Spectacle~~ ✓ (session 060)
+12. **Phase 17**: Balance, Tuning & Launch — performance, AI, launch prep (1-2 sessions, NEXT)
 
 ## Blockers
 _None_

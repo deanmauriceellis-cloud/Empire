@@ -1,5 +1,22 @@
 # Empire Reborn — Changelog
 
+## v0.49.0 — Session 060 (2026-03-11)
+
+### Phase 16: Movement Trails & Spectacle
+- **Movement trails** — Fighter/AWACS white contrails, ship V-shaped wakes, army dust puffs; Special Forces leave no trail (invisible movement)
+- **Trail throttling** — `TRAIL_EMIT_INTERVAL` (60ms) prevents particle spam; unit type sets for clean categorization
+- **Directional facing** — Unit sprites flip horizontally based on movement direction, tracked per-unit via `facingX` field
+- **Bombard projectile arc** — Parabolic 6-step particle path from source to target with impact explosion
+- **Naval combat effect** — Blue-white water spray + foam + standard explosion overlay
+- **Crown capture effect** — 24-particle golden starburst + captor color ring + upward sparkles + 1.0 intensity screen shake
+- **Shield effect** — Expanding translucent blue rings for activation/deactivation
+- **Crown City glow** — `CrownGlowRenderer` draws pulsing golden halo (3-layer: outer, inner, core) with breathing scale animation
+- **Crown event handling** — `emitParticleForEvent()` detects crown capture events, triggers dramatic shatter + shake
+- **New file**: `client/src/renderer/crownGlow.ts` (~75 lines) — persistent crown city glow overlay
+- **New constants**: `TRAIL_EMIT_INTERVAL`, `CONTRAIL_LIFE/SIZE`, `WAKE_LIFE/SPREAD`, `DUST_LIFE/SIZE`, `CROWN_GLOW_RADIUS/PULSE_SPEED/ALPHA`
+- **7 new particle emitters**: `emitContrail`, `emitWake`, `emitDustPuff`, `emitBombardArc`, `emitNavalCombat`, `emitCrownCapture`, `emitShieldEffect`
+- **804 tests passing** (706 shared + 98 server), client builds clean
+
 ## v0.48.0 — Session 059 (2026-03-11)
 
 ### Phase 15: Monetization System
