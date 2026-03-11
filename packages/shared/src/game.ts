@@ -1156,7 +1156,10 @@ export function tickCityProduction(
       city.work += 1;
     }
 
-    const buildTime = UNIT_ATTRIBUTES[city.production].buildTime;
+    // VIP production bonus: 10% faster builds (reduced buildTime)
+    const isVip = state.vipPlayers?.includes(owner) ?? false;
+    const baseBuildTime = UNIT_ATTRIBUTES[city.production].buildTime;
+    const buildTime = isVip ? Math.max(1, Math.floor(baseBuildTime * 0.9)) : baseBuildTime;
     if (city.work >= buildTime) {
       // Produce the unit with city's default behavior for this type
       const unit = createUnit(state, city.production, owner, city.loc);

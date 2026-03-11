@@ -19,6 +19,7 @@ export type MenuAction =
   | "back-to-main"
   | "show-login"
   | "show-register"
+  | "show-store"
   | "logout"
   | { type: "start-game"; options: GameSetupOptions }
   | { type: "start-online"; options: GameSetupOptions }
@@ -176,6 +177,7 @@ export function createMenuScreens(): MenuScreens {
         <button class="menu-btn" data-menu="new-game">Single Player</button>
         <button class="menu-btn" data-menu="multiplayer">Multiplayer</button>
         <button class="menu-btn" data-menu="${loggedInUser ? "world-browser" : "show-login"}">Kingdom World</button>
+        <button class="menu-btn-secondary" data-menu="show-store" style="margin-top: 8px;">Store</button>
       `;
     },
 

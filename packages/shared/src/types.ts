@@ -171,6 +171,10 @@ export interface GameState {
 
   // Shield state per player for world mode disconnect protection (keyed by PlayerId)
   shields: Record<number, ShieldState>;
+
+  // VIP player IDs — populated by server from entitlements before turn execution.
+  // Used for production speed bonus. Not persisted — rebuilt each tick.
+  vipPlayers?: number[];
 }
 
 // ─── Player Actions ──────────────────────────────────────────────────────────

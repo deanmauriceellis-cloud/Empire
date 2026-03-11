@@ -26,3 +26,4 @@ export * from "./world-map.js";
 export * from "./protocol.js";
 export * from "./delta.js";
 export * from "./diagnostic.js";
+export * from "./store.js";

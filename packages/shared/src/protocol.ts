@@ -5,6 +5,7 @@ import type { Owner, UnitType, UnitBehavior } from "./constants.js";
 import type { Loc, ViewMapCell, UnitState, TurnEvent, GameConfig } from "./types.js";
 import type { WorldConfig, KingdomTilePos } from "./world-map.js";
 import type { FilteredDelta } from "./delta.js";
+import type { StoreItem, PlayerEntitlements, CosmeticCategory } from "./store.js";
 
 // ─── Game Phases ────────────────────────────────────────────────────────────
 
@@ -27,7 +28,13 @@ export type ClientMessage =
   | { type: "world_action"; worldId: string; action: ClientAction }
   | { type: "cancel_actions"; worldId: string }
   | { type: "leave_world"; worldId: string }
-  | { type: "list_worlds" };
+  | { type: "list_worlds" }
+  // Store messages
+  | { type: "store_list" }
+  | { type: "store_purchase"; itemId: string }
+  | { type: "store_entitlements" }
+  | { type: "equip_cosmetic"; itemId: string }
+  | { type: "unequip_cosmetic"; category: CosmeticCategory };
 
 export type ClientAction =
   | { type: "move"; unitId: number; loc: Loc }
@@ -63,7 +70,14 @@ export type ServerMessage =
   | { type: "actions_queued"; worldId: string; count: number }
   | { type: "actions_cancelled"; worldId: string }
   | { type: "world_list"; worlds: WorldSummary[] }
-  | { type: "reconnect_failed"; worldId: string; reason: string };
+  | { type: "reconnect_failed"; worldId: string; reason: string }
+  // Store messages
+  | { type: "store_items"; items: StoreItem[] }
+  | { type: "store_purchase_url"; url: string; sessionId: string }
+  | { type: "store_purchase_complete"; itemId: string }
+  | { type: "store_purchase_error"; message: string }
+  | { type: "store_entitlements"; entitlements: PlayerEntitlements }
+  | { type: "equipped_cosmetics"; equipped: Record<string, string> };
 
 // ─── Visible Game State (per-player, fog-of-war filtered) ───────────────────
 

@@ -18,6 +18,7 @@ import {
   verifyRefreshToken,
   type TokenPayload,
 } from "./auth.js";
+import { StoreService, isStripeConfigured } from "./store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -50,6 +51,7 @@ const server = createServer(app);
 const db = new GameDatabase();
 const gameManager = new GameManager(db);
 const worldServer = new WorldServer(db);
+const storeService = new StoreService(db);
 
 // WebSocket server — 256KB max message size
 const wss = new WebSocketServer({ server, path: "/ws", maxPayload: 256 * 1024 });
@@ -59,9 +61,15 @@ const WORLD_MSG_TYPES = new Set([
   "create_world", "join_world", "reconnect_world", "world_action", "cancel_actions", "leave_world", "list_worlds",
 ]);
 
+/** Store message types. */
+const STORE_MSG_TYPES = new Set([
+  "store_list", "store_purchase", "store_entitlements", "equip_cosmetic", "unequip_cosmetic",
+]);
+
 /** Messages that require authentication. */
 const AUTH_REQUIRED_TYPES = new Set([
   "join_world", "reconnect_world",
+  "store_purchase", "store_entitlements", "equip_cosmetic", "unequip_cosmetic",
 ]);
 
 // Start world server heartbeat
@@ -107,6 +115,11 @@ wss.on("connection", (ws) => {
             status: k.status,
           })),
         }));
+        // Send store entitlements
+        const entitlements = storeService.getPlayerEntitlements(payload.userId);
+        const equipped = storeService.getEquippedCosmetics(payload.userId);
+        ws.send(JSON.stringify({ type: "store_entitlements", entitlements }));
+        ws.send(JSON.stringify({ type: "equipped_cosmetics", equipped }));
         return;
       }
 
@@ -119,7 +132,10 @@ wss.on("connection", (ws) => {
         }
       }
 
-      if (WORLD_MSG_TYPES.has(msg.type)) {
+      if (STORE_MSG_TYPES.has(msg.type)) {
+        const auth = wsAuth.get(ws);
+        handleStoreMessage(ws, msg, auth ?? undefined);
+      } else if (WORLD_MSG_TYPES.has(msg.type)) {
         // Pass auth info to WorldServer for join/reconnect
         const auth = wsAuth.get(ws);
         worldServer.handleMessage(ws, msg, auth ?? undefined);
@@ -295,6 +311,147 @@ app.delete("/api/games/:id", (req, res) => {
   }
   res.json({ message: "Game deleted" });
 });
+
+// ─── Store WebSocket Handler ─────────────────────────────────────────────────
+
+function handleStoreMessage(ws: WebSocket, msg: any, auth?: TokenPayload): void {
+  const send = (data: any) => ws.send(JSON.stringify(data));
+
+  if (msg.type === "store_list") {
+    send({ type: "store_items", items: storeService.getAvailableItems() });
+    return;
+  }
+
+  // All other store messages require auth
+  if (!auth) {
+    send({ type: "store_purchase_error", message: "Authentication required" });
+    return;
+  }
+
+  if (msg.type === "store_entitlements") {
+    const entitlements = storeService.getPlayerEntitlements(auth.userId);
+    const equipped = storeService.getEquippedCosmetics(auth.userId);
+    send({ type: "store_entitlements", entitlements });
+    send({ type: "equipped_cosmetics", equipped });
+    return;
+  }
+
+  if (msg.type === "store_purchase") {
+    const { itemId } = msg;
+    if (!itemId || typeof itemId !== "string") {
+      send({ type: "store_purchase_error", message: "Invalid item ID" });
+      return;
+    }
+
+    if (isStripeConfigured()) {
+      // Real Stripe checkout
+      storeService.createCheckoutSession(auth.userId, auth.username, itemId)
+        .then(({ url, sessionId }) => {
+          send({ type: "store_purchase_url", url, sessionId });
+        })
+        .catch((err: Error) => {
+          send({ type: "store_purchase_error", message: err.message });
+        });
+    } else {
+      // Dev mode: grant item immediately (no payment)
+      const ok = storeService.grantItemDev(auth.userId, itemId);
+      if (ok) {
+        send({ type: "store_purchase_complete", itemId });
+        // Send updated entitlements
+        const entitlements = storeService.getPlayerEntitlements(auth.userId);
+        send({ type: "store_entitlements", entitlements });
+      } else {
+        send({ type: "store_purchase_error", message: "Unknown item" });
+      }
+    }
+    return;
+  }
+
+  if (msg.type === "equip_cosmetic") {
+    const ok = storeService.equipCosmetic(auth.userId, msg.itemId);
+    if (ok) {
+      const equipped = storeService.getEquippedCosmetics(auth.userId);
+      send({ type: "equipped_cosmetics", equipped });
+    }
+    return;
+  }
+
+  if (msg.type === "unequip_cosmetic") {
+    // Find equipped item in this category and unequip
+    const equipped = storeService.getEquippedCosmetics(auth.userId);
+    const itemId = equipped[msg.category];
+    if (itemId) {
+      storeService.unequipCosmetic(auth.userId, itemId);
+      const newEquipped = storeService.getEquippedCosmetics(auth.userId);
+      send({ type: "equipped_cosmetics", equipped: newEquipped });
+    }
+    return;
+  }
+}
+
+// ─── Store REST Endpoints ───────────────────────────────────────────────────
+
+app.get("/api/store/items", (_req, res) => {
+  res.json({ items: storeService.getAvailableItems() });
+});
+
+app.get("/api/store/entitlements", (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    res.status(401).json({ error: "No token provided" });
+    return;
+  }
+  const payload = verifyToken(authHeader.slice(7));
+  if (!payload) {
+    res.status(401).json({ error: "Invalid or expired token" });
+    return;
+  }
+  const entitlements = storeService.getPlayerEntitlements(payload.userId);
+  const equipped = storeService.getEquippedCosmetics(payload.userId);
+  res.json({ entitlements, equipped });
+});
+
+// Stripe webhook (raw body required for signature verification)
+app.post("/api/store/webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    if (!isStripeConfigured()) {
+      res.status(400).json({ error: "Stripe not configured" });
+      return;
+    }
+    const sig = req.headers["stripe-signature"] as string;
+    if (!sig) {
+      res.status(400).json({ error: "Missing stripe-signature header" });
+      return;
+    }
+    const handled = await storeService.handleWebhook(req.body, sig);
+    res.json({ received: true, handled });
+  },
+);
+
+// Dev-only: grant items without payment
+if (IS_DEV) {
+  app.post("/api/store/dev-grant", (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      res.status(401).json({ error: "No token provided" });
+      return;
+    }
+    const payload = verifyToken(authHeader.slice(7));
+    if (!payload) {
+      res.status(401).json({ error: "Invalid or expired token" });
+      return;
+    }
+    const { itemId } = req.body;
+    const ok = storeService.grantItemDev(payload.userId, itemId);
+    if (!ok) {
+      res.status(400).json({ error: "Unknown item" });
+      return;
+    }
+    const entitlements = storeService.getPlayerEntitlements(payload.userId);
+    res.json({ granted: true, entitlements });
+  });
+}
 
 // ─── Diagnostic Logging (dev only) ───────────────────────────────────────────
 

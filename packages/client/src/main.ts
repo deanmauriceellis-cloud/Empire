@@ -47,6 +47,7 @@ import { createConnection, getWebSocketUrl, type ConnectionState } from "./net/c
 import { createMultiplayerGame, fetchLobbyGames, type MultiplayerGame } from "./net/multiplayer.js";
 import { createWorldClient, type WorldClient } from "./net/worldClient.js";
 import { createAuthClient, getServerUrl, type AuthClient } from "./net/auth.js";
+import { createStoreClient, type StoreClient } from "./net/storeClient.js";
 import { createAudioManager, type AudioManager } from "./audio/AudioManager.js";
 import type { SelectionState, UIState, TileHighlight, RenderableState } from "./types.js";
 import type { TickInfo, WorldSummary } from "@empire/shared";
@@ -143,6 +144,7 @@ async function init() {
     onMessage(msg) {
       // Route auth messages first
       if (authClient.handleServerMessage(msg)) return;
+      if (storeClient.handleServerMessage(msg)) return;
       mp.handleMessage(msg);
       wc.handleMessage(msg);
     },
@@ -351,6 +353,46 @@ async function init() {
     onError(message) {
       console.error("Auth error:", message);
     },
+  });
+
+  // ─── Store Client ──────────────────────────────────────────────────
+
+  const storeClient: StoreClient = createStoreClient({
+    onItemsLoaded(items) {
+      console.log(`Store: ${items.length} items loaded`);
+    },
+    onEntitlementsUpdated(entitlements) {
+      console.log(`Store: entitlements updated, VIP=${entitlements.isVip}`);
+    },
+    onEquippedUpdated(equipped) {
+      console.log(`Store: equipped updated`, equipped);
+      if (ui.store.isOpen) {
+        ui.store.updateEntitlements(
+          storeClient.entitlements!,
+          equipped,
+        );
+      }
+    },
+    onPurchaseUrl(url) {
+      // Stripe checkout — redirect to payment page
+      window.open(url, "_blank");
+    },
+    onPurchaseComplete(itemId) {
+      console.log(`Store: purchased ${itemId}`);
+      ui.store.showPurchaseResult(itemId, true);
+    },
+    onPurchaseError(message) {
+      console.error(`Store: purchase error: ${message}`);
+      ui.store.showPurchaseResult("", false, message);
+    },
+  });
+
+  // Wire store panel actions now that storeClient and conn exist
+  ui.store.setActions({
+    onPurchase: (itemId) => storeClient.purchase(conn, itemId),
+    onEquip: (itemId) => storeClient.equip(conn, itemId),
+    onUnequip: (category) => storeClient.unequip(conn, category),
+    onClose: () => ui.store.close(),
   });
 
   // Restore username from localStorage if available
@@ -1493,6 +1535,18 @@ async function init() {
         ui.menus.showLoginScreen("login");
       } else if (menuAction === "show-register") {
         ui.menus.showLoginScreen("register");
+      } else if (menuAction === "show-store") {
+        // Open store — request items if not yet loaded
+        if (connState === "disconnected") conn.connect();
+        storeClient.requestItems(conn);
+        if (authClient.isLoggedIn) {
+          storeClient.requestEntitlements(conn);
+        }
+        ui.store.open(
+          storeClient.items,
+          storeClient.entitlements,
+          storeClient.equipped,
+        );
       } else if (menuAction === "logout") {
         authClient.logout();
         ui.menus.setLoggedInUser(null);

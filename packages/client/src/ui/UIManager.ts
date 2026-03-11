@@ -13,6 +13,7 @@ import { createDebugPanel, type DebugPanel } from "./debugPanel.js";
 import { createWarStats, type WarStats } from "./warStats.js";
 import { createUnitInfoPanel, type UnitInfoPanel } from "./unitInfoPanel.js";
 import { createEconomyReview, type EconomyReview } from "./economyReview.js";
+import { createStorePanel, type StorePanel, type StorePanelActions } from "./storePanel.js";
 import type { Camera } from "../core/camera.js";
 
 export interface UIManager {
@@ -27,9 +28,10 @@ export interface UIManager {
   readonly warStats: WarStats;
   readonly unitInfo: UnitInfoPanel;
   readonly economyReview: EconomyReview;
+  readonly store: StorePanel;
 }
 
-export function createUIManager(camera: Camera): UIManager {
+export function createUIManager(camera: Camera, storeActions?: StorePanelActions): UIManager {
   injectStyles();
 
   // Create root overlay
@@ -49,6 +51,12 @@ export function createUIManager(camera: Camera): UIManager {
   const warStats = createWarStats(camera);
   const unitInfo = createUnitInfoPanel();
   const economyReview = createEconomyReview();
+  const store = createStorePanel(storeActions ?? {
+    onPurchase: () => {},
+    onEquip: () => {},
+    onUnequip: () => {},
+    onClose: () => { store.close(); },
+  });
 
   // Wire war stats button into HUD top bar
   hud.setWarStatsButton(warStats.button);
@@ -69,6 +77,7 @@ export function createUIManager(camera: Camera): UIManager {
   root.appendChild(cityPanel.element);
   root.appendChild(warStats.element);
   root.appendChild(economyReview.element);
+  root.appendChild(store.element);
   root.appendChild(menus.element);
 
   return {
@@ -83,5 +92,6 @@ export function createUIManager(camera: Camera): UIManager {
     warStats,
     unitInfo,
     economyReview,
+    store,
   };
 }

@@ -199,6 +199,7 @@ export class GameManager {
       nextBuildingId: 0,
       techResearch: {},
       kingdoms: {},
+      shields: {},
     };
 
     // Initialize per-player data (viewMaps, resources, tech)

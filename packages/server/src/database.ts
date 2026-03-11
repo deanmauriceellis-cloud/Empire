@@ -45,6 +45,29 @@ export interface KingdomRow {
   last_active: string;
 }
 
+export interface PurchaseRow {
+  id: number;
+  user_id: number;
+  type: string;
+  item_id: string;
+  amount_cents: number;
+  currency: string;
+  stripe_session_id: string | null;
+  purchased_at: string;
+}
+
+export interface EntitlementRow {
+  user_id: number;
+  item_id: string;
+  expires_at: string | null;
+  equipped: number;           // 0 or 1 (SQLite boolean)
+}
+
+export interface EquippedCosmeticRow {
+  category: string;
+  item_id: string;
+}
+
 // ─── Database ────────────────────────────────────────────────────────────────
 
 export class GameDatabase {
@@ -102,6 +125,33 @@ export class GameDatabase {
 
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_kingdoms_user_world ON kingdoms(user_id, world_id)
+    `);
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS purchases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        type TEXT NOT NULL,
+        item_id TEXT NOT NULL,
+        amount_cents INTEGER NOT NULL,
+        currency TEXT NOT NULL DEFAULT 'usd',
+        stripe_session_id TEXT,
+        purchased_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS entitlements (
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        item_id TEXT NOT NULL,
+        expires_at TEXT,
+        equipped INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (user_id, item_id)
+      )
+    `);
+
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_purchases_user ON purchases(user_id)
     `);
   }
 
@@ -209,6 +259,94 @@ export class GameDatabase {
 
   updateKingdomLastActive(kingdomId: number): void {
     this.db.prepare("UPDATE kingdoms SET last_active = datetime('now') WHERE id = ?").run(kingdomId);
+  }
+
+  /** Get user IDs for all active human kingdoms in a world. Returns {playerId, userId} pairs. */
+  getWorldPlayerUsers(worldId: string): Array<{ player_id: number; user_id: number }> {
+    return this.db.prepare(
+      "SELECT player_id, user_id FROM kingdoms WHERE world_id = ? AND status = 'active'",
+    ).all(worldId) as Array<{ player_id: number; user_id: number }>;
+  }
+
+  // ─── Purchases ──────────────────────────────────────────────────────────
+
+  createPurchase(
+    userId: number,
+    type: string,
+    itemId: string,
+    amountCents: number,
+    stripeSessionId: string | null,
+  ): number {
+    const stmt = this.db.prepare(
+      "INSERT INTO purchases (user_id, type, item_id, amount_cents, stripe_session_id) VALUES (?, ?, ?, ?, ?)",
+    );
+    const result = stmt.run(userId, type, itemId, amountCents, stripeSessionId);
+    return result.lastInsertRowid as number;
+  }
+
+  getPurchasesForUser(userId: number): PurchaseRow[] {
+    return this.db.prepare(
+      "SELECT * FROM purchases WHERE user_id = ? ORDER BY purchased_at DESC",
+    ).all(userId) as PurchaseRow[];
+  }
+
+  getPurchaseByStripeSession(sessionId: string): PurchaseRow | null {
+    return (this.db.prepare(
+      "SELECT * FROM purchases WHERE stripe_session_id = ?",
+    ).get(sessionId) as PurchaseRow | undefined) ?? null;
+  }
+
+  // ─── Entitlements ────────────────────────────────────────────────────────
+
+  grantEntitlement(userId: number, itemId: string, expiresAt: string | null): void {
+    this.db.prepare(`
+      INSERT INTO entitlements (user_id, item_id, expires_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(user_id, item_id) DO UPDATE SET
+        expires_at = excluded.expires_at
+    `).run(userId, itemId, expiresAt);
+  }
+
+  revokeEntitlement(userId: number, itemId: string): void {
+    this.db.prepare("DELETE FROM entitlements WHERE user_id = ? AND item_id = ?").run(userId, itemId);
+  }
+
+  getEntitlementsForUser(userId: number): EntitlementRow[] {
+    return this.db.prepare(
+      "SELECT * FROM entitlements WHERE user_id = ?",
+    ).all(userId) as EntitlementRow[];
+  }
+
+  /** Get only non-expired entitlements. */
+  getActiveEntitlementsForUser(userId: number): EntitlementRow[] {
+    return this.db.prepare(
+      "SELECT * FROM entitlements WHERE user_id = ? AND (expires_at IS NULL OR expires_at > datetime('now'))",
+    ).all(userId) as EntitlementRow[];
+  }
+
+  hasEntitlement(userId: number, itemId: string): boolean {
+    const row = this.db.prepare(
+      "SELECT 1 FROM entitlements WHERE user_id = ? AND item_id = ? AND (expires_at IS NULL OR expires_at > datetime('now'))",
+    ).get(userId, itemId);
+    return !!row;
+  }
+
+  equipCosmetic(userId: number, itemId: string): void {
+    this.db.prepare(
+      "UPDATE entitlements SET equipped = 1 WHERE user_id = ? AND item_id = ?",
+    ).run(userId, itemId);
+  }
+
+  unequipCosmetic(userId: number, itemId: string): void {
+    this.db.prepare(
+      "UPDATE entitlements SET equipped = 0 WHERE user_id = ? AND item_id = ?",
+    ).run(userId, itemId);
+  }
+
+  getEquippedCosmetics(userId: number): EntitlementRow[] {
+    return this.db.prepare(
+      "SELECT * FROM entitlements WHERE user_id = ? AND equipped = 1",
+    ).all(userId) as EntitlementRow[];
   }
 
   // ─── Lifecycle ─────────────────────────────────────────────────────────────

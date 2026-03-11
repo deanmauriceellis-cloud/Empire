@@ -49,6 +49,7 @@ import {
   getWorldRingInfo,
 } from "@empire/shared";
 import type { GameDatabase } from "./database.js";
+import { isVipPlayer, VIP_SHIELD_MAX_MS, type Entitlement } from "@empire/shared";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -466,6 +467,20 @@ export class WorldServer {
       }
     }
 
+    // Populate VIP player list from DB entitlements
+    if (this.db) {
+      const playerUsers = this.db.getWorldPlayerUsers(activeWorld.id);
+      const vipIds: number[] = [];
+      for (const pu of playerUsers) {
+        const ents = this.db.getActiveEntitlementsForUser(pu.user_id);
+        const items: Entitlement[] = ents.map(e => ({ itemId: e.item_id, expiresAt: e.expires_at }));
+        if (isVipPlayer(items)) {
+          vipIds.push(pu.player_id);
+        }
+      }
+      state.vipPlayers = vipIds.length > 0 ? vipIds : undefined;
+    }
+
     const t1 = performance.now();
 
     // Execute the turn
@@ -657,7 +672,10 @@ export class WorldServer {
         const chargeEarned = onlineMs * SHIELD_CHARGE_RATIO;
         const shield = state.shields[conn.owner];
         if (shield) {
-          shield.chargeMs = Math.min(SHIELD_MAX_MS, shield.chargeMs + chargeEarned);
+          // VIP players get higher shield cap (10hr vs 8hr)
+          const isVip = state.vipPlayers?.includes(conn.owner) ?? false;
+          const maxShield = isVip ? VIP_SHIELD_MAX_MS : SHIELD_MAX_MS;
+          shield.chargeMs = Math.min(maxShield, shield.chargeMs + chargeEarned);
         }
         activeWorld.playerConnectedAt.delete(conn.owner);
       }
