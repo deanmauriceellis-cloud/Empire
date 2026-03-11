@@ -1,5 +1,16 @@
 # Empire Reborn — Changelog
 
+## v0.28.0 — Session 039 (2026-03-10)
+
+### Added
+- **River War map type** — new terrain preset: two equal landmasses separated by a wide river (20-40 tiles), navigable tributaries extending 80-95% to map edges creating natural choke points, small islands with neutral cities in the river, balanced city distribution
+- **River-smart transport AI** — transports on river maps prioritize shoreline enemy/unowned cities (+2 priority) and island continent cities (+2 priority); empty transports return to own shoreline first for army pickup
+- **9 new river map tests** — dimensions, river presence, land balance, city distribution, tributaries, multi-seed/multi-size
+
+### Fixed
+- **Click debug logging** — `[Click]` log now fires on every click (was: only when units present at tile, making empty-tile clicks silent)
+- **Unused AI helpers cleaned up** — removed `isInTributary()`, `directionTowardRiver()`, and unused `MAP_WIDTH/MAP_HEIGHT` imports from ai-transport.ts
+
 ## v0.27.0 — Session 038 (2026-03-10)
 
 ### Added

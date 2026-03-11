@@ -5,12 +5,19 @@
 
 ## Status
 - All 12 phases complete + gameplay polish + debug tools + AI overhaul
-- 283 unit/integration tests passing (255 shared + 28 server)
+- 292 unit/integration tests passing (264 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - Full code review completed (session 035) — 6-phase refactor plan below
 
 ## Latest commit
-`8c0ced5` — session 038: War Stats panel, AI production fix, naval ratio rebalance
+`pending` — session 039: River War map type, river-smart transport AI
+
+## Completed (session 039)
+- [x] River War map type — two landmasses split by wide river, tributaries (80-95% to edge), islands, balanced cities
+- [x] River-smart transport AI — boost shoreline/island city priority, empty transports return to own shore first
+- [x] Click debug logging fix — unconditional [Click] log output
+- [x] Cleaned up unused AI helpers (isInTributary, directionTowardRiver)
+- [x] 9 new river map tests, all 292 tests passing (264 shared + 28 server), client builds clean
 
 ## Completed (session 038)
 - [x] War Stats dialog panel — battle tracking with unit types, casualties, clickable locations, filters

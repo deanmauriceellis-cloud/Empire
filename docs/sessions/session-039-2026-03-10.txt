@@ -1,0 +1,53 @@
+Session 039 — 2026-03-10
+========================
+
+## Summary
+Added "River War" map type — a new terrain preset where two equal landmasses are separated by a wide navigable river with tributaries, islands, and balanced city placement. Implemented river-smart transport AI that prioritizes shoreline and island cities. Fixed unit click/selection debug logging bug.
+
+## Conversation Context
+User requested a new map generation mode creating two landmasses split by a river, with tributaries extending 80-95% toward map edges to create natural choke points. After implementation, user reviewed diagnostic logs and requested transport AI improvements for river maps. Key correction from user: enemy choke point cities (at tributary endpoints) should be priority targets, not avoided.
+
+## Changes
+
+### New: River War Map Type
+- **packages/shared/src/types.ts** — Added `mapType?: string` to `GameConfig` interface
+- **packages/shared/src/constants.ts** — Added `mapType?: string` to `TerrainPreset` interface; added "River War" preset (waterRatio: 30, smoothPasses: 5, mapType: "river")
+- **packages/shared/src/mapgen.ts** — Major additions (~430 lines):
+  - `generateMap()` refactored to dispatch between `generateStandardMap()` and `generateRiverMap()` based on config.mapType
+  - `generateRiverMap()`: all-land initialization → carve central river with wobble → add islands → carve tributaries → scatter lakes → balanced city placement → starting city selection
+  - `generateWobble()`: random-walk with smoothing for natural river bank edges
+  - `carveRiverTributary()`: 3-4 tile wide channels, wider mouth tapering at river junction, turnaround basin at terminus, 80-95% map edge penetration, reduced wobble (0.15) for navigability
+  - River cities: equal distribution across both landmasses, island cities, tribute endpoint cities
+  - Starting cities: placed on opposite sides of the river
+
+### Modified: Transport AI for River Maps
+- **packages/shared/src/ai-transport.ts**:
+  - `createUnloadViewMap()`: on river maps, boost shoreline cities with enemy/unowned cities (+2 value), boost small island continents with cities (+2 value)
+  - Empty transport behavior: on river maps, return to own shoreline first (loadMap → portMap) before exploring random water
+  - Cleaned up unused `isInTributary()` and `directionTowardRiver()` helpers (were added then reverted per user feedback)
+  - Removed unused `MAP_WIDTH, MAP_HEIGHT` imports
+
+### Fixed: Click Debug Logging
+- **packages/client/src/main.ts**: Made `[Click]` debug log unconditional (was only logged when units found at tile, so clicks on empty tiles produced no output)
+
+### Client Integration
+- **packages/client/src/main.ts**: Pass `mapType` from terrain preset to config overrides
+- **packages/client/src/net/multiplayer.ts**: Updated `createGame` signature and implementation to pass `mapType` through WebSocket config
+
+### Tests
+- **packages/shared/src/__tests__/mapgen.test.ts**: Added 9 new tests for river map generation:
+  - Correct dimensions, river presence, land balance (±10%), city distribution balance
+  - Starting cities on opposite sides, tributary existence, cityId consistency
+  - Multiple seeds produce different maps, multiple map sizes work
+
+## Test Results
+- 264 shared tests passing (including 9 new river map tests)
+- 28 server tests passing
+- Client builds clean
+- E2E tests not affected (require browser)
+
+## Important Decisions
+1. River map uses entirely separate generator rather than parameterizing the standard height-map generator — cleaner separation for the fundamentally different generation algorithm
+2. Tributaries are 3-4 tiles wide (minimum 3) to ensure transport navigability
+3. User corrected initial AI approach: enemy choke point cities at tributary endpoints are BEST targets, not something to avoid. Reverted tributary-avoidance logic, instead boosted priority for shoreline/island cities
+4. Empty transports on river maps return to own shoreline first (where armies cluster at river bank) before exploring
