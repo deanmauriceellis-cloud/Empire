@@ -1,0 +1,93 @@
+Session 055 — 2026-03-11
+========================
+
+## Objective
+Complete Phase 11 remaining items: shield mechanic, reconnection, and world client UI.
+
+## Work Done
+
+### Shield Mechanic
+- Added `ShieldState` interface to types.ts: `{ chargeMs, activatedAt, isActive }`
+- Added constants: `SHIELD_MAX_MS` (8hr), `SHIELD_INITIAL_MS` (2hr), `SHIELD_CHARGE_RATIO` (1.0)
+- Added `isShielded()` helper in game.ts — checks if player has active shield
+- Combat immunity in game.ts processAction:
+  - Attack on shielded units: returns empty events, no damage
+  - Attack on shielded cities: returns empty events, no capture
+  - Bombard on shielded units/structures: returns empty events
+  - autoAttackStructures: skips shielded enemy units
+  - checkMineTrigger: shielded units don't trigger mines
+- Shielded player can still attack others (shield is defensive only)
+
+### Shield Lifecycle (WorldServer.ts)
+- New player join: initializes shield with SHIELD_INITIAL_MS (2hr) charge
+- Disconnect: accumulates charge from online time (onlineMs * SHIELD_CHARGE_RATIO), activates shield
+- Grace timer uses shield charge duration (not fixed 5min)
+- Shield expiry: player reverts to AI, shield charge zeroed
+- Reconnect: deactivates shield, preserves remaining charge (chargeMs - elapsed)
+- `playerConnectedAt` map tracks connection timestamps for charge calculation
+
+### Reconnection (WorldServer.ts)
+- New `handleReconnectWorld()` method (~50 lines)
+- Validates: world exists, player exists, player not defeated
+- Restores human control (isAI = false), clears disconnect timer
+- Deactivates shield preserving remaining charge
+- Sends world_joined + visible state to reconnecting client
+
+### Protocol Updates (protocol.ts)
+- Added `reconnect_world` client message: `{ worldId, playerId }`
+- Added `list_worlds` client message
+- Added `reconnect_failed` server message: `{ worldId, reason }`
+- Extended TickInfo: `shieldRemainingMs?`, `actionsQueued?`
+- Per-player tick info: shield remaining and action count included in broadcasts
+
+### World Client (NEW: packages/client/src/net/worldClient.ts, ~250 lines)
+- Complete world mode WebSocket client module
+- WorldClient interface: createWorld, joinWorld, reconnectWorld, sendAction, cancelActions, leaveWorld, listWorlds
+- Game action helpers: moveUnit, attackTarget, setProduction, setBehavior, bombardTarget
+- buildRenderableState(): converts visible state to client renderable format
+- handleMessage(): routes all world server→client message types
+
+### Client UI
+- menuScreens.ts: "Kingdom World" button on main menu, world browser with active worlds, join buttons (inner/outer ring), world setup with tick speed selection
+- hud.ts: tick countdown timer (⏱ M:SS), actions queued badge, shield indicator, season remaining
+- styles.ts: CSS for .tick-timer, .actions-queued, .shield-indicator
+- types.ts: UIState extended with isWorldMode, tickNextMs, tickIntervalMs, seasonRemainingS, shieldRemainingMs, worldActionsQueued
+- main.ts: GameMode extended with "world", WorldClient integration, startWorldGame(), buildWorldUIState(), handleWorldClickAction(), computeWorldHighlights(), fetchWorldList(), frame-based tick countdown
+
+### Test Updates
+- All 10 shared test files: added `shields: {}` to test state creation
+- NEW: shield.test.ts (14 tests): isShielded, shield constants, combat blocking (attack/bombard/auto-attack/mines/city), shielded player attacking
+- WorldServer.test.ts: 10 new tests — shield init on join, shield activation on disconnect (charge accumulation), shield deactivation on reconnect (remaining charge), shield expiry→AI, reconnect success, reconnect world-not-found, reconnect defeated player, restore non-AI on reconnect, list_worlds, per-player tick info
+- Added longTickConfig (24hr tick) to prevent cascading tick execution during shield time-advance tests
+
+## Test Results
+- 621 shared tests pass (14 new shield tests)
+- 50 server tests pass (10 new shield/reconnection tests)
+- Client builds clean
+
+## Files Changed (26)
+- packages/shared/src/types.ts — ShieldState interface, shields on GameState
+- packages/shared/src/constants.ts — SHIELD_MAX_MS, SHIELD_INITIAL_MS, SHIELD_CHARGE_RATIO
+- packages/shared/src/game.ts — isShielded(), shield checks in processAction/autoAttack/mines
+- packages/shared/src/protocol.ts — reconnect_world, list_worlds, reconnect_failed, TickInfo extensions
+- packages/shared/src/singleplayer.ts — shields: {} init
+- packages/shared/src/world-map.ts — shields: {} init
+- packages/shared/src/__tests__/shield.test.ts — NEW (14 tests)
+- packages/shared/src/__tests__/*.test.ts — shields: {} in 10 test files
+- packages/server/src/WorldServer.ts — shield lifecycle, reconnection, per-player tick info
+- packages/server/src/index.ts — reconnect_world, list_worlds routing
+- packages/server/src/__tests__/WorldServer.test.ts — 10 new tests
+- packages/client/src/net/worldClient.ts — NEW (~250 lines)
+- packages/client/src/main.ts — world mode integration (~320 lines added)
+- packages/client/src/types.ts — UIState world mode fields
+- packages/client/src/ui/hud.ts — world mode HUD rendering
+- packages/client/src/ui/menuScreens.ts — world browser + setup screens
+- packages/client/src/ui/styles.ts — world mode CSS
+
+## Commits
+1. `session 055: Phase 11 — Shield mechanic, reconnection, world client UI`
+
+## Deferred
+- Season rewards / leaderboard (Phase 11 stretch → later phase)
+- Monthly world reset ceremony (notification + final stats)
+- JWT authentication for reconnection (Phase 13)

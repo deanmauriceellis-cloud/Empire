@@ -1,17 +1,17 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-KINGDOM Phase 11 in progress** — Kingdom World Server (tick engine, world map, action buffering done; shield, seasons, client UI remaining)
+**PLAN-KINGDOM Phase 11 complete** — Kingdom World Server (tick engine, world map, shield, reconnection, client UI all done)
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phases 1-10 of expansion plan complete + Phase 11 core (world server + tick engine)
-- 647 tests passing (607 shared + 40 server)
+- Phases 1-11 of expansion plan complete
+- 671 tests passing (621 shared + 50 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-KINGDOM.md** is the definitive plan (17 phases: gameplay → kingdom MMO → monetization)
 
 ## Latest commit
-session 054: Phase 11 — Kingdom World Server (tick engine, world map, action buffering)
+session 055: Phase 11 — Shield mechanic, reconnection, world client UI
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
@@ -20,28 +20,23 @@ session 054: Phase 11 — Kingdom World Server (tick engine, world map, action b
 - Economy review tabs not yet updated for structures
 - Crown city relocate action not yet implemented (UI button deferred)
 - Multiplayer server doesn't yet send kingdom data to client
-- World mode: no client UI yet (countdown timer, action indicator, world menu)
-- World mode: shield mechanic not yet implemented
 - World mode: monthly reset/season rewards not yet implemented
-- World mode: no reconnection to existing world session
+- World mode: reconnection uses trust-based playerId (Phase 13 adds JWT auth)
+
+## Completed (session 055) — Phase 11 Remaining: Shield, Reconnection, Client UI
+- [x] 11E: Shield mechanic — ShieldState, SHIELD_MAX/INITIAL/CHARGE constants, isShielded()
+- [x] 11E: Combat immunity — attack/bombard/auto-attack/mines blocked for shielded players
+- [x] 11E: Shield lifecycle — charge accumulates from online time, activates on disconnect, deactivates on reconnect
+- [x] 11E: Shield expiry — grace timer uses charge duration, player reverts to AI when expired
+- [x] 11F: Reconnection — reconnect_world message, player validation, restore human control
+- [x] 11G: World client UI — worldClient.ts, world browser menu, tick countdown, shield indicator
+- [x] 11G: HUD extensions — tick timer, actions queued badge, shield remaining, season countdown
+- [x] Protocol: reconnect_world, list_worlds, reconnect_failed, per-player TickInfo (shield/actions)
+- [x] 24 new tests (14 shield + 10 server), 671 total (621 shared + 50 server)
+- [ ] Deferred: Season rewards / leaderboard (later phase)
+- [ ] Deferred: JWT authentication for reconnection (Phase 13)
 
 ## Completed (session 054) — Phase 11 Core: Kingdom World Server
-- [x] 11A partial: World map generator — compose kingdom tiles into NxN grid with ocean channels
-- [x] 11B: Tick engine — configurable interval (1min/5min/15min/1hr), auto-advance turns
-- [x] 11C: Action buffering — queue actions between ticks, cancel support, 500 action limit
-- [x] 11D partial: AI takeover — disconnected humans get AI control, 5min grace period
-- [x] New file: shared/world-map.ts — WorldConfig, WorldState, generateWorldMap, kingdom claiming
-- [x] New file: server/WorldServer.ts — tick engine, action buffering, player join/leave, persistence
-- [x] Protocol: create_world, join_world, world_action, cancel_actions, leave_world (client→server)
-- [x] Protocol: world_created, world_joined, world_state, tick_result, actions_queued (server→client)
-- [x] Protocol: TickInfo (nextTickMs, tickIntervalMs, seasonRemainingS), WorldSummary
-- [x] Server: WorldServer alongside GameManager, message routing by type, /api/worlds endpoint
-- [x] Server: GameManager.handleMessage/handleDisconnect made public for central routing
-- [x] 42 new tests (30 world-map + 12 WorldServer), 647 total (607 shared + 40 server)
-- [ ] Deferred: Shield mechanic (2hr immunity after disconnect)
-- [ ] Deferred: Monthly world reset / season rewards / leaderboard
-- [ ] Deferred: Client UI (countdown timer, action indicator, world menu)
-- [ ] Deferred: Reconnection to existing world session
 
 ## Completed (session 053) — Phase 10: Crown City & Kingdom System
 - [x] 10A: Crown City assignment from starting cities, reassignment on capture
@@ -346,8 +341,8 @@ R1 and R5 can run in parallel (no dependencies). R2 and R3 depend on R1. R6 depe
 3. ~~**Phase 8**: AI Economy & Strategy~~ ✓ (session 051)
 4. ~~**Phase 9**: N-Player Foundation~~ ✓ (session 052)
 5. ~~**Phase 10**: Crown City & Kingdom System~~ ✓ (session 053)
-6. **Phase 11**: Kingdom World Server — tick engine, AI kingdoms, monthly reset (1-2 sessions, NEXT)
-7. **Phase 12**: Dynamic Map & Player Join — ring placement, world expansion (1-2 sessions)
+6. ~~**Phase 11**: Kingdom World Server~~ ✓ (sessions 054-055)
+7. **Phase 12**: Dynamic Map & Player Join — ring placement, world expansion (1-2 sessions, NEXT)
 8. **Phase 13**: Accounts & Persistence — auth, player DB, kingdom lifecycle (1-2 sessions)
 9. **Phase 14**: Delta Sync & Scaling — efficient updates for 50+ players (1-2 sessions)
 10. **Phase 15**: Monetization — Stripe, cosmetics, VIP, season pass (2-3 sessions)

@@ -1,5 +1,19 @@
 # Empire Reborn — Changelog
 
+## v0.44.0 — Session 055 (2026-03-11)
+
+### Phase 11 Complete: Shield, Reconnection, World Client UI
+- **Shield mechanic**: `ShieldState` (chargeMs, activatedAt, isActive), `SHIELD_MAX_MS` (8hr), `SHIELD_INITIAL_MS` (2hr), `SHIELD_CHARGE_RATIO` (1.0)
+- **Shield combat immunity**: `isShielded()` blocks attack (units+cities), bombard, auto-attack structures, mine triggers for shielded players
+- **Shield lifecycle**: Charge accumulates from online time, activates on disconnect, deactivates on reconnect preserving remaining charge, AI takeover on expiry
+- **Reconnection**: `reconnect_world` message with player validation (world/player exists, not defeated), restores human control, deactivates shield
+- **Protocol**: `reconnect_world`, `list_worlds`, `reconnect_failed` messages; per-player `TickInfo` (shieldRemainingMs, actionsQueued)
+- **New file `worldClient.ts`** (~250 lines): Complete world mode WebSocket client with action helpers and renderable state builder
+- **World browser**: Main menu "Kingdom World" button, world list with join buttons, tick speed setup screen
+- **HUD extensions**: Tick countdown timer (⏱ M:SS), actions queued badge, shield indicator, season remaining display
+- **Main game loop**: Full world mode integration — startWorldGame, buildWorldUIState, handleWorldClickAction, frame-based tick countdown
+- **Tests**: 14 shield unit tests (shared) + 10 server tests (shield lifecycle, reconnection, list_worlds, tick info); 671 total (621 shared + 50 server)
+
 ## v0.43.0 — Session 054 (2026-03-11)
 
 ### Phase 11 Core: Kingdom World Server
