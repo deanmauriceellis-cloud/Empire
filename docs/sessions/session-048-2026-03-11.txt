@@ -1,0 +1,52 @@
+Session 048 — 2026-03-11
+========================
+
+## Summary
+Design session: Kingdom MMO Master Plan. No code changes — pure architecture and planning.
+
+## What Happened
+1. User proposed expanding Empire Reborn into a persistent shared-world MMO:
+   - Global map where all players play on a single map
+   - Tick-based turns (1/minute or slower) with AI takeover for idle players
+   - Players choose starting location and isolation level (ocean buffer width)
+   - Kingdom-centric model with a "Crown City" capital
+   - Monetization through cosmetics, VIP subscription, season pass
+
+2. Analyzed current architecture for feasibility:
+   - Identified all 2-player hardcoded assumptions (Owner enum, executeTurn signature,
+     GameManager player slots, selectStartingCities, checkEndGame, AI surrender)
+   - Confirmed game logic (combat, economy, tech, buildings) is owner-agnostic and scales
+   - Confirmed networking and persistence layers are player-agnostic
+   - Conclusion: HIGHLY FEASIBLE — refactoring, not redesign
+
+3. Created PLAN-KINGDOM.md — comprehensive 17-phase master plan:
+   - Phases 7-8: Finish gameplay foundation (bombard, AI economy) from PLAN-UNIFIED
+   - Phases 9-11: Kingdom core (N-player, crown cities, tick server)
+   - Phases 12-14: Persistent world (dynamic map, accounts, delta sync)
+   - Phases 15-17: Monetization and polish (Stripe, cosmetics, balance, launch)
+   - Estimated 13-22 sessions from current state
+
+4. Key design decisions documented:
+   - Crown City: sacred capital, lose it = lose kingdom (elimination first, vassalage later)
+   - Territory: 4-tile radius from owned cities, grants vision and building rights
+   - Isolation levels: Extreme (80-100 ocean), Far (50-70), Near (30-40), Center (10-20)
+   - Shield: 2hr immunity after disconnect, rechargeable (1hr online = 1hr shield, 8hr max)
+   - Monetization: cosmetics + VIP ($5/mo, 10% build speed) + season pass ($10/season)
+   - Hard rule: NO pay-to-win (no stat boosts, no extra resources, no purchasable intel)
+   - Spawn protection: 100 ticks for new players
+   - Dynamic map: islands generated on player join, world expands as needed
+
+5. Updated MEMORY.md with new plan reference and kingdom vision summary
+
+## Files Created
+- PLAN-KINGDOM.md — 17-phase master plan (715 lines)
+- docs/sessions/session-048-2026-03-11.txt — this session log
+
+## Files Modified
+- MEMORY.md — updated project overview, key files, current phase, added kingdom vision section
+
+## No Code Changes
+This was a pure design/planning session. No game logic, tests, or UI modified.
+
+## Next Session
+Phase 7: Bombard & Defensive Structures (first implementation phase under PLAN-KINGDOM)

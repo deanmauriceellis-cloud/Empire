@@ -1,5 +1,16 @@
 # Empire Reborn — Changelog
 
+## v0.37.0 — Session 048 (2026-03-11)
+
+### Kingdom MMO Master Plan
+- **PLAN-KINGDOM.md** — 17-phase master plan for persistent kingdom MMO (replaces PLAN-UNIFIED as definitive plan)
+- **Architecture analysis** — identified all 2-player hardcoded assumptions; confirmed game logic scales to N players
+- **Kingdom concept** — Crown City capitals, territory system, isolation levels (Extreme/Far/Near/Center)
+- **Persistent world design** — tick-based turns, offline AI defense, shield mechanic, dynamic map expansion
+- **Monetization design** — cosmetics, VIP subscription ($5/mo), season pass ($10/season); hard no-pay-to-win rules
+- **Phase roadmap** — Gameplay (7-8) → Kingdom Core (9-11) → Persistent World (12-14) → Monetization & Polish (15-17)
+- No code changes — design/planning session only
+
 ## v0.36.0 — Session 047 (2026-03-11)
 
 ### Phase 6: Tech System

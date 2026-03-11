@@ -1,21 +1,31 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-UNIFIED Phase 6 complete** — Tech System
+**PLAN-KINGDOM Phase 7 next** — Bombard & Defenses
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
 - Phases 1-6 of expansion plan complete (Graphics, Unit Info, Economy, Construction & Buildings, Economy Review, Tech System)
 - 423 tests passing (395 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
-- **PLAN-UNIFIED.md** is the definitive plan for all future implementation
+- **PLAN-KINGDOM.md** is the definitive plan (17 phases: gameplay → kingdom MMO → monetization)
 
 ## Latest commit
-session 047: Phase 6 Tech System
+session 048: Kingdom MMO master plan (PLAN-KINGDOM.md)
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
 - Armies adjacent to capturable neutral cities not always attacking (pre-existing)
+
+## Completed (session 048) — Kingdom MMO Master Plan
+- [x] Architecture analysis: identified all 2-player hardcoded assumptions
+- [x] Feasibility confirmed: game logic is owner-agnostic, scales to N players
+- [x] PLAN-KINGDOM.md: 17-phase master plan (13-22 sessions estimated)
+- [x] Phases 7-8: Bombard & AI Economy (from PLAN-UNIFIED)
+- [x] Phases 9-11: Kingdom core — N-player, crown cities, tick-based server
+- [x] Phases 12-14: Persistent world — dynamic map, accounts, delta sync
+- [x] Phases 15-17: Monetization & polish — Stripe, cosmetics, VIP, balance
+- [x] Design decisions: crown city, territory, isolation levels, shields, monetization rules
 
 ## Completed (session 047) — Tech System
 - [x] Tech thresholds [10, 30, 60, 100, 150] for levels 1-5
@@ -235,17 +245,19 @@ session 047: Phase 6 Tech System
 ### Execution Order
 R1 and R5 can run in parallel (no dependencies). R2 and R3 depend on R1. R6 depends on R2/R3. R4 is last (depends on stable shared API).
 
-## Next Steps (PLAN-UNIFIED phases)
-1. ~~**Phase 1**: Graphics Foundation~~ ✓ (session 041)
-2. ~~**Phase 2**: Unit Info & Vision~~ ✓ (session 042)
-3. ~~**Phase 3**: Economy Foundation~~ ✓ (sessions 043-044)
-4. ~~**Phase 4**: Construction & Buildings~~ ✓ (session 045)
-5. ~~**Phase 5**: Economy Review Screen~~ ✓ (session 046)
-6. ~~**Phase 6**: Tech System~~ ✓ (session 047)
-7. **Phase 7**: Bombard & Defenses — ranged combat, fortifications, bridges, mines (1-2 sessions)
-8. **Phase 8**: AI Economy & Strategy — AI construction, deposit claiming, defense placement (2-3 sessions)
-9. **Phase 9**: Movement Trails & Atmosphere — contrails, wakes, combat spectacle (1 session)
-10. **Phase 10**: Balance & Testing — tuning, integration, AI competence (1-2 sessions)
+## Next Steps (PLAN-KINGDOM phases)
+1. ~~**Phase 1-6**: Graphics, UI, Economy, Construction, Review, Tech~~ ✓ (sessions 041-047)
+2. **Phase 7**: Bombard & Defenses — 5 new units, 10 structures, ranged combat (1-2 sessions)
+3. **Phase 8**: AI Economy & Strategy — AI construction, defense placement (2-3 sessions)
+4. **Phase 9**: N-Player Foundation — dynamic ownership, N-player turns (1-2 sessions)
+5. **Phase 10**: Crown City & Kingdoms — capitals, territory, win condition (1-2 sessions)
+6. **Phase 11**: Tick-Based Server — timer turns, offline AI, shields (1 session)
+7. **Phase 12**: Dynamic Map & Spawning — island gen, isolation levels (1-2 sessions)
+8. **Phase 13**: Accounts & Persistence — auth, player DB, kingdom lifecycle (1-2 sessions)
+9. **Phase 14**: Delta Sync & Scaling — efficient updates for 50+ players (1-2 sessions)
+10. **Phase 15**: Monetization — Stripe, cosmetics, VIP, season pass (2-3 sessions)
+11. **Phase 16**: Movement Trails & Spectacle — visual polish (1 session)
+12. **Phase 17**: Balance, Tuning & Launch — performance, AI, launch prep (1-2 sessions)
 
 ## Blockers
 _None_
