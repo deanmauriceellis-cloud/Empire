@@ -39,6 +39,7 @@ import { ParticleSystem } from "./renderer/particles.js";
 import { HighlightRenderer } from "./renderer/highlights.js";
 import { createScreenShake } from "./renderer/screenShake.js";
 import { MapOverlays } from "./renderer/mapOverlays.js";
+import { CrownGlowRenderer } from "./renderer/crownGlow.js";
 import { screenToTile } from "./iso/coords.js";
 import { createActionCollector, type ActionCollector } from "./game/actionCollector.js";
 import { computeHighlights, getClickAction } from "./game/moveCalc.js";
@@ -83,6 +84,10 @@ async function init() {
   const particles = new ParticleSystem(effectsContainer);
   const highlightRenderer = new HighlightRenderer(worldContainer, assets);
   const mapOverlays = new MapOverlays(worldContainer);
+  const crownGlow = new CrownGlowRenderer(worldContainer);
+
+  // Wire particle system into unit renderer for movement trails
+  unitRenderer.setParticles(particles);
 
   // ─── Audio ──────────────────────────────────────────────────────────
   const audio: AudioManager = createAudioManager();
@@ -1076,6 +1081,12 @@ async function init() {
       particles.emitCapture(event.loc, owner);
       audio.playCapture();
       shake.trigger(0.3);
+    } else if (event.type === "crown") {
+      // Crown capture — dramatic golden shatter
+      const captor = (event.data?.overlordId ?? event.data?.captor ?? Owner.Player1) as number;
+      particles.emitCrownCapture(event.loc, captor);
+      audio.playCapture();
+      shake.trigger(1.0); // big shake for crown captures
     } else if (event.type === "death") {
       const owner = event.data?.owner as number ?? Owner.Unowned;
       particles.emitDeath(event.loc, owner);
@@ -1745,6 +1756,7 @@ async function init() {
     if (currentState) {
       tilemap.update(currentState, camera, vw, vh, dt);
       highlightRenderer.update(currentHighlights, selection, currentState.mapWidth, dt);
+      crownGlow.update(currentState.crownCityLocs, dt);
       unitRenderer.update(currentState.units, selection, dt);
       particles.update(dt);
 

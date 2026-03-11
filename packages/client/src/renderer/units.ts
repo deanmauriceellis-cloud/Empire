@@ -3,14 +3,16 @@
 // pulsing selection glow, smooth movement animation, idle bobbing, and shadows.
 
 import { Container, Sprite, Graphics, Text, TextStyle } from "pixi.js";
-import { locRow, locCol, UNIT_ATTRIBUTES, Owner } from "@empire/shared";
+import { locRow, locCol, UNIT_ATTRIBUTES, Owner, UnitType } from "@empire/shared";
 import type { UnitState } from "@empire/shared";
 import { cartToIso } from "../iso/coords.js";
 import {
   UNIT_MOVE_LERP, COLORS,
   UNIT_IDLE_BOB_SPEED, UNIT_IDLE_BOB_AMOUNT, UNIT_SHADOW_ALPHA,
+  TRAIL_EMIT_INTERVAL,
 } from "../constants.js";
 import type { AssetBundle, SelectionState } from "../types.js";
+import type { ParticleSystem } from "./particles.js";
 
 interface UnitSprite {
   container: Container;
@@ -25,12 +27,26 @@ interface UnitSprite {
   targetY: number;
   fadeAlpha: number;   // for death fade-out (-1 = alive)
   bobOffset: number;   // randomized phase offset for bobbing
+  lastTrailTime: number; // last time a trail particle was emitted
+  facingX: number;     // -1 = left, 1 = right (for directional facing)
+  unitType: UnitType;  // cached unit type for trail logic
 }
+
+// Unit types that produce specific trail effects
+const AIR_UNITS = new Set([UnitType.Fighter, UnitType.AWACS, UnitType.Satellite]);
+const SHIP_UNITS = new Set([
+  UnitType.Patrol, UnitType.Destroyer, UnitType.Submarine,
+  UnitType.Transport, UnitType.Carrier, UnitType.Battleship,
+  UnitType.MissileCruiser, UnitType.EngineerBoat,
+]);
+const LAND_UNITS = new Set([UnitType.Army, UnitType.Construction, UnitType.Artillery]);
+// SpecialForces: no trail (invisible movement)
 
 export class UnitRenderer {
   private unitContainer: Container;
   private sprites = new Map<number, UnitSprite>();
   private assets: AssetBundle;
+  private particles: ParticleSystem | null = null;
   private time = 0;
 
   constructor(worldContainer: Container, assets: AssetBundle) {
@@ -40,6 +56,11 @@ export class UnitRenderer {
     this.unitContainer.zIndex = 20;
     this.unitContainer.sortableChildren = true;
     worldContainer.addChild(this.unitContainer);
+  }
+
+  /** Late-bind particle system for movement trails */
+  setParticles(particles: ParticleSystem): void {
+    this.particles = particles;
   }
 
   private createUnitSprite(unit: UnitState): UnitSprite {
@@ -119,6 +140,9 @@ export class UnitRenderer {
       targetY: iso.y,
       fadeAlpha: -1,
       bobOffset: Math.random() * Math.PI * 2, // randomize phase
+      lastTrailTime: 0,
+      facingX: 1,
+      unitType: unit.type,
     };
   }
 
@@ -167,6 +191,8 @@ export class UnitRenderer {
       us.targetY = iso.y;
 
       // Lerp toward target
+      const prevX = us.currentX;
+      const prevY = us.currentY;
       us.currentX += (us.targetX - us.currentX) * UNIT_MOVE_LERP;
       us.currentY += (us.targetY - us.currentY) * UNIT_MOVE_LERP;
 
@@ -174,8 +200,31 @@ export class UnitRenderer {
       if (Math.abs(us.targetX - us.currentX) < 0.5) us.currentX = us.targetX;
       if (Math.abs(us.targetY - us.currentY) < 0.5) us.currentY = us.targetY;
 
-      // Idle bobbing (only when not moving)
+      // Movement detection and direction tracking
+      const dx = us.currentX - prevX;
+      const dy = us.currentY - prevY;
       const isMoving = Math.abs(us.targetX - us.currentX) > 1 || Math.abs(us.targetY - us.currentY) > 1;
+
+      // 16B: Directional facing — flip sprite based on movement
+      if (Math.abs(dx) > 0.1) {
+        us.facingX = dx > 0 ? 1 : -1;
+      }
+      us.sprite.scale.x = Math.abs(us.sprite.scale.x) * us.facingX;
+
+      // 16A: Movement trails
+      if (isMoving && this.particles && this.time - us.lastTrailTime > TRAIL_EMIT_INTERVAL) {
+        us.lastTrailTime = this.time;
+        if (AIR_UNITS.has(us.unitType)) {
+          this.particles.emitContrail(us.currentX, us.currentY);
+        } else if (SHIP_UNITS.has(us.unitType)) {
+          this.particles.emitWake(us.currentX, us.currentY, dx, dy);
+        } else if (LAND_UNITS.has(us.unitType)) {
+          this.particles.emitDustPuff(us.currentX, us.currentY);
+        }
+        // SpecialForces: no trail (invisible movement)
+      }
+
+      // Idle bobbing (only when not moving)
       let bobY = 0;
       if (!isMoving) {
         bobY = Math.sin(this.time * UNIT_IDLE_BOB_SPEED + us.bobOffset) * UNIT_IDLE_BOB_AMOUNT;

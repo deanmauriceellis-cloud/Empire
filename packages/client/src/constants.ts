@@ -96,3 +96,19 @@ export const UNIT_IDLE_BOB_AMOUNT = 1.5;   // pixels of vertical bob
 export const UNIT_SHADOW_ALPHA = 0.25;     // shadow opacity
 export const SCREEN_SHAKE_INTENSITY = 4;   // max pixels of shake
 export const SCREEN_SHAKE_DECAY = 8;       // shake decay speed (per second)
+
+// ─── Movement Trails ─────────────────────────────────────────────────────────
+
+export const TRAIL_EMIT_INTERVAL = 0.06;   // seconds between trail particle emissions
+export const CONTRAIL_LIFE = 0.8;          // fighter contrail particle lifetime
+export const CONTRAIL_SIZE = 1.5;          // contrail particle size
+export const WAKE_LIFE = 1.0;             // ship wake particle lifetime
+export const WAKE_SPREAD = 0.6;           // wake V-angle spread (radians)
+export const DUST_LIFE = 0.5;             // army dust puff lifetime
+export const DUST_SIZE = 2.0;             // dust puff particle size
+
+// ─── Crown Glow ──────────────────────────────────────────────────────────────
+
+export const CROWN_GLOW_RADIUS = 18;      // glow circle radius
+export const CROWN_GLOW_PULSE_SPEED = 1.5; // pulse frequency
+export const CROWN_GLOW_ALPHA = 0.25;     // base glow alpha
