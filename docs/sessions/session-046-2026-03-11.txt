@@ -1,0 +1,66 @@
+Session 046 — 2026-03-11
+Phase 5: Economy Review Screen
+
+SUMMARY
+- Implemented Economy Review Screen: modal dialog shown before turn execution
+- Enhanced HUD resource bar with per-turn income display
+- Added comprehensive economy/building/tech state to diagnostic logging
+
+CHANGES
+
+1. Economy Review Screen (economyReview.ts — new, ~470 lines)
+   - Modal dialog triggered by pressing Enter (blocks turn execution until confirmed)
+   - 6 tabbed views: Events | Resources | Cities | Tech | Construction | Buildings
+   - Events tab: battle results, captures, productions, deaths with icons/locations
+   - Resources tab: stockpile + city income + deposit income + total per-turn
+   - Cities tab: production status, progress bars, retool/stall indicators, upgrade list
+   - Tech tab: research points per track, income/turn, contributing buildings
+   - Construction tab: active builds with progress, idle/assigned constructors
+   - Buildings tab: completed buildings with type, level, output, location
+   - "Confirm & Execute Turn →" button commits the turn
+   - Escape/Enter/click-close all confirm and execute
+   - Number keys 1-6 switch between tabs
+   - Capture-phase keyboard handling prevents input leaking to game
+   - Properly blocks all game clicks, keys, and map interaction while open
+
+2. Resource Bar Enhancement (hud.ts)
+   - Added "+N" per-turn income display next to each resource stockpile
+   - Green-colored income text for visual distinction
+   - Income computed from city passive income + active deposit buildings
+   - Added resourceIncome field to UIState interface
+
+3. Turn Flow Integration (main.ts)
+   - Enter key → opens Economy Review (async/blocking) → on confirm → executes turn
+   - Economy review blocks all game input while open (clicks, keys, right-clicks)
+   - Escape guard updated to not interfere with economy review's own Escape handling
+   - Multiplayer path unchanged (direct turn end, no review screen)
+
+4. Diagnostic Enhancements (diagnostic.ts)
+   - Added Economy section: per-player resource stockpiles with income breakdown
+   - Shows city passive income vs deposit income per resource type
+   - Flags stalled cities (work=0) and retooling cities (work<0) with warnings
+   - Added Deposits section: all deposits with type, location, owner, status
+   - Added Buildings section: complete list with progress, output, constructor assignments
+   - Added City upgrade summary: per-city upgrade slots (filled/empty, types, levels)
+   - In-progress builds show work/buildTime, percentage, and assigned constructor ID
+   - Completed builds show resource/tech output per turn
+
+FILES CHANGED
+- New: packages/client/src/ui/economyReview.ts (470 lines)
+- Modified: packages/client/src/ui/UIManager.ts — wired economyReview component
+- Modified: packages/client/src/ui/styles.ts — +250 lines economy review CSS
+- Modified: packages/client/src/ui/hud.ts — income display in resource bar
+- Modified: packages/client/src/main.ts — async turn flow, input guards, income computation
+- Modified: packages/client/src/types.ts — resourceIncome field on UIState
+- Modified: packages/shared/src/diagnostic.ts — economy/building/tech/deposit sections
+
+TESTS
+- 366 passing (338 shared + 28 server) — no regressions
+- Client TypeScript clean, build clean
+
+DESIGN NOTES
+- Economy review is singleplayer only; multiplayer skips it (server-driven turn execution)
+- Dialog uses z-index 55 (above war stats at 50, below menus at 100)
+- Keyboard capture phase ensures Enter/Escape don't leak to game input system
+- Tab bar wraps on narrow screens (flex-wrap)
+- No new tests added — this is pure UI/client code with no testable shared logic

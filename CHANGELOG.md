@@ -1,5 +1,20 @@
 # Empire Reborn — Changelog
 
+## v0.35.0 — Session 046 (2026-03-11)
+
+### Phase 5: Economy Review Screen
+- **Economy Review dialog** — modal triggered by Enter before turn execution; 6 tabs: Events, Resources, Cities, Tech, Construction, Buildings
+- **Events tab** — battle results, captures, productions, deaths with icons and map coordinates
+- **Resources tab** — stockpile + city income breakdown + deposit income + total per-turn income per resource
+- **Cities tab** — all owned cities with production status, progress bars, retool/stall indicators, upgrade list
+- **Tech tab** — research points per track, income per turn from buildings, list of contributing sources
+- **Construction tab** — active builds with progress, idle vs assigned construction units
+- **Buildings tab** — all completed buildings with type, level, resource/tech output per turn
+- **"Confirm & Execute Turn →"** button commits the turn; Escape/Enter also confirm
+- **HUD resource income** — per-turn income (+N) shown next to each resource stockpile in green
+- **Diagnostic enhancements** — economy state (resources, income breakdown, stall/retool warnings), deposits (location, type, status), buildings (progress, output, constructors), city upgrades per city
+- Number keys 1-6 switch tabs; capture-phase keyboard isolation prevents input leaking
+
 ## v0.34.0 — Session 045 (2026-03-10)
 
 ### Phase 4: Construction & Buildings

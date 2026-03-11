@@ -1,21 +1,33 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-UNIFIED Phase 4 complete** — Construction & Buildings
+**PLAN-UNIFIED Phase 5 complete** — Economy Review Screen
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phases 1-4 of expansion plan complete (Graphics, Unit Info, Economy, Construction & Buildings)
+- Phases 1-5 of expansion plan complete (Graphics, Unit Info, Economy, Construction & Buildings, Economy Review)
 - 366 tests passing (338 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-UNIFIED.md** is the definitive plan for all future implementation
 
 ## Latest commit
-_pending_ — session 045: Phase 4 Construction & Buildings
+session 046: Phase 5 Economy Review Screen
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
 - Armies adjacent to capturable neutral cities not always attacking (pre-existing)
+
+## Completed (session 046) — Economy Review Screen
+- [x] Economy Review dialog: modal triggered by Enter, 6 tabs (Events/Resources/Cities/Tech/Construction/Buildings)
+- [x] Resources tab: stockpile + city income + deposit income + total per-turn
+- [x] Cities tab: production status, progress bars, retool/stall, upgrade list
+- [x] Tech tab: research points, income/turn, contributing buildings
+- [x] Construction tab: active builds with progress, idle/assigned constructors
+- [x] Buildings tab: completed buildings with type, level, output
+- [x] "Confirm & Execute Turn →" button, Escape/Enter also confirm
+- [x] HUD resource income: +N per-turn income next to stockpile in green
+- [x] Diagnostic enhancements: economy/deposits/buildings/tech state + stall/retool warnings
+- [x] Number keys 1-6 switch tabs, capture-phase keyboard isolation
 
 ## Completed (session 045) — Construction & Buildings
 - [x] UnitType.Construction: land, speed 1, str 0, hp 1, buildTime 10, cost [10,0,5]
