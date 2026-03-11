@@ -1,21 +1,35 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-UNIFIED Phase 5 complete** — Economy Review Screen
+**PLAN-UNIFIED Phase 6 complete** — Tech System
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phases 1-5 of expansion plan complete (Graphics, Unit Info, Economy, Construction & Buildings, Economy Review)
-- 366 tests passing (338 shared + 28 server)
+- Phases 1-6 of expansion plan complete (Graphics, Unit Info, Economy, Construction & Buildings, Economy Review, Tech System)
+- 423 tests passing (395 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-UNIFIED.md** is the definitive plan for all future implementation
 
 ## Latest commit
-session 046: Phase 5 Economy Review Screen
+session 047: Phase 6 Tech System
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
 - Armies adjacent to capturable neutral cities not always attacking (pre-existing)
+
+## Completed (session 047) — Tech System
+- [x] Tech thresholds [10, 30, 60, 100, 150] for levels 1-5
+- [x] Vision bonuses: Science 2 (+1 all), Electronics 1 (+1 ships)
+- [x] HP bonuses: Health 2 (Army +1), Health 3 (land +1), Health 5 (all +1)
+- [x] Strength bonuses: War 1-5 progressive (combat integration)
+- [x] Healing bonuses: Health 1 (2 HP/turn city), Health 4 (ships heal at sea)
+- [x] Range bonuses: Electronics 3 (+2 fighter), Electronics 4 (+100 satellite)
+- [x] Speed bonus: Science 4 (+1 construction)
+- [x] Unit unlock gating infrastructure (canProduceUnit)
+- [x] HUD: tech levels display (S:Lv2 format)
+- [x] Economy Review: enhanced tech tab with progress bars, bonuses, previews
+- [x] Unit info panel: effective stats with green (+N) indicators
+- [x] 57 new tests, 423 total passing
 
 ## Completed (session 046) — Economy Review Screen
 - [x] Economy Review dialog: modal triggered by Enter, 6 tabs (Events/Resources/Cities/Tech/Construction/Buildings)
@@ -224,10 +238,10 @@ R1 and R5 can run in parallel (no dependencies). R2 and R3 depend on R1. R6 depe
 ## Next Steps (PLAN-UNIFIED phases)
 1. ~~**Phase 1**: Graphics Foundation~~ ✓ (session 041)
 2. ~~**Phase 2**: Unit Info & Vision~~ ✓ (session 042)
-3. **Phase 3**: Economy Foundation — resources, deposits, production gating (1-2 sessions)
-4. **Phase 4**: Construction & Buildings — construction unit, mines/farms, city upgrades (1-2 sessions)
-5. **Phase 5**: Economy Review Screen — turn summary dialog, resource bar (1 session)
-6. **Phase 6**: Tech System — tech trees, bonuses, unit/building unlocks (1-2 sessions)
+3. ~~**Phase 3**: Economy Foundation~~ ✓ (sessions 043-044)
+4. ~~**Phase 4**: Construction & Buildings~~ ✓ (session 045)
+5. ~~**Phase 5**: Economy Review Screen~~ ✓ (session 046)
+6. ~~**Phase 6**: Tech System~~ ✓ (session 047)
 7. **Phase 7**: Bombard & Defenses — ranged combat, fortifications, bridges, mines (1-2 sessions)
 8. **Phase 8**: AI Economy & Strategy — AI construction, deposit claiming, defense placement (2-3 sessions)
 9. **Phase 9**: Movement Trails & Atmosphere — contrails, wakes, combat spectacle (1 session)

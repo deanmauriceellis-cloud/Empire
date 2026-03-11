@@ -1,5 +1,22 @@
 # Empire Reborn — Changelog
 
+## v0.36.0 — Session 047 (2026-03-11)
+
+### Phase 6: Tech System
+- **Tech thresholds** — levels 1-5 at [10, 30, 60, 100, 150] cumulative points per track
+- **Vision bonuses** — Science 2 (+1 all units), Electronics 1 (+1 ships); scan() extended range
+- **HP bonuses** — Health 2 (Army +1), Health 3 (land +1), Health 5 (all +1); applied at unit creation and repair
+- **Strength bonuses** — War 1-5 progressive; combat uses getEffectiveStrength()
+- **Healing bonuses** — Health 1 (2 HP/turn in city), Health 4 (ships heal 1 HP/turn at sea)
+- **Range bonuses** — Electronics 3 (+2 fighter range), Electronics 4 (+100 satellite range)
+- **Speed bonuses** — Science 4 (+1 construction unit speed)
+- **Unit unlock gating** — canProduceUnit() infrastructure (all existing units always available; gates new Phase 7 units)
+- **HUD tech display** — shows "S:Lv2" format with tooltip details instead of raw points
+- **Economy Review Tech tab** — 4-track progress bars, level dots, points-to-next, "Next:" unlock preview, active bonuses section
+- **Unit info panel** — effective stats with green (+N) tech bonus indicators
+- **Bottom HUD bar** — tech-boosted HP/speed for selected units
+- 57 new tests; 423 total (395 shared + 28 server)
+
 ## v0.35.0 — Session 046 (2026-03-11)
 
 ### Phase 5: Economy Review Screen

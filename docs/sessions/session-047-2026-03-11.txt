@@ -1,0 +1,76 @@
+Session 047 — 2026-03-11
+Phase 6: Tech System
+
+## Summary
+Implemented the complete tech system: thresholds, level calculation, tech bonuses
+(vision, HP, strength, healing, range, speed), combat integration, and UI updates.
+
+## Changes
+
+### New Files
+- `packages/shared/src/tech.ts` — Tech system module
+  - TECH_THRESHOLDS [10, 30, 60, 100, 150] for levels 1-5
+  - getTechLevel(), getPlayerTechLevels(), pointsToNextLevel()
+  - Bonus functions: techVisionBonus, techMaxHpBonus, techStrengthBonus,
+    techCityHealRate, techShipsHealAtSea, techFighterRangeBonus,
+    techSatelliteRangeBonus, techConstructionSpeedBonus
+  - Effective stat functions: getEffectiveStrength/MaxHp/Speed/FighterRange/SatelliteRange
+  - Unit unlock gating: UNIT_TECH_REQUIREMENTS, canProduceUnit()
+  - UI helpers: getActiveTechBonuses(), getNextLevelPreview()
+
+- `packages/shared/src/__tests__/tech.test.ts` — 57 tests
+  - Tech level calculation (thresholds, boundaries, edge cases)
+  - All bonus functions (vision, HP, strength, healing, range, speed)
+  - Effective stats integration (createUnit, combat, repair, movement)
+  - Unit unlock gating
+  - UI helper functions
+
+### Modified Files
+- `packages/shared/src/game.ts`
+  - createUnit(): applies tech HP and range bonuses to new units
+  - scan(): supports extraRange parameter for tech vision bonuses
+  - moveUnit(): passes tech vision bonus to scan
+  - attackUnit(): uses getEffectiveStrength() for combat damage
+  - repairShips(): Health 1 (2 HP/turn city), Health 4 (heal at sea), effective max HP
+  - objMoves(): optional GameState parameter for tech speed bonuses
+  - objCapacity(): optional GameState parameter for effective max HP
+  - Fighter refueling uses getEffectiveFighterRange()
+
+- `packages/shared/src/index.ts` — exports tech.ts
+
+- `packages/client/src/ui/hud.ts`
+  - Top bar: tech displays "S:Lv2" format instead of raw points
+  - Tooltip shows full details (pts, level/max)
+  - Bottom bar: uses tech-boosted HP, speed for selected units
+
+- `packages/client/src/ui/economyReview.ts`
+  - Tech tab completely rewritten: progress bars, level dots, points-to-next,
+    "Next:" preview text, active bonuses section, research sources
+
+- `packages/client/src/ui/unitInfoPanel.ts`
+  - Shows effective stats (HP, strength, speed, range)
+  - Green (+N) indicators for tech bonuses
+
+- `packages/client/src/ui/styles.ts`
+  - New CSS for tech tracks, dots, bar wraps, preview, bonus rows
+
+## Tech Bonus Details (from PLAN-UNIFIED.md)
+
+Science: Lv2 +1 vision (all), Lv4 construction +1 speed, Lv5 buildings +3 HP
+Health:  Lv1 city heal 2/turn, Lv2 army +1 HP, Lv3 land +1 HP, Lv4 ships heal at sea, Lv5 all +1 HP
+Elec:    Lv1 +1 vision (ships), Lv2 subs visible, Lv3 +2 fighter range, Lv4 +100 sat range, Lv5 intel
+War:     Lv1 army str +1, Lv2 ship str +1, Lv3 fighter str +1, Lv4 all +1, Lv5 all +1 (cumul.)
+
+## Test Results
+- 395 shared tests (338 existing + 57 new)
+- 28 server tests
+- 423 total, all passing
+- Client builds clean
+
+## Notes
+- Unit unlock gating infrastructure ready but all existing units are always available
+  (new units in Phase 7 will use UNIT_TECH_REQUIREMENTS)
+- Science 5 "All buildings +3 HP" not yet implemented (buildings don't have HP yet)
+- Electronics 2 "Subs visible when adjacent" not yet implemented (needs visibility system change)
+- Electronics 5 "See enemies on explored tiles" not yet implemented (needs fog system change)
+- These will be addressed when the relevant Phase 7/8 systems are built
