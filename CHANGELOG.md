@@ -1,5 +1,22 @@
 # Empire Reborn — Changelog
 
+## v0.50.0 — Session 061 (2026-03-11)
+
+### Phase 17: Balance, Tuning & Launch (in progress)
+- **Balance test suite** — 23 comprehensive tests covering all Phase 17 plan items
+- **Resource flow** — Validates starting resources are spent, deposits are utilized
+- **Tech pacing** — Confirms linear thresholds (prevents snowball), verifies research mechanics with buildings
+- **Advanced units** — Tests AI can produce tech-gated units (Artillery, Special Forces, etc.)
+- **Multi-player balance** — 6-player games stable 100+ turns, competitive (no instant domination), economy scales
+- **Crown & tributary** — Crown bonuses initialized correctly, tribute income transfers verified via direct call
+- **AI competence** — Expansion to 3+ cities, army maintenance, multi-threat adaptation across 6 players
+- **Performance** — 2-player avg <200ms/turn, 6-player avg <500ms/turn, no single turn >2000ms
+- **Stress tests** — 200-turn 2-player (2 seeds), 100-turn 6-player (2 seeds) — no crashes
+- **Game integrity** — Winner validation, asset ownership, unit count bounds (<500), 4-player determinism
+- **Balance insight** — Tribute rounds to 0 with single-city vassals (30% of [2,1,2] floors to [0,0,0]); needs 4+ cities to matter
+- **New file**: `packages/shared/src/__tests__/balance.test.ts` (~390 lines)
+- **827 tests passing** (729 shared + 98 server), client builds clean
+
 ## v0.49.0 — Session 060 (2026-03-11)
 
 ### Phase 16: Movement Trails & Spectacle

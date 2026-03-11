@@ -1,0 +1,73 @@
+Session 061 — 2026-03-11
+Phase 17: Balance, Tuning & Launch (in progress)
+
+## Summary
+Built comprehensive balance and stress test suite covering all Phase 17 plan items
+(17A-17D). 23 new tests validating resource flow, tech pacing, multi-player balance,
+crown/tributary mechanics, AI competence, performance, and game integrity.
+
+## Changes
+
+### New File
+- packages/shared/src/__tests__/balance.test.ts (~390 lines)
+  - 23 tests organized by Phase 17 sub-sections
+
+### Balance: Resource Flow (17A)
+- Starting resources validation: AI spends resources (not just accumulating)
+- Deposit utilization: AI builds on deposits in 6-player games
+
+### Balance: Tech Pacing (17A)
+- Theoretical verification: Level 5 reachable at ~50 turns with Lv3 building
+- Linear thresholds confirmed (gaps grow ≤2x, prevents snowball)
+- Direct test: University produces 1 sci/turn → tech level 1 at 10 turns
+
+### Balance: New Units (17A)
+- AI can receive and use tech-gated units (Artillery, SF, AWACS, MC)
+- Verified no crashes with high-tech N-player games
+
+### Balance: Multi-Player (17B)
+- 6-player game runs stably for 100 turns
+- Competitive balance: multiple players active after 50 turns
+- Economy scaling: players with 5+ cities maintain 3+ units
+
+### Balance: Crown & Tributaries (17B)
+- Crown bonuses initialized correctly (crownCityId, tributeTarget, tributeRate)
+- Tribute income verified via direct collectTributeIncome() call
+- KEY FINDING: Tribute rounds to 0 with single-city vassals
+  (floor(0.3 * 2) = 0 for ore/textile, floor(0.3 * 1) = 0 for oil)
+  Needs 4+ cities to generate meaningful tribute (floor(0.3 * 8) = 2)
+
+### AI Competence (17C)
+- AI expands to 3+ cities (construction units produced)
+- Army presence maintained (doesn't suicide all units)
+- Multi-threat adaptation: ≥2 players expand in 6-player games
+
+### Performance (17D)
+- 2-player: avg ~30ms/turn (well under 200ms limit)
+- 6-player: avg ~13ms/turn (well under 500ms limit)
+- No single turn >2000ms in 6-player games
+- 200-turn stress test (2 seeds): no crashes
+- 100-turn stress test (2 seeds): no crashes
+
+### Game Integrity (17E)
+- Winner has cities; losers are resigned
+- All unit/city owners are valid player IDs
+- Unit counts stay bounded (<500 over 150 turns)
+- 4-player determinism: same seed = same actions = same result
+
+## Key Findings
+1. 2-player games end quickly (~turn 20-30 via AI surrender or elimination)
+   → balance tests must account for short games
+2. 6-player games last much longer (often 100+ turns without a winner)
+3. Tribute floor-rounding issue: 30% of small incomes rounds to zero
+4. Performance is excellent: all turns well under limits
+5. Game is fully deterministic with seeded RNG
+
+## Test Count
+- Before: 804 (706 shared + 98 server)
+- After: 827 (729 shared + 98 server)
+- All passing, client builds clean
+
+## Remaining Phase 17 Items
+- [ ] 17E: Launch checklist (4-player completion test, payment flow, server restart persistence, concurrent connections, admin tools, client load time)
+- [ ] Consider tribute floor fix (minimum 1 per resource if vassal has any income)

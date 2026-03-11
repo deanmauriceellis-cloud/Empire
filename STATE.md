@@ -1,17 +1,17 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-KINGDOM Phase 16 complete** — Movement Trails & Spectacle (visual polish)
+**PLAN-KINGDOM Phase 17 in progress** — Balance, Tuning & Launch
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phases 1-16 of expansion plan complete
-- 804 tests passing (706 shared + 98 server)
+- Phases 1-16 complete, Phase 17 in progress
+- 827 tests passing (729 shared + 98 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-KINGDOM.md** is the definitive plan (17 phases: gameplay → kingdom MMO → monetization)
 
 ## Latest commit
-session 060: Phase 16 — Movement Trails & Spectacle
+session 061: Phase 17 — Balance, Tuning & Launch (balance test suite)
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
@@ -22,6 +22,21 @@ session 060: Phase 16 — Movement Trails & Spectacle
 - Multiplayer server doesn't yet send kingdom data to client
 - World mode: monthly reset/season rewards not yet implemented
 - Spawn protection enforcement not yet in executeTurn (needs world context in game engine)
+
+## In Progress (session 061) — Phase 17: Balance, Tuning & Launch
+- [x] 17A-D: Comprehensive balance & stress test suite (23 tests)
+  - Resource flow validation (starting resources, deposits)
+  - Tech pacing verification (thresholds, research mechanics)
+  - Advanced unit availability (tech-gated production)
+  - Multi-player balance (6-player stability, competitive balance, economy scaling)
+  - Crown & tributary mechanics (bonuses, tribute income)
+  - AI competence (economy building, army presence, multi-threat adaptation)
+  - Performance benchmarks (avg <200ms/turn 2P, <500ms/turn 6P, no spike >2s)
+  - Stress tests (200-turn 2P, 100-turn 6P, multiple seeds)
+  - Game integrity (winner validation, asset ownership, unit bounds, determinism)
+- [x] New file: packages/shared/src/__tests__/balance.test.ts (~390 lines)
+- [x] 827 tests passing (729 shared + 98 server), client builds clean
+- [ ] 17E: Launch checklist items remaining
 
 ## Completed (session 060) — Phase 16: Movement Trails & Spectacle
 - [x] 16A: Movement trails — fighter contrails (white fading smoke), ship wakes (V-shaped water spray), army dust puffs (brown particles), no trail for Special Forces
