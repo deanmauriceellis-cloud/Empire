@@ -93,6 +93,8 @@ export interface TickInfo {
   shieldRemainingMs?: number;
   /** Number of actions currently queued for this player. */
   actionsQueued?: number;
+  /** Ticks remaining on spawn protection (0 = expired). */
+  spawnProtectionTicks?: number;
 }
 
 /** Summary of a world for the world list. */
@@ -108,4 +110,6 @@ export interface WorldSummary {
   tickIntervalMs: number;
   /** Seconds remaining in the season. */
   seasonRemainingS: number;
+  /** Per-ring breakdown for world browser. */
+  rings?: import("./world-map.js").RingInfo[];
 }

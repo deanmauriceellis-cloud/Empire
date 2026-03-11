@@ -1,17 +1,17 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-KINGDOM Phase 11 complete** — Kingdom World Server (tick engine, world map, shield, reconnection, client UI all done)
+**PLAN-KINGDOM Phase 12 complete** — Dynamic Map & Player Join (pre-allocated grid, world expansion, AI strength gradient, spawn protection, world browser info)
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phases 1-11 of expansion plan complete
-- 671 tests passing (621 shared + 50 server)
+- Phases 1-12 of expansion plan complete
+- 701 tests passing (651 shared + 50 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-KINGDOM.md** is the definitive plan (17 phases: gameplay → kingdom MMO → monetization)
 
 ## Latest commit
-session 055: Phase 11 — Shield mechanic, reconnection, world client UI
+session 056: Phase 12 — Dynamic Map & Player Join
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
@@ -22,6 +22,19 @@ session 055: Phase 11 — Shield mechanic, reconnection, world client UI
 - Multiplayer server doesn't yet send kingdom data to client
 - World mode: monthly reset/season rewards not yet implemented
 - World mode: reconnection uses trust-based playerId (Phase 13 adds JWT auth)
+- Spawn protection enforcement not yet in executeTurn (needs world context in game engine)
+
+## Completed (session 056) — Phase 12: Dynamic Map & Player Join
+- [x] 12A: placeKingdomTile() — on-demand kingdom generation with terrain, cities, deposits, player, crown city, vision
+- [x] 12B: findAvailableKingdom() auto-expands when no AI kingdoms at preferred ring
+- [x] 12C: Pre-allocated grid (maxRadius → 11x11), expandWorldToRing() deterministic expansion, populatedRadius tracking
+- [x] 12D: AI strength gradient — origin(5 armies+tech+resources), ring1(3+modest), ring2+(1+standard)
+- [x] 12E: getWorldRingInfo(), RingInfo type, WorldSummary.rings, ring descriptions
+- [x] 12F: SPAWN_PROTECTION_TICKS=100, isBlockedBySpawnProtection(), TickInfo.spawnProtectionTicks
+- [x] 12G: Cross-kingdom seamless movement (already works, protection functions available)
+- [x] 30 new tests, 701 total (651 shared + 50 server)
+- [ ] Deferred: Spawn protection enforcement in executeTurn (needs world context)
+- [ ] Deferred: World browser ring selection UI, spawn shield visual
 
 ## Completed (session 055) — Phase 11 Remaining: Shield, Reconnection, Client UI
 - [x] 11E: Shield mechanic — ShieldState, SHIELD_MAX/INITIAL/CHARGE constants, isShielded()
@@ -342,8 +355,8 @@ R1 and R5 can run in parallel (no dependencies). R2 and R3 depend on R1. R6 depe
 4. ~~**Phase 9**: N-Player Foundation~~ ✓ (session 052)
 5. ~~**Phase 10**: Crown City & Kingdom System~~ ✓ (session 053)
 6. ~~**Phase 11**: Kingdom World Server~~ ✓ (sessions 054-055)
-7. **Phase 12**: Dynamic Map & Player Join — ring placement, world expansion (1-2 sessions, NEXT)
-8. **Phase 13**: Accounts & Persistence — auth, player DB, kingdom lifecycle (1-2 sessions)
+7. ~~**Phase 12**: Dynamic Map & Player Join~~ ✓ (session 056)
+8. **Phase 13**: Accounts & Persistence — auth, player DB, kingdom lifecycle (1-2 sessions, NEXT)
 9. **Phase 14**: Delta Sync & Scaling — efficient updates for 50+ players (1-2 sessions)
 10. **Phase 15**: Monetization — Stripe, cosmetics, VIP, season pass (2-3 sessions)
 11. **Phase 16**: Movement Trails & Spectacle — visual polish (1 session)

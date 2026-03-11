@@ -30,10 +30,12 @@ import {
   type WorldConfig,
   type WorldState,
   type KingdomTile,
+  type RingInfo,
   DEFAULT_WORLD_CONFIG,
   generateWorldMap,
   findAvailableKingdom,
   claimKingdom,
+  getWorldRingInfo,
 } from "@empire/shared";
 import type { GameDatabase } from "./database.js";
 
@@ -181,11 +183,13 @@ export class WorldServer {
       return;
     }
 
-    // Claim the kingdom (converts AI → human)
+    // Claim the kingdom (converts AI → human, activates spawn protection)
+    const currentTick = activeWorld.world.gameState.turn;
     const playerId = claimKingdom(
       activeWorld.world,
       tile,
       playerName || `Player ${tile.owner}`,
+      currentTick,
     );
 
     // Register connection
@@ -439,7 +443,7 @@ export class WorldServer {
       seasonRemainingS: Math.max(0, Math.floor((activeWorld.world.seasonEndsAt - now) / 1000)),
     };
 
-    // Per-player shield and action info
+    // Per-player shield, action, and spawn protection info
     if (playerId !== undefined) {
       const shield = activeWorld.world.gameState.shields[playerId];
       if (shield?.isActive && shield.activatedAt !== null) {
@@ -448,6 +452,12 @@ export class WorldServer {
       }
       const queued = activeWorld.pendingActions.get(playerId);
       info.actionsQueued = queued ? queued.length : 0;
+
+      // Spawn protection remaining
+      const tile = activeWorld.world.kingdoms.find(k => k.owner === playerId);
+      if (tile && tile.spawnProtectionEndTick > activeWorld.world.gameState.turn) {
+        info.spawnProtectionTicks = tile.spawnProtectionEndTick - activeWorld.world.gameState.turn;
+      }
     }
 
     return info;
@@ -626,10 +636,12 @@ export class WorldServer {
         worldConfig: activeWorld.world.worldConfig,
         kingdoms: activeWorld.world.kingdoms,
         gridSize: activeWorld.world.gridSize,
+        populatedRadius: activeWorld.world.populatedRadius,
         worldWidth: activeWorld.world.worldWidth,
         worldHeight: activeWorld.world.worldHeight,
         createdAt: activeWorld.world.createdAt,
         seasonEndsAt: activeWorld.world.seasonEndsAt,
+        expansionSeed: activeWorld.world.expansionSeed,
       };
       // Save game state under world ID with a "world:" prefix
       this.db.saveGame(
@@ -664,6 +676,7 @@ export class WorldServer {
         turn: aw.world.gameState.turn,
         tickIntervalMs: aw.world.worldConfig.tickIntervalMs,
         seasonRemainingS: Math.max(0, Math.floor((aw.world.seasonEndsAt - now) / 1000)),
+        rings: getWorldRingInfo(aw.world),
       });
     }
     return summaries;

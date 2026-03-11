@@ -353,6 +353,16 @@ export const SHIELD_INITIAL_MS = 2 * 60 * 60 * 1000;
 /** Shield charge ratio: 1 hour online = 1 hour shield. */
 export const SHIELD_CHARGE_RATIO = 1.0;
 
+// ─── Spawn Protection ────────────────────────────────────────────────────────
+
+/** Number of ticks new players are protected from foreign attacks. */
+export const SPAWN_PROTECTION_TICKS = 100;
+
+// ─── World Expansion ─────────────────────────────────────────────────────────
+
+/** Maximum world grid radius (5 → 11x11 grid = 121 kingdoms). */
+export const WORLD_MAX_RADIUS = 5;
+
 // ─── Map Size Presets ───────────────────────────────────────────────────────
 
 export interface MapSizePreset {

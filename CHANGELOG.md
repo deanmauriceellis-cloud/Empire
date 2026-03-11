@@ -1,5 +1,18 @@
 # Empire Reborn — Changelog
 
+## v0.45.0 — Session 056 (2026-03-11)
+
+### Phase 12: Dynamic Map & Player Join
+- **Pre-allocated grid**: Map sized by `maxRadius` (default 5 → 11x11 = 121 kingdoms) but only `initialRadius` rings populated; rest is ocean ready for expansion
+- **Dynamic expansion**: `expandWorldToRing()` generates new AI kingdoms deterministically using seeded RNG; no index remapping needed
+- **AI strength gradient**: Origin AI (ring 0) gets 5 armies + tech bonuses + stockpile; inner ring gets 3 armies + modest tech; outer rings match human start
+- **Spawn protection**: `SPAWN_PROTECTION_TICKS=100` shields new human players from foreign attacks for 100 ticks; `isBlockedBySpawnProtection()` for enforcement
+- **World browser info**: `getWorldRingInfo()` returns per-ring slot counts and descriptions; `WorldSummary.rings` for UI display
+- **Auto-expansion**: `findAvailableKingdom()` triggers world expansion when no AI kingdoms available at preferred ring
+- **New helpers**: `placeKingdomTile()`, `ringSlotCount()`, `getKingdomTileAtLoc()`, `isSpawnProtected()`
+- **WorldState**: new fields `populatedRadius`, `expansionSeed`, `maxRadius` on config
+- **Tests**: 30 new tests (60 in world-map.test.ts); 701 total (651 shared + 50 server)
+
 ## v0.44.0 — Session 055 (2026-03-11)
 
 ### Phase 11 Complete: Shield, Reconnection, World Client UI

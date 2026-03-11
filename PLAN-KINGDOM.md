@@ -48,10 +48,10 @@ GAMEPLAY FOUNDATION (finish PLAN-UNIFIED core)
 KINGDOM CORE
 ├── Phase 9:  N-Player Foundation         ✅ DONE (session 052)
 ├── Phase 10: Crown City & Kingdom Map    ✅ DONE (session 053)
-├── Phase 11: Kingdom World Server        ← 1-2 sessions
+├── Phase 11: Kingdom World Server        ✅ DONE (sessions 054-055)
 
 PERSISTENT WORLD
-├── Phase 12: Dynamic Map & Player Join   ← 1-2 sessions
+├── Phase 12: Dynamic Map & Player Join   ✅ DONE (session 056)
 ├── Phase 13: Accounts & Persistence      ← 1-2 sessions
 ├── Phase 14: Delta Sync & Scaling        ← 1-2 sessions
 
