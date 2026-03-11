@@ -1,16 +1,26 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**Expansion Planning** — PLAN-UNIFIED.md: 10-phase graphics + economy + defensive warfare transformation
+**PLAN-UNIFIED Phase 1 complete** — Graphics Foundation implemented
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
+- Phase 1 (Graphics Foundation) of expansion plan complete
 - 292 unit/integration tests passing (264 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-UNIFIED.md** is the definitive plan for all future implementation
 
 ## Latest commit
-`2b9ba0d` — session 040: unified expansion plan — graphics + economy + defensive warfare
+`381eeb4` — session 041: Phase 1 graphics foundation — ocean overhaul, detailed unit sprites, enhanced effects
+
+## Completed (session 041) — Graphics Foundation
+- [x] Multi-depth ocean: deep/coastal/shore textures by adjacent land count
+- [x] Shore foam overlay with pulsing alpha and scale breathing
+- [x] Three-frequency wave animation with vertical tile bob and alpha oscillation
+- [x] All 9 unit types redrawn with detailed procedural sprites
+- [x] Enhanced selection glow: double-ring, multi-frequency pulse, scale breathing
+- [x] Segmented health bars with per-HP dividers
+- [x] Richer particle effects: 3-layer explosions, lingering smoke, debris
 
 ## Completed (session 040) — Design Only
 - [x] PLAN-A.md — Graphics overhaul plan (ocean, unit sprites, info panel, vision overlays, GPU effects)
@@ -159,7 +169,7 @@
 R1 and R5 can run in parallel (no dependencies). R2 and R3 depend on R1. R6 depends on R2/R3. R4 is last (depends on stable shared API).
 
 ## Next Steps (PLAN-UNIFIED phases)
-1. **Phase 1**: Graphics Foundation — ocean overhaul, detailed unit sprites, GPU effects (1-2 sessions)
+1. ~~**Phase 1**: Graphics Foundation~~ ✓ (session 041)
 2. **Phase 2**: Unit Info & Vision — right-side info panel, vision/path overlays (1 session)
 3. **Phase 3**: Economy Foundation — resources, deposits, production gating (1-2 sessions)
 4. **Phase 4**: Construction & Buildings — construction unit, mines/farms, city upgrades (1-2 sessions)

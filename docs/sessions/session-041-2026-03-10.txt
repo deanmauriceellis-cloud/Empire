@@ -1,0 +1,61 @@
+Session 041 — 2026-03-10
+Phase 1: Graphics Foundation (PLAN-UNIFIED Phase 1)
+
+OBJECTIVE
+Implement Phase 1 of the unified expansion plan: make the game visually stunning
+with multi-depth ocean, detailed unit sprites, and enhanced particle effects.
+
+CHANGES
+
+1. Ocean Overhaul (Phase 1A)
+   - Added 3 sea texture variants: deep ocean, coastal, shore
+   - Water depth determined by counting adjacent land tiles (4-cardinal)
+   - Shore foam overlay on water tiles with any adjacent land (8-neighbor)
+   - Three-frequency wave animation (2.0 Hz + 1.3 Hz + 3.2 Hz shimmer)
+   - Per-tile phase offset (col*0.4 + row*0.6) creates rolling wave pattern
+   - Vertical tile bob ±1.2px — tiles physically rise and fall
+   - Alpha oscillation ±15% for visible brightness ebb and flow
+   - Foam scale breathing ±6% and alpha pulse 0.10–0.60
+   - Vibrant blue color palette: brighter than original dark navy
+
+2. Unit Graphics Revolution (Phase 1B)
+   - All 9 unit types redrawn with detailed procedural sprites:
+     Army: shield/helmet with emblem stripe
+     Fighter: swept-wing jet with tail fin and cockpit
+     Patrol: boat hull with radar mast/dish
+     Destroyer: sleek warship with turret/barrel/bridge/mast
+     Submarine: streamlined hull with conning tower/periscope
+     Transport: wide cargo hull with 3 deck sections + bow ramp
+     Carrier: flight deck with runway lines + island structure
+     Battleship: heavy hull with dual turrets + superstructure
+     Satellite: central body + dual solar panels + dish antenna
+   - darken()/lighten() helpers for consistent color accents
+   - Land tile texture gets subtle darker patches for variation
+
+3. Selection & Polish (Phase 1C)
+   - Selection glow: double-ring (outer dim + inner bright)
+   - Multi-frequency pulse (4 Hz + 7 Hz) + scale breathing
+   - Health bars: segmented per-HP, wider (22px), border outline
+   - Larger shadows: 12×5 ellipse (was 10×4)
+   - Explosions: 42 particles in 3 color layers + 8 lingering smoke
+   - Smoke particles: negative gravity, scale expansion, 1.5s life
+   - Death: 14 player-colored + 6 debris particles
+   - Capture: 16-particle ring + upward sparkle burst
+   - All particles get ±30% life variance for natural dissipation
+
+FILES MODIFIED
+- packages/client/src/constants.ts — new ocean colors, wave animation constants
+- packages/client/src/types.ts — AssetBundle gains seaDeep/seaCoastal/seaShore/shoreFoam
+- packages/client/src/assets/placeholders.ts — 4 new sea textures, all 9 unit sprites redrawn
+- packages/client/src/renderer/tilemap.ts — multi-depth ocean, foam layer, wave physics
+- packages/client/src/renderer/units.ts — enhanced selection glow, segmented health bars
+- packages/client/src/renderer/particles.ts — smoke particles, richer effects
+
+TESTS
+- 264 shared + 28 server = 292 tests passing (no game logic changes)
+- Client builds clean
+- Visual changes only — no shared/server code modified
+
+NEXT
+- Phase 2: Unit Info Panel & Vision (right-side panel, overlays)
+- Or continue Phase 1 polish if desired

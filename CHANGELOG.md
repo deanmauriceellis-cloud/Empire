@@ -1,5 +1,16 @@
 # Empire Reborn — Changelog
 
+## v0.30.0 — Session 041 (2026-03-10)
+
+### Graphics — Phase 1: Graphics Foundation (PLAN-UNIFIED)
+- **Multi-depth ocean** — deep ocean (dark navy), coastal (teal), shore (light blue) textures based on adjacent land count; vibrant blue palette
+- **Shore foam overlay** — translucent foam ring on coastal water tiles, pulsing alpha + scale breathing animation
+- **Three-frequency wave animation** — rolling waves with vertical tile bob (±1.2px), strong alpha oscillation (±15%), organic multi-speed sine blend
+- **Detailed unit sprites** — all 9 unit types redrawn: Army (shield/helmet), Fighter (swept-wing jet), Patrol (boat + radar), Destroyer (warship + turret), Submarine (hull + conning tower), Transport (cargo deck), Carrier (flight deck + island), Battleship (dual turrets), Satellite (solar panels + dish)
+- **Enhanced selection glow** — double-ring design with multi-frequency pulse (4+7 Hz) and scale breathing
+- **Segmented health bars** — individual HP segments with dividers and border outline
+- **Richer particle effects** — explosions: 42 particles in 3 color layers + lingering smoke; death: 14 + 6 debris; capture: 16-ring + sparkle burst; smoke particles float upward and expand
+
 ## v0.29.0 — Session 040 (2026-03-10)
 
 ### Design — Unified Expansion Plan
