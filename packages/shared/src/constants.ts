@@ -211,6 +211,9 @@ export const DEPOSIT_RESOURCE: readonly ResourceType[] = [
 /** Per-turn income from a completed mine/well/farm on a deposit */
 export const DEPOSIT_INCOME = 3;
 
+/** Per-turn passive income per owned city: [ore, oil, textile] */
+export const CITY_INCOME: readonly number[] = [2, 1, 2] as const;
+
 // ─── Starting Resources ────────────────────────────────────────────────────
 
 export const STARTING_ORE = 150;

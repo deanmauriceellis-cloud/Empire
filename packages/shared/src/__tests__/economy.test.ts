@@ -551,8 +551,8 @@ describe("Economy in executeTurn", () => {
     const p1OreBefore = state.resources[Owner.Player1][0];
     executeTurn(state, [{ type: "endTurn" }], [{ type: "endTurn" }]);
 
-    // Army costs 5 ore
-    expect(state.resources[Owner.Player1][0]).toBe(p1OreBefore - 5);
+    // Army costs 5 ore, city passive income adds 2 ore
+    expect(state.resources[Owner.Player1][0]).toBe(p1OreBefore + 2 - 5);
   });
 
   it("income collected before production in turn execution", () => {
@@ -560,20 +560,16 @@ describe("Economy in executeTurn", () => {
     state.resources[Owner.Player1] = [0, 0, 0]; // broke
     addCity(state, rowColLoc(5, 5), Owner.Player1, UnitType.Army);
     addCity(state, rowColLoc(10, 10), Owner.Player2, UnitType.Army);
-    // Add a completed ore deposit that provides 3 ore/turn
-    addDeposit(state, rowColLoc(20, 20), DepositType.OreVein, Owner.Player1, true);
-    // Add a completed textile deposit that provides 3 textile/turn
-    addDeposit(state, rowColLoc(25, 25), DepositType.TextileFarm, Owner.Player1, true);
-
+    // No deposits — only passive city income: +2 ore, +1 oil, +2 textile per city
+    // Army costs 5 ore, 0 oil, 5 textile — not enough from 1 city (2 ore, 2 textile)
     const result = executeTurn(state, [{ type: "endTurn" }], [{ type: "endTurn" }]);
 
-    // Income: +3 ore, +3 textile → enough for army (5 ore, 5 textile)? No, only 3 each
-    // So city should stall (needs 5 ore, 5 textile but only has 3, 3)
     const city = state.cities[0];
-    expect(city.work).toBe(0); // stalled
+    expect(city.work).toBe(0); // stalled — can't afford army
 
-    // Resources should be 3 ore, 0 oil, 3 textile (income collected, nothing spent)
-    expect(state.resources[Owner.Player1][0]).toBe(DEPOSIT_INCOME);
-    expect(state.resources[Owner.Player1][2]).toBe(DEPOSIT_INCOME);
+    // Resources should be passive income only (2 ore, 1 oil, 2 textile)
+    expect(state.resources[Owner.Player1][0]).toBe(2);
+    expect(state.resources[Owner.Player1][1]).toBe(1);
+    expect(state.resources[Owner.Player1][2]).toBe(2);
   });
 });

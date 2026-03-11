@@ -18,6 +18,7 @@ import {
   DEPOSIT_RESOURCE,
   DEPOSIT_INCOME,
   NUM_RESOURCE_TYPES,
+  CITY_INCOME,
 } from "./constants.js";
 import { UNIT_ATTRIBUTES, canTraverse, UNIT_COSTS, canAffordUnit } from "./units.js";
 import type {
@@ -648,8 +649,14 @@ export function tickCityProduction(
   for (const city of state.cities) {
     if (city.owner !== owner) continue;
 
-    // If city is about to start production (work <= 0 → will reach 1), check resources
-    if (city.work <= 0) {
+    // Retooling: negative work just ticks toward 0, no resource check needed
+    if (city.work < 0) {
+      city.work += 1;
+      continue;
+    }
+
+    // At work === 0, city is about to start production — check resources
+    if (city.work === 0) {
       const cost = UNIT_COSTS[city.production];
       if (!canAffordUnit(res, city.production)) {
         // Stall — don't advance work
@@ -662,10 +669,8 @@ export function tickCityProduction(
         continue;
       }
       // Consume resources when production starts (work goes from 0 to 1)
-      if (city.work === 0) {
-        for (let i = 0; i < NUM_RESOURCE_TYPES; i++) {
-          res[i] -= cost[i];
-        }
+      for (let i = 0; i < NUM_RESOURCE_TYPES; i++) {
+        res[i] -= cost[i];
       }
     }
 
@@ -705,6 +710,16 @@ export function collectResourceIncome(
   const res = state.resources[owner];
   let totalIncome = [0, 0, 0];
 
+  // Passive income: each owned city generates a small baseline
+  for (const city of state.cities) {
+    if (city.owner !== owner) continue;
+    for (let i = 0; i < NUM_RESOURCE_TYPES; i++) {
+      res[i] += CITY_INCOME[i];
+      totalIncome[i] += CITY_INCOME[i];
+    }
+  }
+
+  // Deposit income: completed buildings on owned deposits
   for (const deposit of state.deposits) {
     if (deposit.owner !== owner) continue;
     if (!deposit.buildingComplete) continue;
