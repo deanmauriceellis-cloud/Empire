@@ -67,12 +67,41 @@ export function createHUD(): HUD {
           `</span>`
         : "";
 
+      // World mode indicators
+      let worldHtml = "";
+      if (state.isWorldMode) {
+        const parts: string[] = [];
+        // Tick countdown
+        if (state.tickNextMs !== undefined) {
+          const secs = Math.max(0, Math.ceil(state.tickNextMs / 1000));
+          const min = Math.floor(secs / 60);
+          const sec = secs % 60;
+          parts.push(`<span class="tick-timer" title="Next tick">⏱ ${min}:${sec.toString().padStart(2, "0")}</span>`);
+        }
+        // Actions queued
+        if (state.worldActionsQueued !== undefined && state.worldActionsQueued > 0) {
+          parts.push(`<span class="actions-queued" title="Actions queued for next tick">${state.worldActionsQueued} queued</span>`);
+        }
+        // Shield
+        if (state.shieldRemainingMs !== undefined && state.shieldRemainingMs > 0) {
+          const shieldMin = Math.ceil(state.shieldRemainingMs / 60000);
+          parts.push(`<span class="shield-indicator" title="Shield active">${shieldMin}min shield</span>`);
+        }
+        // Season
+        if (state.seasonRemainingS !== undefined) {
+          const days = Math.ceil(state.seasonRemainingS / 86400);
+          parts.push(`<span style="color:#888" title="Season remaining">${days}d left</span>`);
+        }
+        worldHtml = parts.join("");
+      }
+
       topContent.innerHTML = [
         `<span><span class="stat-label">Turn</span><span class="stat">${state.turn}</span></span>`,
         `<span><span class="stat-label">Cities</span><span class="stat">${state.playerCityCount}</span></span>`,
         `<span><span class="stat-label">Units</span>${unitSummary}</span>`,
         resHtml,
         techHtml,
+        worldHtml,
         `<span style="margin-left:auto;color:#555">Empire Reborn v${GAME_VERSION}</span>`,
       ].join("");
 

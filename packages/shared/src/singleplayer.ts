@@ -71,6 +71,7 @@ export function createSinglePlayerGame(configOverrides?: Partial<GameConfig>): S
     nextBuildingId: 0,
     techResearch: {},
     kingdoms: {},
+    shields: {},
   };
 
   // Initialize per-player data (viewMaps, resources, tech)

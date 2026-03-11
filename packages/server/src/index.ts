@@ -43,7 +43,7 @@ const wss = new WebSocketServer({ server, path: "/ws", maxPayload: 256 * 1024 })
 
 /** World message types that should be routed to WorldServer. */
 const WORLD_MSG_TYPES = new Set([
-  "create_world", "join_world", "world_action", "cancel_actions", "leave_world",
+  "create_world", "join_world", "reconnect_world", "world_action", "cancel_actions", "leave_world", "list_worlds",
 ]);
 
 wss.on("connection", (ws) => {

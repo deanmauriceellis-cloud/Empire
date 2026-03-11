@@ -342,6 +342,17 @@ export const CROWN_GARRISON_BONUS = 5;
 /** Cooldown in turns before a player can relocate their crown city. */
 export const CROWN_RELOCATE_COOLDOWN = 50;
 
+// ─── Shield Constants ─────────────────────────────────────────────────────
+
+/** Maximum shield charge in milliseconds (8 hours). */
+export const SHIELD_MAX_MS = 8 * 60 * 60 * 1000;
+
+/** Initial shield charge for new players (2 hours). */
+export const SHIELD_INITIAL_MS = 2 * 60 * 60 * 1000;
+
+/** Shield charge ratio: 1 hour online = 1 hour shield. */
+export const SHIELD_CHARGE_RATIO = 1.0;
+
 // ─── Map Size Presets ───────────────────────────────────────────────────────
 
 export interface MapSizePreset {

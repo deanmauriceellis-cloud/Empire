@@ -51,6 +51,18 @@ export interface KingdomState {
   tributeRate: number;                // fraction of income paid as tribute (0.3 = 30%)
 }
 
+// ─── Shield State ───────────────────────────────────────────────────────────
+
+/** Shield state for disconnect protection in world mode. */
+export interface ShieldState {
+  /** Shield charge in milliseconds (max SHIELD_MAX_MS). */
+  chargeMs: number;
+  /** Timestamp when shield was activated (null = not active). */
+  activatedAt: number | null;
+  /** Whether shield is currently active (immune to attack). */
+  isActive: boolean;
+}
+
 // ─── Deposit State ───────────────────────────────────────────────────────────
 
 export interface DepositState {
@@ -156,6 +168,9 @@ export interface GameState {
 
   // Kingdom state per player (keyed by PlayerId)
   kingdoms: Record<number, KingdomState>;
+
+  // Shield state per player for world mode disconnect protection (keyed by PlayerId)
+  shields: Record<number, ShieldState>;
 }
 
 // ─── Player Actions ──────────────────────────────────────────────────────────

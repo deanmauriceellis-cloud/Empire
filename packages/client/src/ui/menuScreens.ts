@@ -1,7 +1,7 @@
 // Empire Reborn — Menu Screens (Main Menu, Lobby, Game Over)
 
 import { Owner, GAME_VERSION, MAP_SIZE_PRESETS, TERRAIN_PRESETS } from "@empire/shared";
-import type { MapSizePreset, TerrainPreset } from "@empire/shared";
+import type { MapSizePreset, TerrainPreset, WorldSummary } from "@empire/shared";
 import type { ConnectionState } from "../net/connection.js";
 import type { LobbyGame } from "../net/multiplayer.js";
 
@@ -13,11 +13,15 @@ export interface GameSetupOptions {
 export type MenuAction =
   | "new-game"
   | "multiplayer"
+  | "world-browser"
   | "create-online"
+  | "create-world"
   | "back-to-main"
   | { type: "start-game"; options: GameSetupOptions }
   | { type: "start-online"; options: GameSetupOptions }
   | { type: "join-game"; gameId: string }
+  | { type: "join-world"; worldId: string; ring: number }
+  | { type: "start-world"; tickSpeed: number }
   | null;
 
 export interface MenuScreens {
@@ -28,6 +32,10 @@ export interface MenuScreens {
   showGameSetup(mode: "singleplayer" | "multiplayer"): void;
   /** Show the multiplayer lobby. */
   showLobby(games: LobbyGame[], connState: ConnectionState): void;
+  /** Show the world browser. */
+  showWorldBrowser(worlds: WorldSummary[], connState: ConnectionState): void;
+  /** Show world creation setup screen. */
+  showWorldSetup(): void;
   /** Show a "Waiting for opponent" screen. */
   showWaiting(gameId: string): void;
   /** Show the game over screen. */
@@ -57,6 +65,12 @@ export function createMenuScreens(): MenuScreens {
       const action = target.dataset.menu!;
       if (action.startsWith("join:")) {
         pendingAction = { type: "join-game", gameId: action.slice(5) };
+      } else if (action.startsWith("joinworld:")) {
+        const parts = action.split(":");
+        pendingAction = { type: "join-world", worldId: parts[1], ring: parseInt(parts[2]) };
+      } else if (action.startsWith("startworld:")) {
+        const tickSpeed = parseInt(action.slice(11));
+        pendingAction = { type: "start-world", tickSpeed };
       } else if (action.startsWith("mapsize:")) {
         selectedMapSize = parseInt(action.slice(8));
         showGameSetupInner();
@@ -124,6 +138,7 @@ export function createMenuScreens(): MenuScreens {
         <div class="subtitle">A 4X Strategy Game &mdash; v${GAME_VERSION}</div>
         <button class="menu-btn" data-menu="new-game">Single Player</button>
         <button class="menu-btn" data-menu="multiplayer">Multiplayer</button>
+        <button class="menu-btn" data-menu="world-browser">Kingdom World</button>
       `;
     },
 
@@ -187,6 +202,80 @@ export function createMenuScreens(): MenuScreens {
         <button class="menu-btn" data-menu="create-online">Create Game</button>
         <div class="lobby-list">${gamesHtml}</div>
         <button class="menu-btn-secondary" data-menu="back-to-main">Back</button>
+      `;
+    },
+
+    showWorldBrowser(worlds: WorldSummary[], connState: ConnectionState): void {
+      isVisible = true;
+      element.classList.remove("hidden");
+
+      const connLabel = connState === "connected" ? "Connected"
+        : connState === "connecting" ? "Connecting..."
+        : "Disconnected";
+      const connClass = connState === "connected" ? "conn-ok"
+        : connState === "connecting" ? "conn-warn"
+        : "conn-err";
+
+      let worldsHtml = "";
+      if (worlds.length > 0) {
+        worldsHtml = `<div class="lobby-section"><h3>Active Worlds</h3>`;
+        for (const w of worlds) {
+          const tickLabel = w.tickIntervalMs <= 60000 ? "Fast (1min)"
+            : w.tickIntervalMs <= 300000 ? "Standard (5min)"
+            : w.tickIntervalMs <= 900000 ? "Slow (15min)"
+            : "Epic (1hr)";
+          const daysLeft = Math.ceil(w.seasonRemainingS / 86400);
+          worldsHtml += `
+            <div class="lobby-game">
+              <span class="game-id">${w.id}</span>
+              <span class="game-info">Turn ${w.turn} | ${w.humanPlayers}/${w.totalKingdoms} players | ${tickLabel} | ${daysLeft}d left</span>
+              <button class="lobby-btn" data-menu="joinworld:${w.id}:1">Join (Inner)</button>
+              <button class="lobby-btn" data-menu="joinworld:${w.id}:2">Join (Outer)</button>
+            </div>`;
+        }
+        worldsHtml += `</div>`;
+      } else {
+        worldsHtml = `<div class="lobby-empty">No active worlds. Create one!</div>`;
+      }
+
+      element.innerHTML = `
+        <h2>KINGDOM WORLD</h2>
+        <div class="conn-status ${connClass}">${connLabel}</div>
+        <div class="subtitle">Persistent tick-based kingdoms with AI takeover</div>
+        <button class="menu-btn" data-menu="create-world">Create World</button>
+        <div class="lobby-list">${worldsHtml}</div>
+        <button class="menu-btn-secondary" data-menu="back-to-main">Back</button>
+      `;
+    },
+
+    showWorldSetup(): void {
+      isVisible = true;
+      element.classList.remove("hidden");
+
+      element.innerHTML = `
+        <h2>CREATE WORLD</h2>
+        <div class="setup-section">
+          <div class="setup-label">Tick Speed</div>
+          <div class="setup-grid">
+            <button class="setup-option" data-menu="startworld:60000">
+              <span class="option-name">Fast</span>
+              <span class="option-desc">1 tick per minute</span>
+            </button>
+            <button class="setup-option selected" data-menu="startworld:300000">
+              <span class="option-name">Standard</span>
+              <span class="option-desc">1 tick per 5 minutes</span>
+            </button>
+            <button class="setup-option" data-menu="startworld:900000">
+              <span class="option-name">Slow</span>
+              <span class="option-desc">1 tick per 15 minutes</span>
+            </button>
+            <button class="setup-option" data-menu="startworld:3600000">
+              <span class="option-name">Epic</span>
+              <span class="option-desc">1 tick per hour</span>
+            </button>
+          </div>
+        </div>
+        <button class="menu-btn-secondary" data-menu="world-browser">Back</button>
       `;
     },
 

@@ -88,6 +88,13 @@ import {
   scanCrownVision,
 } from "./kingdom.js";
 
+// ─── Shield ─────────────────────────────────────────────────────────────────────
+
+/** Check if a player is currently shielded (immune to attack) in world mode. */
+export function isShielded(state: GameState, playerId: number): boolean {
+  return state.shields?.[playerId]?.isActive === true;
+}
+
 // ─── RNG ────────────────────────────────────────────────────────────────────────
 
 /** Advance the game PRNG state and return a float in [0, 1). Mutates state.rngState. */
@@ -431,6 +438,8 @@ export function checkMineTrigger(
   state: GameState,
   unit: UnitState,
 ): TurnEvent[] {
+  // Shield check: shielded player's units don't trigger enemy mines
+  if (isShielded(state, unit.owner as number)) return [];
   // Find enemy mines at unit's location
   const mine = state.buildings.find(
     (b) => b.loc === unit.loc && b.complete && b.owner !== unit.owner &&
@@ -463,6 +472,8 @@ export function autoAttackStructures(state: GameState, owner: Owner): TurnEvent[
 
     for (const unit of state.units) {
       if (unit.owner === owner || unit.shipId !== null) continue;
+      // Shield check: don't auto-attack shielded players' units
+      if (isShielded(state, unit.owner as number)) continue;
       if (!canStructureTarget(structure.type, unit.type)) continue;
 
       const d = chebyshevDist(state, structure.loc, unit.loc);
@@ -1660,6 +1671,8 @@ export function processAction(
       if (cell.cityId !== null) {
         const city = state.cities[cell.cityId];
         if (city.owner !== owner) {
+          // Shield check: shielded player's city cannot be attacked
+          if (isShielded(state, city.owner as number)) break;
           events.push(...attackCity(state, unit, cell.cityId));
           break;
         }
@@ -1670,6 +1683,8 @@ export function processAction(
         (u) => u.loc === action.targetLoc && u.owner !== owner && u.shipId === null,
       );
       if (defender) {
+        // Shield check: shielded player's units cannot be attacked
+        if (isShielded(state, defender.owner as number)) break;
         events.push(...attackUnit(state, unit, defender));
       }
       break;
@@ -1753,6 +1768,8 @@ export function processAction(
         (u) => u.loc === action.targetLoc && u.owner !== owner && u.shipId === null,
       );
       if (target) {
+        // Shield check: shielded player's units cannot be bombarded
+        if (isShielded(state, target.owner as number)) break;
         events.push(...bombardUnit(state, unit, target));
       }
       // Also check for enemy structure at target
@@ -1762,6 +1779,8 @@ export function processAction(
           isStructureType(b.type),
         );
         if (targetBuilding) {
+          // Shield check: shielded player's structures cannot be bombarded
+          if (isShielded(state, targetBuilding.owner as number)) break;
           events.push(...bombardStructure(state, unit, targetBuilding));
         }
       }

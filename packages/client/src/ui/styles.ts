@@ -1512,4 +1512,30 @@ const CSS = `
   background: var(--color-border-dark);
   border-radius: 2px;
 }
+
+/* ─── World Mode HUD ──────────────────────────────────────────────────── */
+
+.tick-timer {
+  color: #6af;
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+.actions-queued {
+  color: #6c6;
+  background: rgba(100, 200, 100, 0.1);
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-right: 8px;
+  font-size: 11px;
+}
+
+.shield-indicator {
+  color: #fc4;
+  background: rgba(255, 200, 50, 0.1);
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-right: 8px;
+  font-size: 11px;
+}
 `;

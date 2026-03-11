@@ -65,6 +65,13 @@ export interface UIState {
   resources: number[];  // player's [ore, oil, textile]
   resourceIncome: number[];  // per-turn income [ore, oil, textile]
   techResearch: number[];  // player's [science, health, electronics, war]
+  // World mode fields (undefined when not in world mode)
+  isWorldMode?: boolean;
+  tickNextMs?: number;       // ms until next tick (countdown)
+  tickIntervalMs?: number;   // tick interval setting
+  seasonRemainingS?: number; // seconds left in season
+  shieldRemainingMs?: number; // ms of shield remaining
+  worldActionsQueued?: number; // actions queued for next tick
 }
 
 // ─── Tile Highlights ────────────────────────────────────────────────────

@@ -349,6 +349,7 @@ export function generateWorldMap(config: WorldConfig): WorldState {
     nextBuildingId: 0,
     techResearch: {},
     kingdoms: {},
+    shields: {},
   };
 
   // Initialize per-player data (viewMaps, resources, tech)

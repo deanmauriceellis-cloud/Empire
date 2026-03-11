@@ -20,9 +20,11 @@ export type ClientMessage =
   // World mode messages
   | { type: "create_world"; config?: Partial<WorldConfig> }
   | { type: "join_world"; worldId: string; preferredRing?: number; playerName?: string }
+  | { type: "reconnect_world"; worldId: string; playerId: number }
   | { type: "world_action"; worldId: string; action: ClientAction }
   | { type: "cancel_actions"; worldId: string }
-  | { type: "leave_world"; worldId: string };
+  | { type: "leave_world"; worldId: string }
+  | { type: "list_worlds" };
 
 export type ClientAction =
   | { type: "move"; unitId: number; loc: Loc }
@@ -52,7 +54,8 @@ export type ServerMessage =
   | { type: "tick_result"; worldId: string; turn: number; events: TurnEvent[]; tickInfo: TickInfo }
   | { type: "actions_queued"; worldId: string; count: number }
   | { type: "actions_cancelled"; worldId: string }
-  | { type: "world_list"; worlds: WorldSummary[] };
+  | { type: "world_list"; worlds: WorldSummary[] }
+  | { type: "reconnect_failed"; worldId: string; reason: string };
 
 // ─── Visible Game State (per-player, fog-of-war filtered) ───────────────────
 
@@ -86,6 +89,10 @@ export interface TickInfo {
   tickIntervalMs: number;
   /** Seconds remaining in the season. */
   seasonRemainingS: number;
+  /** Milliseconds of shield remaining for this player (undefined if no shield). */
+  shieldRemainingMs?: number;
+  /** Number of actions currently queued for this player. */
+  actionsQueued?: number;
 }
 
 /** Summary of a world for the world list. */

@@ -9,10 +9,14 @@ import {
   type TurnResult,
   type UnitState,
   type ViewMapCell,
+  type ShieldState,
   configureMapDimensions,
   executeTurn,
   computeAITurn,
   scan,
+  SHIELD_MAX_MS,
+  SHIELD_INITIAL_MS,
+  SHIELD_CHARGE_RATIO,
 } from "@empire/shared";
 import type {
   ClientMessage,
@@ -54,6 +58,8 @@ interface ActiveWorld {
   nextTickAt: number;
   /** Disconnect grace timers. */
   disconnectTimers: Map<number, ReturnType<typeof setTimeout>>;
+  /** Track when each human player connected (for shield charge calculation). */
+  playerConnectedAt: Map<number, number>;
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -94,6 +100,12 @@ export class WorldServer {
       case "leave_world":
         this.handleLeaveWorld(ws, msg.worldId);
         return true;
+      case "reconnect_world":
+        this.handleReconnectWorld(ws, (msg as any).worldId, (msg as any).playerId);
+        return true;
+      case "list_worlds":
+        this.send(ws, { type: "world_list", worlds: this.getWorldList() });
+        return true;
       default:
         return false; // not a world message
     }
@@ -125,6 +137,7 @@ export class WorldServer {
       tickTimer: null,
       nextTickAt: Date.now() + config.tickIntervalMs,
       disconnectTimers: new Map(),
+      playerConnectedAt: new Map(),
     };
 
     // Register all AI players (no WebSocket connection)
@@ -178,6 +191,17 @@ export class WorldServer {
     // Register connection
     activeWorld.players.set(playerId, ws);
     this.playerConnections.set(ws, { ws, owner: playerId, worldId });
+    activeWorld.playerConnectedAt.set(playerId, Date.now());
+
+    // Initialize shield for new player
+    const state = activeWorld.world.gameState;
+    if (!state.shields[playerId]) {
+      state.shields[playerId] = {
+        chargeMs: SHIELD_INITIAL_MS,
+        activatedAt: null,
+        isActive: false,
+      };
+    }
 
     // Clear any disconnect timer
     const timer = activeWorld.disconnectTimers.get(playerId);
@@ -197,6 +221,74 @@ export class WorldServer {
     });
 
     // Send current visible state
+    this.sendVisibleState(activeWorld, playerId);
+  }
+
+  // ─── Reconnection ─────────────────────────────────────────────────────
+
+  handleReconnectWorld(ws: WebSocket, worldId: string, playerId: number): void {
+    const activeWorld = this.worlds.get(worldId);
+    if (!activeWorld) {
+      this.send(ws, { type: "reconnect_failed", worldId, reason: "World not found" });
+      return;
+    }
+
+    // Check if this WebSocket is already connected to a world
+    const existing = this.playerConnections.get(ws);
+    if (existing) {
+      this.send(ws, { type: "error", message: "Already connected to a world" });
+      return;
+    }
+
+    const state = activeWorld.world.gameState;
+    const player = state.players.find(p => p.id === playerId);
+    if (!player) {
+      this.send(ws, { type: "reconnect_failed", worldId, reason: "Player not found" });
+      return;
+    }
+
+    if (player.status === "defeated") {
+      this.send(ws, { type: "reconnect_failed", worldId, reason: "Kingdom has been defeated" });
+      return;
+    }
+
+    // Restore human control
+    player.isAI = false;
+    activeWorld.players.set(playerId, ws);
+    this.playerConnections.set(ws, { ws, owner: playerId, worldId });
+    activeWorld.playerConnectedAt.set(playerId, Date.now());
+
+    // Clear disconnect timer
+    const timer = activeWorld.disconnectTimers.get(playerId);
+    if (timer) {
+      clearTimeout(timer);
+      activeWorld.disconnectTimers.delete(playerId);
+    }
+
+    // Deactivate shield, preserve remaining charge
+    const shield = state.shields[playerId];
+    if (shield && shield.isActive && shield.activatedAt !== null) {
+      const elapsed = Date.now() - shield.activatedAt;
+      shield.chargeMs = Math.max(0, shield.chargeMs - elapsed);
+      shield.isActive = false;
+      shield.activatedAt = null;
+      console.log(`[World] Player ${playerId} shield deactivated (${Math.round(shield.chargeMs / 60000)}min remaining)`);
+    }
+
+    // Find kingdom tile for this player
+    const tile = activeWorld.world.kingdoms.find(k => k.owner === playerId);
+    const kingdom = tile ? tile.pos : { row: 0, col: 0 };
+
+    console.log(`[World] Player ${playerId} reconnected to world ${worldId}`);
+
+    // Send join confirmation and state
+    this.send(ws, {
+      type: "world_joined",
+      worldId,
+      owner: playerId as any,
+      kingdom,
+    });
+
     this.sendVisibleState(activeWorld, playerId);
   }
 
@@ -298,9 +390,6 @@ export class WorldServer {
     activeWorld.nextTickAt = Date.now() + activeWorld.world.worldConfig.tickIntervalMs;
     this.scheduleTick(activeWorld);
 
-    // Build tick info
-    const tickInfo = this.getTickInfo(activeWorld);
-
     // Log timing
     const humanCount = [...activeWorld.players.entries()].filter(([, ws]) => ws !== null).length;
     console.log(
@@ -310,6 +399,9 @@ export class WorldServer {
     // Broadcast results to connected players
     for (const [playerId, ws] of activeWorld.players) {
       if (!ws) continue;
+
+      // Per-player tick info (includes shield and action count)
+      const tickInfo = this.getTickInfo(activeWorld, playerId);
 
       // Filter events visible to this player
       const visibleEvents = result.events.filter(ev => {
@@ -338,14 +430,27 @@ export class WorldServer {
     }
   }
 
-  private getTickInfo(activeWorld: ActiveWorld): TickInfo {
+  private getTickInfo(activeWorld: ActiveWorld, playerId?: number): TickInfo {
     const now = Date.now();
-    return {
+    const info: TickInfo = {
       turn: activeWorld.world.gameState.turn,
       nextTickMs: Math.max(0, activeWorld.nextTickAt - now),
       tickIntervalMs: activeWorld.world.worldConfig.tickIntervalMs,
       seasonRemainingS: Math.max(0, Math.floor((activeWorld.world.seasonEndsAt - now) / 1000)),
     };
+
+    // Per-player shield and action info
+    if (playerId !== undefined) {
+      const shield = activeWorld.world.gameState.shields[playerId];
+      if (shield?.isActive && shield.activatedAt !== null) {
+        const elapsed = now - shield.activatedAt;
+        info.shieldRemainingMs = Math.max(0, shield.chargeMs - elapsed);
+      }
+      const queued = activeWorld.pendingActions.get(playerId);
+      info.actionsQueued = queued ? queued.length : 0;
+    }
+
+    return info;
   }
 
   // ─── Visible State ─────────────────────────────────────────────────────
@@ -356,7 +461,7 @@ export class WorldServer {
 
     const state = activeWorld.world.gameState;
     const visibleState = this.getVisibleState(state, playerId);
-    const tickInfo = this.getTickInfo(activeWorld);
+    const tickInfo = this.getTickInfo(activeWorld, playerId);
 
     this.send(ws, {
       type: "world_state",
@@ -428,18 +533,48 @@ export class WorldServer {
 
     const activeWorld = this.worlds.get(conn.worldId);
     if (activeWorld) {
+      const state = activeWorld.world.gameState;
+
       // Mark as disconnected (AI takes over on next tick)
       activeWorld.players.set(conn.owner, null);
 
-      // Set grace timer — after timeout, mark player as AI permanently
+      // Accumulate shield charge from online time
+      const connectedAt = activeWorld.playerConnectedAt.get(conn.owner);
+      if (connectedAt) {
+        const onlineMs = Date.now() - connectedAt;
+        const chargeEarned = onlineMs * SHIELD_CHARGE_RATIO;
+        const shield = state.shields[conn.owner];
+        if (shield) {
+          shield.chargeMs = Math.min(SHIELD_MAX_MS, shield.chargeMs + chargeEarned);
+        }
+        activeWorld.playerConnectedAt.delete(conn.owner);
+      }
+
+      // Activate shield if player has charge
+      const shield = state.shields[conn.owner];
+      if (shield && shield.chargeMs > 0) {
+        shield.isActive = true;
+        shield.activatedAt = Date.now();
+        console.log(`[World] Player ${conn.owner} shield activated (${Math.round(shield.chargeMs / 60000)}min charge)`);
+      }
+
+      // Set grace timer — after shield expires (or DISCONNECT_GRACE_MS if no shield), mark as AI
+      const graceMs = (shield && shield.chargeMs > 0) ? shield.chargeMs : DISCONNECT_GRACE_MS;
       const timer = setTimeout(() => {
-        const player = activeWorld.world.gameState.players.find(p => p.id === conn.owner);
+        const player = state.players.find(p => p.id === conn.owner);
         if (player && !activeWorld.players.get(conn.owner)) {
           player.isAI = true;
-          console.log(`[World] Player ${conn.owner} in world ${conn.worldId} reverted to AI (disconnect timeout)`);
+          // Deactivate shield
+          const s = state.shields[conn.owner];
+          if (s) {
+            s.isActive = false;
+            s.chargeMs = 0;
+            s.activatedAt = null;
+          }
+          console.log(`[World] Player ${conn.owner} in world ${conn.worldId} reverted to AI (shield expired)`);
         }
         activeWorld.disconnectTimers.delete(conn.owner);
-      }, DISCONNECT_GRACE_MS);
+      }, graceMs);
 
       activeWorld.disconnectTimers.set(conn.owner, timer);
 

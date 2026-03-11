@@ -45,12 +45,14 @@ import { computeHighlights, getClickAction } from "./game/moveCalc.js";
 import { createUIManager } from "./ui/UIManager.js";
 import { createConnection, getWebSocketUrl, type ConnectionState } from "./net/connection.js";
 import { createMultiplayerGame, fetchLobbyGames, type MultiplayerGame } from "./net/multiplayer.js";
+import { createWorldClient, type WorldClient } from "./net/worldClient.js";
 import { createAudioManager, type AudioManager } from "./audio/AudioManager.js";
 import type { SelectionState, UIState, TileHighlight, RenderableState } from "./types.js";
+import type { TickInfo, WorldSummary } from "@empire/shared";
 
 // ─── Game Mode ───────────────────────────────────────────────────────────────
 
-type GameMode = "none" | "singleplayer" | "multiplayer";
+type GameMode = "none" | "singleplayer" | "multiplayer" | "world";
 
 async function init() {
   // ─── Bootstrap ──────────────────────────────────────────────────────────
@@ -64,6 +66,11 @@ async function init() {
   let game: SinglePlayerGame;
   let collector: ActionCollector;
   let playerOwner: Owner = Owner.Player1;  // the human player's owner ID
+
+  // World mode state
+  let worldTickInfo: TickInfo | null = null;
+  let worldTickCountdown = 0; // ms remaining until next tick (local countdown)
+  let worldLastFrameTime = 0; // for delta-based countdown
 
   // ─── Camera (single instance, reused across games) ──────────────────
   const camera = createCamera(100, 60);
@@ -130,6 +137,7 @@ async function init() {
     },
     onMessage(msg) {
       mp.handleMessage(msg);
+      wc.handleMessage(msg);
     },
   });
 
@@ -219,6 +227,117 @@ async function init() {
     },
   });
 
+  // ─── World Client ─────────────────────────────────────────────────────
+
+  const wc: WorldClient = createWorldClient(conn, {
+    onWorldCreated(worldId) {
+      console.log(`World created: ${worldId}`);
+      // Auto-join the world we just created
+      wc.joinWorld(worldId, 1, "Player");
+    },
+
+    onWorldJoined(worldId, owner, kingdom) {
+      console.log(`Joined world: ${worldId}, player ${owner}, kingdom (${kingdom.row},${kingdom.col})`);
+      startWorldGame();
+    },
+
+    onWorldState(state, tickInfoMsg) {
+      worldTickInfo = tickInfoMsg;
+      worldTickCountdown = tickInfoMsg.nextTickMs;
+      worldLastFrameTime = performance.now();
+      if (mode === "world" && gameStarted) {
+        // Refresh turn flow on new state
+        audio.playTurnStart();
+        ui.turnFlow.startTurn(stateForTurnFlow(state) as any);
+        ui.turnFlow.nextUnit(stateForTurnFlow(state) as any, camera);
+        if (ui.turnFlow.currentUnitId !== null) {
+          selection.selectedUnitId = ui.turnFlow.currentUnitId;
+          selection.selectedCityId = null;
+        } else {
+          selection.selectedUnitId = null;
+          selection.selectedCityId = null;
+        }
+        refreshHighlights();
+      }
+    },
+
+    onTickResult(turn, events, tickInfoMsg) {
+      worldTickInfo = tickInfoMsg;
+      worldTickCountdown = tickInfoMsg.nextTickMs;
+      worldLastFrameTime = performance.now();
+      if (mode !== "world") return;
+      ui.eventLog.addEvents(events);
+      ui.warStats.addEvents(turn - 1, events);
+      emitParticlesForEvents(events);
+    },
+
+    onActionsQueued(count) {
+      // UI updates via worldTickInfo.actionsQueued
+    },
+
+    onActionsCancelled() {
+      // UI updates via worldTickInfo.actionsQueued
+    },
+
+    onWorldList(worlds) {
+      ui.menus.showWorldBrowser(worlds, connState);
+    },
+
+    onReconnectFailed(worldId, reason) {
+      console.error(`Reconnect failed for world ${worldId}: ${reason}`);
+      ui.eventLog.addEvents([{
+        type: "death", loc: 0,
+        description: `Reconnect failed: ${reason}`,
+      }]);
+    },
+
+    onError(message) {
+      console.error("World error:", message);
+    },
+  });
+
+  // ─── Start World Game ───────────────────────────────────────────────
+
+  function startWorldGame(): void {
+    mode = "world";
+    if (wc.owner !== null) {
+      playerOwner = wc.owner;
+      ui.turnFlow.setOwner(wc.owner);
+    }
+
+    if (wc.visibleState) {
+      camera.reconfigure(wc.visibleState.config.mapWidth, wc.visibleState.config.mapHeight);
+      const playerCity = wc.visibleState.cities.find(c => c.owner === wc.owner);
+      if (playerCity) {
+        camera.centerOnTile(locCol(playerCity.loc), locRow(playerCity.loc));
+      }
+    }
+
+    resetSelection();
+    ui.eventLog.clear();
+    ui.warStats.clear();
+    ui.menus.hide();
+    gameStarted = true;
+    audio.playGameStart();
+    audio.startAmbient();
+    console.log(`Empire Reborn v${GAME_VERSION} — World mode started`);
+  }
+
+  // ─── Fetch World List ──────────────────────────────────────────────────
+
+  async function fetchWorldList(): Promise<WorldSummary[]> {
+    const serverUrl = location.port === "5174"
+      ? `http://${location.hostname}:3001`
+      : "";
+    try {
+      const res = await fetch(`${serverUrl}/api/worlds`);
+      if (!res.ok) return [];
+      return await res.json();
+    } catch {
+      return [];
+    }
+  }
+
   // ─── Lobby ──────────────────────────────────────────────────────────────
 
   async function refreshLobby(): Promise<void> {
@@ -250,10 +369,45 @@ async function init() {
         currentHighlights = [];
         return;
       }
-      // For multiplayer, compute highlights from visible state
-      // We can only show adjacent tiles — server validates moves
       currentHighlights = computeMultiplayerHighlights(unit);
+    } else if (mode === "world" && wc.visibleState && wc.owner !== null) {
+      const unit = wc.visibleState.units.find((u) => u.id === selection.selectedUnitId);
+      if (!unit || unit.owner !== wc.owner) {
+        currentHighlights = [];
+        return;
+      }
+      currentHighlights = computeWorldHighlights(unit);
     }
+  }
+
+  function computeWorldHighlights(unit: { id: number; loc: number; type: number; owner: number; moved: number; hits: number }): TileHighlight[] {
+    if (!wc.visibleState || wc.owner === null) return [];
+    const highlights: TileHighlight[] = [];
+    const { config, units, cities, viewMap } = wc.visibleState;
+    const mapWidth = config.mapWidth;
+    const mapHeight = config.mapHeight;
+
+    for (let d = 0; d < 8; d++) {
+      const targetLoc = unit.loc + DIR_OFFSET[d];
+      const col = targetLoc % mapWidth;
+      const row = Math.floor(targetLoc / mapWidth);
+      if (col < 0 || col >= mapWidth || row < 0 || row >= mapHeight) continue;
+
+      const enemyUnit = units.find((u) => u.loc === targetLoc && u.owner !== wc.owner && u.shipId === null);
+      const city = cities.find((c) => c.loc === targetLoc);
+      const isEnemyCity = city && city.owner !== wc.owner && city.owner !== Owner.Unowned;
+      const isNeutralCity = city && city.owner === Owner.Unowned && unit.type === UnitType.Army;
+
+      if (enemyUnit || isEnemyCity || isNeutralCity) {
+        highlights.push({ loc: targetLoc, type: "attack" });
+      } else {
+        const view = viewMap[targetLoc];
+        if (view && view.seen >= 0) {
+          highlights.push({ loc: targetLoc, type: "move" });
+        }
+      }
+    }
+    return highlights;
   }
 
   function computeMultiplayerHighlights(unit: { id: number; loc: number; type: number; owner: number; moved: number; hits: number }): TileHighlight[] {
@@ -420,6 +574,8 @@ async function init() {
       return buildSinglePlayerUIState();
     } else if (mode === "multiplayer") {
       return buildMultiplayerUIState();
+    } else if (mode === "world") {
+      return buildWorldUIState();
     }
     // Fallback (menu)
     return {
@@ -529,6 +685,61 @@ async function init() {
     };
   }
 
+  function buildWorldUIState(): UIState {
+    const vs = wc.visibleState;
+    if (!vs || wc.owner === null) {
+      return {
+        turn: 0, owner: Owner.Player1,
+        playerCityCount: 0, playerUnitCount: 0, enemyCityCount: 0,
+        unitCountsByType: new Array(NUM_UNIT_TYPES).fill(0),
+        selectedUnit: null, selectedCity: null,
+        pendingActionCount: 0, events: [], isGameOver: false, winner: null,
+        resources: [0, 0, 0], resourceIncome: [0, 0, 0],
+        techResearch: [0, 0, 0, 0],
+        isWorldMode: true,
+      };
+    }
+
+    const wo = wc.owner;
+    const selectedUnit = selection.selectedUnitId !== null
+      ? vs.units.find((u) => u.id === selection.selectedUnitId) ?? null
+      : null;
+    const selectedVisCity = selection.selectedCityId !== null
+      ? vs.cities.find((c) => c.id === selection.selectedCityId) : null;
+    const selectedCity = selectedVisCity ? {
+      id: selectedVisCity.id, loc: selectedVisCity.loc, owner: selectedVisCity.owner,
+      production: selectedVisCity.production, work: selectedVisCity.work ?? 0,
+    } : null;
+
+    const wPlayerUnits = vs.units.filter((u) => u.owner === wo);
+    const wUnitCounts = new Array(NUM_UNIT_TYPES).fill(0);
+    for (const u of wPlayerUnits) wUnitCounts[u.type]++;
+
+    return {
+      turn: vs.turn,
+      owner: wo,
+      playerCityCount: vs.cities.filter((c) => c.owner === wo).length,
+      playerUnitCount: wPlayerUnits.length,
+      enemyCityCount: vs.cities.filter((c) => c.owner !== wo && c.owner !== Owner.Unowned).length,
+      unitCountsByType: wUnitCounts,
+      selectedUnit,
+      selectedCity: selectedCity as any,
+      pendingActionCount: wc.actionsQueued,
+      events: [],
+      isGameOver: false,
+      winner: null,
+      resources: [0, 0, 0], resourceIncome: [0, 0, 0],
+      techResearch: [0, 0, 0, 0],
+      // World mode fields
+      isWorldMode: true,
+      tickNextMs: worldTickCountdown,
+      tickIntervalMs: worldTickInfo?.tickIntervalMs,
+      seasonRemainingS: worldTickInfo?.seasonRemainingS,
+      shieldRemainingMs: worldTickInfo?.shieldRemainingMs,
+      worldActionsQueued: wc.actionsQueued,
+    };
+  }
+
   // ─── Helper to build GameState-like object for turn flow ────────────────
 
   function stateForTurnFlow(vs: VisibleGameState): { units: any[]; cities: any[]; config: any; turn: number } {
@@ -549,8 +760,12 @@ async function init() {
     if (screenX > vw - 200) return;
 
     const tile = screenToTile(screenX, screenY, camera, vw, vh);
-    const mapWidth = mode === "singleplayer" ? game.state.config.mapWidth : (mp.visibleState?.config.mapWidth ?? 100);
-    const mapHeight = mode === "singleplayer" ? game.state.config.mapHeight : (mp.visibleState?.config.mapHeight ?? 60);
+    const mapWidth = mode === "singleplayer" ? game.state.config.mapWidth
+      : mode === "world" ? (wc.visibleState?.config.mapWidth ?? 100)
+      : (mp.visibleState?.config.mapWidth ?? 100);
+    const mapHeight = mode === "singleplayer" ? game.state.config.mapHeight
+      : mode === "world" ? (wc.visibleState?.config.mapHeight ?? 60)
+      : (mp.visibleState?.config.mapHeight ?? 60);
 
     if (tile.col < 0 || tile.col >= mapWidth || tile.row < 0 || tile.row >= mapHeight) return;
 
@@ -562,13 +777,15 @@ async function init() {
         handleSinglePlayerClickAction(loc);
       } else if (mode === "multiplayer") {
         handleMultiplayerClickAction(loc);
+      } else if (mode === "world") {
+        handleWorldClickAction(loc);
       }
       return;
     }
 
     // ─── Click on own unit → select (re-click cycles to city) ─────
-    const clickOwner = mode === "singleplayer" ? playerOwner : mp.owner;
-    const units = mode === "singleplayer" ? game.state.units : (mp.visibleState?.units ?? []);
+    const clickOwner = mode === "singleplayer" ? playerOwner : mode === "world" ? wc.owner : mp.owner;
+    const units = mode === "singleplayer" ? game.state.units : mode === "world" ? (wc.visibleState?.units ?? []) : (mp.visibleState?.units ?? []);
     const playerUnit = units.find(
       (u) => u.loc === loc && u.owner === clickOwner && u.shipId === null,
     );
@@ -584,6 +801,8 @@ async function init() {
 
     const cities = mode === "singleplayer"
       ? game.state.cities
+      : mode === "world"
+      ? (wc.visibleState?.cities ?? [])
       : (mp.visibleState?.cities ?? []);
     const city = cities.find((c) => c.loc === loc && c.owner === clickOwner);
 
@@ -688,6 +907,28 @@ async function init() {
     advanceToNextUnit();
   }
 
+  function handleWorldClickAction(loc: number): void {
+    if (!wc.visibleState || wc.owner === null) return;
+
+    const unit = wc.visibleState.units.find((u) => u.id === selection.selectedUnitId);
+    if (!unit) return;
+
+    const highlight = currentHighlights.find((h) => h.loc === loc);
+    if (!highlight) return;
+
+    if (highlight.type === "attack") {
+      wc.attackTarget(unit.id, loc);
+      audio.playCombat();
+    } else {
+      const dir = directionFromLocs(unit.loc, loc);
+      wc.moveUnit(unit.id, dir);
+      audio.playMove(unit.type);
+    }
+
+    ui.turnFlow.markDone(unit.id);
+    advanceToNextUnit();
+  }
+
   // ─── Direction from source to adjacent target ────────────────────────
 
   function directionFromLocs(srcLoc: number, dstLoc: number): Direction {
@@ -730,7 +971,7 @@ async function init() {
       audio.playExplosion();
       shake.trigger(0.6);
     } else if (event.type === "capture") {
-      const owner = mode === "singleplayer" ? playerOwner : (mp.owner ?? Owner.Player1);
+      const owner = mode === "singleplayer" ? playerOwner : mode === "world" ? (wc.owner ?? Owner.Player1) : (mp.owner ?? Owner.Player1);
       particles.emitCapture(event.loc, owner);
       audio.playCapture();
       shake.trigger(0.3);
@@ -749,6 +990,8 @@ async function init() {
   function advanceToNextUnit(): void {
     if (mode === "singleplayer") {
       ui.turnFlow.nextUnit(game.state, camera);
+    } else if (mode === "world" && wc.visibleState) {
+      ui.turnFlow.nextUnit(stateForTurnFlow(wc.visibleState) as any, camera);
     } else if (mp.visibleState) {
       ui.turnFlow.nextUnit(stateForTurnFlow(mp.visibleState) as any, camera);
     }
@@ -794,6 +1037,9 @@ async function init() {
       audio.playTurnEnd();
       mp.endTurn();
       // Server will send state_update when both players have ended
+    } else if (mode === "world") {
+      // In world mode, turns are tick-based — no manual end turn
+      // Enter is a no-op (actions are buffered automatically)
     }
   }
 
@@ -871,6 +1117,24 @@ async function init() {
     refreshHighlights();
   }
 
+  // ─── Remote action helpers (multiplayer or world mode) ─────────────────
+
+  function remoteSetBehavior(unitId: number, behavior: UnitBehavior): void {
+    if (mode === "world") {
+      wc.setBehavior(unitId, behavior);
+    } else {
+      mp.setBehavior(unitId, behavior);
+    }
+  }
+
+  function remoteSetProduction(cityId: number, unitType: UnitType): void {
+    if (mode === "world") {
+      wc.setProduction(cityId, unitType);
+    } else {
+      mp.setProduction(cityId, unitType);
+    }
+  }
+
   // ─── Handle Key Presses ───────────────────────────────────────────────
 
   function handleKeyPress(key: string): void {
@@ -889,7 +1153,7 @@ async function init() {
     if (ui.cityPanel.isOpen) return;
     if (ui.economyReview.isOpen) return;
 
-    const keyOwner = mode === "singleplayer" ? playerOwner : mp.owner;
+    const keyOwner = mode === "singleplayer" ? playerOwner : mode === "world" ? wc.owner : mp.owner;
 
     switch (key) {
       case " ":
@@ -912,7 +1176,7 @@ async function init() {
           if (mode === "singleplayer") {
             collector.setBehavior(selection.selectedUnitId, UnitBehavior.Sentry);
           } else {
-            mp.setBehavior(selection.selectedUnitId, UnitBehavior.Sentry);
+            remoteSetBehavior(selection.selectedUnitId, UnitBehavior.Sentry);
           }
           ui.turnFlow.markDone(selection.selectedUnitId);
           advanceToNextUnit();
@@ -924,7 +1188,7 @@ async function init() {
           if (mode === "singleplayer") {
             collector.setBehavior(selection.selectedUnitId, UnitBehavior.Explore);
           } else {
-            mp.setBehavior(selection.selectedUnitId, UnitBehavior.Explore);
+            remoteSetBehavior(selection.selectedUnitId, UnitBehavior.Explore);
           }
           ui.turnFlow.markDone(selection.selectedUnitId);
           advanceToNextUnit();
@@ -936,7 +1200,7 @@ async function init() {
           if (mode === "singleplayer") {
             collector.setBehavior(selection.selectedUnitId, UnitBehavior.Aggressive);
           } else {
-            mp.setBehavior(selection.selectedUnitId, UnitBehavior.Aggressive);
+            remoteSetBehavior(selection.selectedUnitId, UnitBehavior.Aggressive);
           }
           ui.turnFlow.markDone(selection.selectedUnitId);
           advanceToNextUnit();
@@ -948,7 +1212,7 @@ async function init() {
           if (mode === "singleplayer") {
             collector.setBehavior(selection.selectedUnitId, UnitBehavior.Cautious);
           } else {
-            mp.setBehavior(selection.selectedUnitId, UnitBehavior.Cautious);
+            remoteSetBehavior(selection.selectedUnitId, UnitBehavior.Cautious);
           }
           ui.turnFlow.markDone(selection.selectedUnitId);
           advanceToNextUnit();
@@ -975,7 +1239,7 @@ async function init() {
             if (mode === "singleplayer") {
               collector.setBehavior(selection.selectedUnitId, UnitBehavior.WaitForTransport);
             } else {
-              mp.setBehavior(selection.selectedUnitId, UnitBehavior.WaitForTransport);
+              remoteSetBehavior(selection.selectedUnitId, UnitBehavior.WaitForTransport);
             }
             ui.turnFlow.markDone(selection.selectedUnitId);
             advanceToNextUnit();
@@ -991,7 +1255,7 @@ async function init() {
             if (mode === "singleplayer") {
               collector.setBehavior(selection.selectedUnitId, UnitBehavior.Land);
             } else {
-              mp.setBehavior(selection.selectedUnitId, UnitBehavior.Land);
+              remoteSetBehavior(selection.selectedUnitId, UnitBehavior.Land);
             }
             ui.turnFlow.markDone(selection.selectedUnitId);
             advanceToNextUnit();
@@ -1016,7 +1280,7 @@ async function init() {
           if (mode === "singleplayer") {
             collector.setBehavior(selection.selectedUnitId, UnitBehavior.Sentry);
           } else {
-            mp.setBehavior(selection.selectedUnitId, UnitBehavior.Sentry);
+            remoteSetBehavior(selection.selectedUnitId, UnitBehavior.Sentry);
           }
           ui.turnFlow.markDone(selection.selectedUnitId);
           advanceToNextUnit();
@@ -1027,7 +1291,7 @@ async function init() {
           if (mode === "singleplayer") {
             collector.setBehavior(selection.selectedUnitId, UnitBehavior.Explore);
           } else {
-            mp.setBehavior(selection.selectedUnitId, UnitBehavior.Explore);
+            remoteSetBehavior(selection.selectedUnitId, UnitBehavior.Explore);
           }
           ui.turnFlow.markDone(selection.selectedUnitId);
           advanceToNextUnit();
@@ -1038,7 +1302,7 @@ async function init() {
           if (mode === "singleplayer") {
             collector.setBehavior(selection.selectedUnitId, UnitBehavior.Aggressive);
           } else {
-            mp.setBehavior(selection.selectedUnitId, UnitBehavior.Aggressive);
+            remoteSetBehavior(selection.selectedUnitId, UnitBehavior.Aggressive);
           }
           ui.turnFlow.markDone(selection.selectedUnitId);
           advanceToNextUnit();
@@ -1049,7 +1313,7 @@ async function init() {
           if (mode === "singleplayer") {
             collector.setBehavior(selection.selectedUnitId, UnitBehavior.Cautious);
           } else {
-            mp.setBehavior(selection.selectedUnitId, UnitBehavior.Cautious);
+            remoteSetBehavior(selection.selectedUnitId, UnitBehavior.Cautious);
           }
           ui.turnFlow.markDone(selection.selectedUnitId);
           advanceToNextUnit();
@@ -1060,7 +1324,7 @@ async function init() {
           if (mode === "singleplayer") {
             collector.setBehavior(selection.selectedUnitId, UnitBehavior.WaitForTransport);
           } else {
-            mp.setBehavior(selection.selectedUnitId, UnitBehavior.WaitForTransport);
+            remoteSetBehavior(selection.selectedUnitId, UnitBehavior.WaitForTransport);
           }
           ui.turnFlow.markDone(selection.selectedUnitId);
           advanceToNextUnit();
@@ -1071,7 +1335,7 @@ async function init() {
           if (mode === "singleplayer") {
             collector.setBehavior(selection.selectedUnitId, UnitBehavior.Land);
           } else {
-            mp.setBehavior(selection.selectedUnitId, UnitBehavior.Land);
+            remoteSetBehavior(selection.selectedUnitId, UnitBehavior.Land);
           }
           ui.turnFlow.markDone(selection.selectedUnitId);
           advanceToNextUnit();
@@ -1139,6 +1403,8 @@ async function init() {
       return buildRenderableState(game);
     } else if (mode === "multiplayer") {
       return mp.buildRenderableState();
+    } else if (mode === "world") {
+      return wc.buildRenderableState();
     }
     return null;
   }
@@ -1164,8 +1430,19 @@ async function init() {
         refreshLobby();
       } else if (menuAction === "create-online") {
         ui.menus.showGameSetup("multiplayer");
+      } else if (menuAction === "world-browser") {
+        // Connect and show world browser
+        if (connState === "disconnected") {
+          conn.connect();
+        }
+        fetchWorldList().then(worlds => {
+          ui.menus.showWorldBrowser(worlds, connState);
+        });
+      } else if (menuAction === "create-world") {
+        ui.menus.showWorldSetup();
       } else if (menuAction === "back-to-main") {
         mp.reset();
+        wc.reset();
         conn.disconnect();
         audio.stopAmbient();
         mode = "none";
@@ -1185,6 +1462,18 @@ async function init() {
         }
         mp.reset();
         mp.joinGame(menuAction.gameId);
+      } else if (typeof menuAction === "object" && menuAction.type === "join-world") {
+        if (connState !== "connected") {
+          conn.connect();
+        }
+        wc.reset();
+        wc.joinWorld(menuAction.worldId, menuAction.ring, "Player");
+      } else if (typeof menuAction === "object" && menuAction.type === "start-world") {
+        if (connState !== "connected") {
+          conn.connect();
+        }
+        wc.reset();
+        wc.createWorld({ tickIntervalMs: menuAction.tickSpeed });
       }
     }
 
@@ -1196,6 +1485,16 @@ async function init() {
       return;
     }
 
+    // ─── World mode tick countdown (local frame-based) ────────────────
+    if (mode === "world") {
+      const now = performance.now();
+      if (worldLastFrameTime > 0) {
+        worldTickCountdown -= (now - worldLastFrameTime);
+        if (worldTickCountdown < 0) worldTickCountdown = 0;
+      }
+      worldLastFrameTime = now;
+    }
+
     // ─── City panel actions ─────────────────────────────────────────────
     const citySel = ui.cityPanel.consumeSelection();
     if (citySel) {
@@ -1203,7 +1502,7 @@ async function init() {
       if (mode === "singleplayer") {
         collector.setProduction(citySel.cityId, citySel.unitType);
       } else {
-        mp.setProduction(citySel.cityId, citySel.unitType);
+        remoteSetProduction(citySel.cityId, citySel.unitType);
       }
     }
 
@@ -1231,15 +1530,19 @@ async function init() {
         if (selection.selectedUnitId !== null) {
           // Right-click with unit selected → set navigation target
           const tile = screenToTile(rc.x, rc.y, camera, vw, vh);
-          const mapWidth = mode === "singleplayer" ? game.state.config.mapWidth : (mp.visibleState?.config.mapWidth ?? 100);
-          const mapHeight = mode === "singleplayer" ? game.state.config.mapHeight : (mp.visibleState?.config.mapHeight ?? 60);
+          const mapWidth = mode === "singleplayer" ? game.state.config.mapWidth
+            : mode === "world" ? (wc.visibleState?.config.mapWidth ?? 100)
+            : (mp.visibleState?.config.mapWidth ?? 100);
+          const mapHeight = mode === "singleplayer" ? game.state.config.mapHeight
+            : mode === "world" ? (wc.visibleState?.config.mapHeight ?? 60)
+            : (mp.visibleState?.config.mapHeight ?? 60);
           if (tile.col >= 0 && tile.col < mapWidth && tile.row >= 0 && tile.row < mapHeight) {
             const targetLoc = tile.row * mapWidth + tile.col;
             if (mode === "singleplayer") {
               collector.setTarget(selection.selectedUnitId, targetLoc);
             } else {
               // For multiplayer, send setBehavior + target via protocol
-              mp.setBehavior(selection.selectedUnitId, UnitBehavior.GoTo);
+              remoteSetBehavior(selection.selectedUnitId, UnitBehavior.GoTo);
             }
             audio.playUIClick();
             ui.turnFlow.markDone(selection.selectedUnitId);
@@ -1268,8 +1571,12 @@ async function init() {
     camera.applyTo(worldContainer, vw, vh);
 
     // ─── Update hover tile ──────────────────────────────────────────────
-    const mapWidth = mode === "singleplayer" ? game.state.config.mapWidth : (mp.visibleState?.config.mapWidth ?? 100);
-    const mapHeight = mode === "singleplayer" ? game.state.config.mapHeight : (mp.visibleState?.config.mapHeight ?? 60);
+    const mapWidth = mode === "singleplayer" ? game.state.config.mapWidth
+      : mode === "world" ? (wc.visibleState?.config.mapWidth ?? 100)
+      : (mp.visibleState?.config.mapWidth ?? 100);
+    const mapHeight = mode === "singleplayer" ? game.state.config.mapHeight
+      : mode === "world" ? (wc.visibleState?.config.mapHeight ?? 60)
+      : (mp.visibleState?.config.mapHeight ?? 60);
 
     const hover = screenToTile(input.mouseX, input.mouseY, camera, vw, vh);
     if (hover.col >= 0 && hover.col < mapWidth && hover.row >= 0 && hover.row < mapHeight) {
@@ -1304,13 +1611,15 @@ async function init() {
       // For action panel, build a minimal state object
       const actionPanelState = mode === "singleplayer"
         ? game.state
+        : mode === "world"
+        ? stateForTurnFlow(wc.visibleState!) as any
         : stateForTurnFlow(mp.visibleState!) as any;
       ui.actionPanel.update(
         uiState.selectedUnit,
         selection.selectedCityId,
         actionPanelState,
         currentHighlights.length > 0,
-        mode === "singleplayer" ? playerOwner : mp.owner ?? Owner.Player1,
+        mode === "singleplayer" ? playerOwner : mode === "world" ? (wc.owner ?? Owner.Player1) : (mp.owner ?? Owner.Player1),
       );
       ui.unitInfo.update(
         uiState.selectedUnit,
