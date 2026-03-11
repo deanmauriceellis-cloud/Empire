@@ -1,6 +1,6 @@
 // Empire Reborn — Core Game State Interfaces
 
-import type { Owner, UnitType, UnitBehavior, TerrainType } from "./constants.js";
+import type { Owner, UnitType, UnitBehavior, TerrainType, DepositType } from "./constants.js";
 
 // ─── Coordinates ─────────────────────────────────────────────────────────────
 
@@ -19,13 +19,24 @@ export interface Position {
 export interface MapCell {
   terrain: TerrainType;
   onBoard: boolean;
-  cityId: number | null;  // index into cities array, or null
+  cityId: number | null;     // index into cities array, or null
+  depositId: number | null;  // index into deposits array, or null
 }
 
 /** A cell of a player's view map. */
 export interface ViewMapCell {
   contents: string;  // terrain char, unit char, or city
   seen: number;      // turn number when last updated (-1 = never)
+}
+
+// ─── Deposit State ───────────────────────────────────────────────────────────
+
+export interface DepositState {
+  id: number;
+  loc: Loc;
+  type: DepositType;
+  owner: Owner;                // who controls it (Unowned until a building is placed)
+  buildingComplete: boolean;   // true once a mine/well/farm is built on it
 }
 
 // ─── City State ──────────────────────────────────────────────────────────────
@@ -85,6 +96,13 @@ export interface GameState {
 
   // Seedable PRNG state for game logic (combat, satellite directions)
   rngState: number;
+
+  // Economy — resource stockpiles per player [ore, oil, textile]
+  resources: Record<Owner, number[]>;
+
+  // Map deposits (ore veins, oil wells, textile farms)
+  deposits: DepositState[];
+  nextDepositId: number;
 }
 
 // ─── Player Actions ──────────────────────────────────────────────────────────
@@ -103,7 +121,7 @@ export type PlayerAction =
 // ─── Turn Result ─────────────────────────────────────────────────────────────
 
 export interface TurnEvent {
-  type: "combat" | "capture" | "production" | "death" | "discovery";
+  type: "combat" | "capture" | "production" | "death" | "discovery" | "stall" | "income";
   loc: Loc;
   description: string;
   data?: Record<string, unknown>;

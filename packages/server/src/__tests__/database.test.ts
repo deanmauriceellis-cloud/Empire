@@ -45,6 +45,9 @@ function createTestState(): GameState {
       [Owner.Player2]: initViewMap(),
     },
     rngState: config.seed,
+    resources: { [Owner.Unowned]: [0,0,0], [Owner.Player1]: [150,100,150], [Owner.Player2]: [150,100,150] },
+    deposits: [],
+    nextDepositId: 0,
   };
 
   const [city1Id, city2Id] = mapResult.startingCities;

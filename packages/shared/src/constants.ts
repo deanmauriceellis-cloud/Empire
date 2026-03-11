@@ -179,6 +179,44 @@ export const MOVE_ORDER: readonly UnitType[] = [
   UnitType.Fighter,
 ] as const;
 
+// ─── Resource Types ─────────────────────────────────────────────────────────
+
+export enum ResourceType {
+  Ore = 0,
+  Oil = 1,
+  Textile = 2,
+}
+
+export const NUM_RESOURCE_TYPES = 3;
+
+export const RESOURCE_NAMES: readonly string[] = ["Ore", "Oil", "Textile"] as const;
+
+// ─── Deposit Types ──────────────────────────────────────────────────────────
+
+export enum DepositType {
+  OreVein = 0,   // found on/near mountains (high terrain)
+  OilWell = 1,   // found on lowland (dark pools)
+  TextileFarm = 2, // found on fertile grassland
+}
+
+export const DEPOSIT_NAMES: readonly string[] = ["Ore Vein", "Oil Well", "Textile Farm"] as const;
+
+/** Which resource each deposit type produces */
+export const DEPOSIT_RESOURCE: readonly ResourceType[] = [
+  ResourceType.Ore,
+  ResourceType.Oil,
+  ResourceType.Textile,
+] as const;
+
+/** Per-turn income from a completed mine/well/farm on a deposit */
+export const DEPOSIT_INCOME = 3;
+
+// ─── Starting Resources ────────────────────────────────────────────────────
+
+export const STARTING_ORE = 150;
+export const STARTING_OIL = 100;
+export const STARTING_TEXTILE = 150;
+
 // ─── Map Size Presets ───────────────────────────────────────────────────────
 
 export interface MapSizePreset {

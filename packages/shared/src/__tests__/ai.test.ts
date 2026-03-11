@@ -38,6 +38,7 @@ function createTestState(): GameState {
       terrain: TerrainType.Land,
       onBoard,
       cityId: null,
+      depositId: null,
     });
   }
 
@@ -63,6 +64,9 @@ function createTestState(): GameState {
       [Owner.Player2]: initViewMap(),
     },
     rngState: 12345,
+    resources: { [Owner.Unowned]: [0,0,0], [Owner.Player1]: [150,100,150], [Owner.Player2]: [150,100,150] },
+    deposits: [],
+    nextDepositId: 0,
   };
 }
 

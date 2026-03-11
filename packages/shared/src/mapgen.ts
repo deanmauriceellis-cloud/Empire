@@ -12,8 +12,9 @@ import {
   Owner,
   UnitType,
   UnitBehavior,
+  DepositType,
 } from "./constants.js";
-import type { Loc, MapCell, CityState, GameConfig } from "./types.js";
+import type { Loc, MapCell, CityState, DepositState, GameConfig } from "./types.js";
 import { locRow, locCol, rowColLoc, dist, isOnBoard } from "./utils.js";
 
 // ─── Seedable RNG ───────────────────────────────────────────────────────────
@@ -136,7 +137,7 @@ export function assignTerrain(
     const onBoard = row > 0 && row < height - 1 && col > 0 && col < width - 1;
     const terrain = heights[i] > waterline ? TerrainType.Land : TerrainType.Sea;
 
-    map[i] = { terrain, onBoard, cityId: null };
+    map[i] = { terrain, onBoard, cityId: null, depositId: null };
   }
 
   return map;
@@ -567,6 +568,159 @@ function pickDistantCities(
   return bestPair;
 }
 
+// ─── Deposit Placement ──────────────────────────────────────────────────────
+
+/**
+ * Place resource deposits on the map.
+ * Density: ~1 deposit per 3-4 cities.
+ * Fair placement: equal types near each player's start.
+ * Contested deposits in neutral middle ground.
+ *
+ * Deposit type is determined by terrain height:
+ *   - Ore veins on high terrain (mountains)
+ *   - Oil wells on low-medium terrain
+ *   - Textile farms on medium terrain (fertile)
+ *
+ * When no height map is available (river maps), types are assigned
+ * by rotating through the 3 types evenly.
+ */
+export function placeDeposits(
+  map: MapCell[],
+  cities: CityState[],
+  startingCities: [number, number],
+  width: number,
+  height: number,
+  rng: () => number,
+  heights?: Int32Array,
+  waterline?: number,
+): DepositState[] {
+  const deposits: DepositState[] = [];
+  const numDeposits = Math.max(6, Math.floor(cities.length / 3.5));
+
+  // Minimum distance between deposits and from cities
+  const minDepositDist = Math.max(3, Math.floor(Math.sqrt((width * height) / numDeposits) * 0.5));
+  const minCityDist = 2;
+
+  // Find starting city locations
+  const start1 = cities[startingCities[0]].loc;
+  const start2 = cities[startingCities[1]].loc;
+  const midCol = Math.floor(width / 2);
+
+  // Collect candidate land tiles (not cities, not map edges)
+  const candidates: Loc[] = [];
+  for (let i = 0; i < map.length; i++) {
+    if (!map[i].onBoard) continue;
+    if (map[i].terrain !== TerrainType.Land) continue;
+    if (map[i].cityId !== null) continue;
+
+    // Not too close to any city
+    let nearCity = false;
+    for (const city of cities) {
+      if (dist(i, city.loc) < minCityDist) {
+        nearCity = true;
+        break;
+      }
+    }
+    if (nearCity) continue;
+    candidates.push(i);
+  }
+
+  if (candidates.length === 0) return deposits;
+
+  // Categorize candidates by zone: near player 1, near player 2, contested middle
+  const d1Max = dist(start1, start2) * 0.4;  // within 40% of inter-start distance
+  const d2Max = d1Max;
+
+  const zone1: Loc[] = [];  // near player 1
+  const zone2: Loc[] = [];  // near player 2
+  const zoneM: Loc[] = [];  // contested middle
+
+  for (const loc of candidates) {
+    const d1 = dist(loc, start1);
+    const d2 = dist(loc, start2);
+    if (d1 <= d1Max && d1 < d2) zone1.push(loc);
+    else if (d2 <= d2Max && d2 < d1) zone2.push(loc);
+    else zoneM.push(loc);
+  }
+
+  // Plan deposit distribution: equal per player zone, rest contested
+  // Each zone gets roughly equal count of each type
+  const perZone = Math.max(2, Math.floor(numDeposits / 3));
+  const contested = numDeposits - perZone * 2;
+
+  // Helper: pick a deposit location from a zone, respecting min distance to existing deposits
+  function pickFromZone(zone: Loc[]): Loc | null {
+    // Shuffle zone candidates
+    for (let i = zone.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [zone[i], zone[j]] = [zone[j], zone[i]];
+    }
+
+    for (const loc of zone) {
+      let tooClose = false;
+      for (const dep of deposits) {
+        if (dist(loc, dep.loc) < minDepositDist) {
+          tooClose = true;
+          break;
+        }
+      }
+      if (!tooClose) return loc;
+    }
+    return null;
+  }
+
+  // Assign deposit type based on terrain height or rotation
+  function assignType(loc: Loc, index: number): DepositType {
+    if (heights && waterline !== undefined) {
+      const h = heights[loc];
+      const landRange = 999 - waterline;
+      const relative = (h - waterline) / landRange; // 0 = just above water, 1 = highest peak
+      if (relative > 0.6) return DepositType.OreVein;
+      if (relative < 0.3) return DepositType.OilWell;
+      return DepositType.TextileFarm;
+    }
+    // Fallback: rotate evenly
+    return (index % 3) as DepositType;
+  }
+
+  // Place deposits in each zone, ensuring type balance
+  function placeInZone(zone: Loc[], count: number): void {
+    // Track types placed to ensure balance
+    const typeCounts = [0, 0, 0];
+
+    for (let i = 0; i < count; i++) {
+      const loc = pickFromZone(zone);
+      if (loc === null) break;
+
+      let type = assignType(loc, deposits.length);
+
+      // Rebalance: if one type is overrepresented in this zone, force underrepresented type
+      const minCount = Math.min(...typeCounts);
+      const maxCount = Math.max(...typeCounts);
+      if (maxCount - minCount >= 2) {
+        type = typeCounts.indexOf(minCount) as DepositType;
+      }
+
+      const deposit: DepositState = {
+        id: deposits.length,
+        loc,
+        type,
+        owner: Owner.Unowned,
+        buildingComplete: false,
+      };
+      deposits.push(deposit);
+      map[loc].depositId = deposit.id;
+      typeCounts[type]++;
+    }
+  }
+
+  placeInZone(zone1, perZone);
+  placeInZone(zone2, perZone);
+  placeInZone(zoneM, contested);
+
+  return deposits;
+}
+
 // ─── Integrated Map Generator ───────────────────────────────────────────────
 
 export interface MapGenerationResult {
@@ -574,6 +728,7 @@ export interface MapGenerationResult {
   cities: CityState[];
   startingCities: [number, number]; // [player1CityId, player2CityId]
   continents: Continent[];
+  deposits: DepositState[];
 }
 
 /**
@@ -609,7 +764,10 @@ function generateStandardMap(config: GameConfig): MapGenerationResult {
   const continents = findContinents(map, cities, mapWidth, mapHeight);
   const startingCities = selectStartingCities(continents, cities, rng, mapWidth * mapHeight, map, mapWidth, mapHeight);
 
-  return { map, cities, startingCities, continents };
+  // Step 2.5: Deposit placement
+  const deposits = placeDeposits(map, cities, startingCities, mapWidth, mapHeight, rng, heights, waterline);
+
+  return { map, cities, startingCities, continents, deposits };
 }
 
 // ─── River War Map Generator ────────────────────────────────────────────────
@@ -635,7 +793,7 @@ function generateRiverMap(config: GameConfig): MapGenerationResult {
     const row = Math.floor(i / mapWidth);
     const col = i % mapWidth;
     const onBoard = row > 0 && row < mapHeight - 1 && col > 0 && col < mapWidth - 1;
-    map[i] = { terrain: onBoard ? TerrainType.Land : TerrainType.Sea, onBoard, cityId: null };
+    map[i] = { terrain: onBoard ? TerrainType.Land : TerrainType.Sea, onBoard, cityId: null, depositId: null };
   }
 
   // ─── Step 2: Carve the main river down the center ──────────────────────
@@ -904,7 +1062,10 @@ function generateRiverMap(config: GameConfig): MapGenerationResult {
   // ─── Step 8: Detect continents ─────────────────────────────────────────
   const continents = findContinents(map, cities, mapWidth, mapHeight);
 
-  return { map, cities, startingCities, continents };
+  // ─── Step 9: Place deposits ───────────────────────────────────────────
+  const deposits = placeDeposits(map, cities, startingCities, mapWidth, mapHeight, rng);
+
+  return { map, cities, startingCities, continents, deposits };
 }
 
 // ─── River Map Helpers ──────────────────────────────────────────────────────

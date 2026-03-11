@@ -1,7 +1,7 @@
 // Empire Reborn — Unit Attributes
 // Ported from VMS-Empire data.c piece_attr[]
 
-import { INFINITY, UnitType, TerrainType } from "./constants.js";
+import { INFINITY, UnitType, TerrainType, NUM_RESOURCE_TYPES } from "./constants.js";
 
 // ─── Unit Attributes Interface ───────────────────────────────────────────────
 
@@ -160,6 +160,35 @@ export const UNIT_ATTRIBUTES: readonly UnitAttributes[] = [
     range: 500,
   },
 ] as const;
+
+// ─── Unit Resource Costs ─────────────────────────────────────────────────────
+
+/** Resource cost to produce each unit type: [ore, oil, textile] */
+export const UNIT_COSTS: readonly (readonly [number, number, number])[] = [
+  [5,  0,  5],   // Army
+  [15, 10, 0],   // Fighter
+  [10, 5,  0],   // Patrol
+  [20, 10, 0],   // Destroyer
+  [25, 15, 0],   // Submarine
+  [15, 10, 5],   // Transport
+  [30, 20, 5],   // Carrier
+  [40, 25, 0],   // Battleship
+  [20, 5,  10],  // Satellite
+] as const;
+
+/** Get resource cost for a unit type */
+export function getUnitCost(type: UnitType): readonly [number, number, number] {
+  return UNIT_COSTS[type];
+}
+
+/** Check if player can afford a unit (resources >= cost for all 3 types) */
+export function canAffordUnit(resources: readonly number[], type: UnitType): boolean {
+  const cost = UNIT_COSTS[type];
+  for (let i = 0; i < NUM_RESOURCE_TYPES; i++) {
+    if (resources[i] < cost[i]) return false;
+  }
+  return true;
+}
 
 // ─── Attack Target Lists ─────────────────────────────────────────────────────
 

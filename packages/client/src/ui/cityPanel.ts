@@ -1,6 +1,6 @@
 // Empire Reborn — City Production Panel (Modal)
 
-import { UNIT_ATTRIBUTES, UnitType, NUM_UNIT_TYPES } from "@empire/shared";
+import { UNIT_ATTRIBUTES, UnitType, NUM_UNIT_TYPES, UNIT_COSTS } from "@empire/shared";
 import type { CityState } from "@empire/shared";
 
 export interface CityPanel {
@@ -41,9 +41,15 @@ export function createCityPanel(): CityPanel {
     for (let i = 0; i < NUM_UNIT_TYPES; i++) {
       const attrs = UNIT_ATTRIBUTES[i];
       const active = city.production === i ? " active" : "";
+      const cost = UNIT_COSTS[i];
+      const costStr = [
+        cost[0] > 0 ? `${cost[0]}o` : "",
+        cost[1] > 0 ? `${cost[1]}f` : "",
+        cost[2] > 0 ? `${cost[2]}t` : "",
+      ].filter(Boolean).join("/");
       html += `<button class="prod-btn${active}" data-unit-type="${i}">` +
         `<span class="prod-name">${attrs.char} ${attrs.name}</span>` +
-        `<span class="prod-stat">${attrs.buildTime}t | ` +
+        `<span class="prod-stat">${attrs.buildTime}t | ${costStr} | ` +
         `${attrs.strength}atk | ${attrs.maxHits}hp</span>` +
         `</button>`;
     }

@@ -2,7 +2,7 @@
 // Renders a 2px-per-tile overview on a dedicated <canvas>.
 // Performance: caches terrain ImageData, only redraws units + viewport each frame.
 
-import { TerrainType, Owner, locRow, locCol } from "@empire/shared";
+import { TerrainType, Owner, DepositType, locRow, locCol } from "@empire/shared";
 import type { RenderableState } from "../types.js";
 import type { Camera } from "../core/camera.js";
 import { isoToCart } from "../iso/coords.js";
@@ -130,6 +130,27 @@ export function createMinimap(camera: Camera): Minimap {
         canvas.width, canvas.height,
       );
       const data = imgData.data;
+
+      // Draw deposits as colored dots (brown=ore, dark=oil, green=textile)
+      for (const deposit of state.deposits) {
+        const col = locCol(deposit.loc);
+        const row = locRow(deposit.loc);
+        // Deposit type colors
+        let r: number, g: number, b: number;
+        switch (deposit.type) {
+          case DepositType.OreVein:      r = 192; g = 128; b = 64; break;
+          case DepositType.OilWell:      r = 60;  g = 60;  b = 80; break;
+          case DepositType.TextileFarm:  r = 96;  g = 176; b = 80; break;
+        }
+        for (let dy = 0; dy < SCALE; dy++) {
+          for (let dx = 0; dx < SCALE; dx++) {
+            const px = col * SCALE + dx;
+            const py = row * SCALE + dy;
+            const i = (py * canvas.width + px) * 4;
+            data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = 220;
+          }
+        }
+      }
 
       // Draw units as bright dots (changes every frame due to movement)
       for (const unit of state.units) {

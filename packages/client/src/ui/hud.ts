@@ -42,10 +42,19 @@ export function createHUD(): HUD {
         ? unitParts.join("")
         : `<span class="stat">0</span>`;
 
+      // Resource display
+      const [ore, oil, txt] = state.resources;
+      const resHtml = `<span class="resources">` +
+        `<span class="res-ore" title="Ore">${ore}</span>` +
+        `<span class="res-oil" title="Oil">${oil}</span>` +
+        `<span class="res-txt" title="Textile">${txt}</span>` +
+        `</span>`;
+
       topContent.innerHTML = [
         `<span><span class="stat-label">Turn</span><span class="stat">${state.turn}</span></span>`,
         `<span><span class="stat-label">Cities</span><span class="stat">${state.playerCityCount}</span></span>`,
         `<span><span class="stat-label">Units</span>${unitSummary}</span>`,
+        resHtml,
         `<span style="margin-left:auto;color:#555">Empire Reborn v${GAME_VERSION}</span>`,
       ].join("");
 

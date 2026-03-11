@@ -2,7 +2,7 @@
 // Generates colored geometric textures for all game elements.
 
 import { Graphics, type Renderer, type Texture } from "pixi.js";
-import { UnitType, Owner } from "@empire/shared";
+import { UnitType, Owner, DepositType } from "@empire/shared";
 import { TILE_WIDTH, TILE_HEIGHT, HALF_TILE_W, HALF_TILE_H, COLORS } from "../constants.js";
 import type { AssetBundle } from "../types.js";
 
@@ -496,6 +496,67 @@ function makeUnitTexture(renderer: Renderer, type: UnitType, owner: Owner): Text
   return renderer.generateTexture(g);
 }
 
+// ─── Deposit Textures ────────────────────────────────────────────────────────
+
+/**
+ * Create a deposit texture — a small icon rendered on the tile.
+ * Ore: triangular mountain icon (brown-orange)
+ * Oil: circular pool/derrick icon (dark slate)
+ * Textile: leaf/plant icon (green)
+ */
+function makeDepositTexture(renderer: Renderer, depositType: DepositType): Texture {
+  const g = new Graphics();
+  const cx = HALF_TILE_W;
+  const cy = HALF_TILE_H;
+
+  switch (depositType) {
+    case DepositType.OreVein: {
+      // Mountain/crystal icon — two overlapping triangles
+      const baseY = cy + 5;
+      // Back mountain (slightly left, taller)
+      g.poly([cx - 8, baseY, cx - 2, baseY - 12, cx + 4, baseY]);
+      g.fill({ color: COLORS.DEPOSIT_ORE_STROKE, alpha: 0.9 });
+      // Front mountain (slightly right, shorter)
+      g.poly([cx - 2, baseY, cx + 5, baseY - 9, cx + 10, baseY]);
+      g.fill({ color: COLORS.DEPOSIT_ORE, alpha: 0.95 });
+      // Snow cap / crystal glint
+      g.poly([cx - 2, baseY - 12, cx - 4, baseY - 8, cx, baseY - 8]);
+      g.fill({ color: 0xffeedd, alpha: 0.6 });
+      break;
+    }
+    case DepositType.OilWell: {
+      // Dark pool with derrick structure
+      // Pool (dark ellipse)
+      g.ellipse(cx, cy + 3, 8, 4);
+      g.fill({ color: COLORS.DEPOSIT_OIL, alpha: 0.85 });
+      g.stroke({ width: 0.5, color: 0x111118, alpha: 0.6 });
+      // Oil sheen highlight
+      g.ellipse(cx - 2, cy + 2, 3, 1.5);
+      g.fill({ color: 0x445566, alpha: 0.4 });
+      // Derrick (small triangle frame)
+      g.poly([cx - 3, cy + 1, cx, cy - 7, cx + 3, cy + 1]);
+      g.stroke({ width: 1, color: 0x666680, alpha: 0.8 });
+      break;
+    }
+    case DepositType.TextileFarm: {
+      // Green plant/leaf cluster
+      const baseY = cy + 5;
+      // Three leaf shapes
+      for (const dx of [-5, 0, 5]) {
+        g.ellipse(cx + dx, baseY - 5, 3, 5);
+        g.fill({ color: dx === 0 ? COLORS.DEPOSIT_TEXTILE : COLORS.DEPOSIT_TEXTILE_STROKE, alpha: 0.85 });
+      }
+      // Small stem
+      g.moveTo(cx, baseY);
+      g.lineTo(cx, baseY - 3);
+      g.stroke({ width: 1, color: COLORS.DEPOSIT_TEXTILE_STROKE, alpha: 0.6 });
+      break;
+    }
+  }
+
+  return renderer.generateTexture(g);
+}
+
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 export function generateAssets(renderer: Renderer): AssetBundle {
@@ -508,6 +569,12 @@ export function generateAssets(renderer: Renderer): AssetBundle {
       units.set(key, makeUnitTexture(renderer, t, owner));
     }
   }
+
+  // Generate deposit textures
+  const deposits = new Map<string, Texture>();
+  deposits.set("ore", makeDepositTexture(renderer, DepositType.OreVein));
+  deposits.set("oil", makeDepositTexture(renderer, DepositType.OilWell));
+  deposits.set("textile", makeDepositTexture(renderer, DepositType.TextileFarm));
 
   return {
     terrain: {
@@ -527,5 +594,6 @@ export function generateAssets(renderer: Renderer): AssetBundle {
     moveHighlight: makeMoveHighlightTexture(renderer),
     attackHighlight: makeAttackHighlightTexture(renderer),
     units,
+    deposits,
   };
 }

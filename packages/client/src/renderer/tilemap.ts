@@ -3,7 +3,7 @@
 // animated water, and smooth fog transitions.
 
 import { Container, Sprite, type Texture } from "pixi.js";
-import { TerrainType, Owner } from "@empire/shared";
+import { TerrainType, Owner, DepositType } from "@empire/shared";
 import { cartToIso, getVisibleTileBounds } from "../iso/coords.js";
 import {
   HALF_TILE_W, HALF_TILE_H,
@@ -58,12 +58,15 @@ function hasAdjacentLand(
 export class TilemapRenderer {
   private tileContainer: Container;
   private foamContainer: Container;
+  private depositContainer: Container;
   private fogContainer: Container;
   private tilePool: Sprite[] = [];
   private foamPool: Sprite[] = [];
+  private depositPool: Sprite[] = [];
   private fogPool: Sprite[] = [];
   private activeTiles = 0;
   private activeFoam = 0;
+  private activeDeposits = 0;
   private activeFog = 0;
   private assets: AssetBundle;
   private time = 0;
@@ -81,6 +84,10 @@ export class TilemapRenderer {
     this.foamContainer = new Container();
     this.foamContainer.zIndex = 1;
     worldContainer.addChild(this.foamContainer);
+
+    this.depositContainer = new Container();
+    this.depositContainer.zIndex = 3;
+    worldContainer.addChild(this.depositContainer);
 
     this.fogContainer = new Container();
     this.fogContainer.zIndex = 10;
@@ -107,6 +114,25 @@ export class TilemapRenderer {
     this.foamContainer.addChild(sprite);
     this.foamPool.push(sprite);
     return sprite;
+  }
+
+  private getDepositSprite(index: number): Sprite {
+    if (index < this.depositPool.length) {
+      return this.depositPool[index];
+    }
+    const sprite = new Sprite();
+    sprite.anchor.set(0, 0);
+    this.depositContainer.addChild(sprite);
+    this.depositPool.push(sprite);
+    return sprite;
+  }
+
+  private getDepositTexture(depositType: DepositType): Texture {
+    switch (depositType) {
+      case DepositType.OreVein: return this.assets.deposits.get("ore")!;
+      case DepositType.OilWell: return this.assets.deposits.get("oil")!;
+      case DepositType.TextileFarm: return this.assets.deposits.get("textile")!;
+    }
   }
 
   private getFogSprite(index: number): Sprite {
@@ -147,6 +173,7 @@ export class TilemapRenderer {
 
     this.activeTiles = 0;
     this.activeFoam = 0;
+    this.activeDeposits = 0;
     this.activeFog = 0;
 
     for (let row = bounds.minRow; row <= bounds.maxRow; row++) {
@@ -207,6 +234,16 @@ export class TilemapRenderer {
           sprite.alpha = 1;
         }
 
+        // Deposit overlay (only on seen land tiles with deposits)
+        if (tile.depositType !== null && tile.seen >= 0) {
+          const dep = this.getDepositSprite(this.activeDeposits++);
+          dep.texture = this.getDepositTexture(tile.depositType);
+          dep.position.set(px, py);
+          dep.visible = true;
+          // Gentle pulse to make deposits noticeable
+          dep.alpha = 0.85 + Math.sin(this.time * 1.5 + loc * 0.3) * 0.1;
+        }
+
         // Fog overlay with smooth alpha transitions
         let targetAlpha = 0;
         if (tile.seen === -1) {
@@ -239,6 +276,9 @@ export class TilemapRenderer {
     }
     for (let i = this.activeFoam; i < this.foamPool.length; i++) {
       this.foamPool[i].visible = false;
+    }
+    for (let i = this.activeDeposits; i < this.depositPool.length; i++) {
+      this.depositPool[i].visible = false;
     }
     for (let i = this.activeFog; i < this.fogPool.length; i++) {
       this.fogPool[i].visible = false;

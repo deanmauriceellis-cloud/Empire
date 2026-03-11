@@ -181,6 +181,9 @@ export function createMultiplayerGame(
           terrain,
           seen: view.seen,
           cityOwner,
+          depositType: null,   // TODO: server needs to send deposit data
+          depositOwner: null,
+          depositComplete: false,
         };
       }
 
@@ -197,6 +200,8 @@ export function createMultiplayerGame(
           production: c.owner === owner ? c.production : null,
         })),
         units: visibleUnits,
+        deposits: [],           // TODO: server needs to send deposit data
+        resources: [0, 0, 0],   // TODO: server needs to send resource data
         mapWidth: config.mapWidth,
         mapHeight: config.mapHeight,
         owner,

@@ -50,6 +50,14 @@ export const COLORS = {
   HEALTH_LOW: 0xcc4444,
   HEALTH_BG: 0x333333,
 
+  // Deposits
+  DEPOSIT_ORE: 0xc08040,       // warm brown-orange
+  DEPOSIT_ORE_STROKE: 0x8a5a2a,
+  DEPOSIT_OIL: 0x2a2a3a,       // dark slate
+  DEPOSIT_OIL_STROKE: 0x1a1a28,
+  DEPOSIT_TEXTILE: 0x60b050,   // lush green
+  DEPOSIT_TEXTILE_STROKE: 0x408030,
+
   // Background
   BG: 0x0a0a1e,
 } as const;

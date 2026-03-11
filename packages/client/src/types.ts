@@ -1,7 +1,7 @@
 // Empire Reborn — Client-Side Interfaces
 
-import type { Owner, UnitType, TerrainType } from "@empire/shared";
-import type { Loc, UnitState, CityState, TurnEvent, PlayerAction } from "@empire/shared";
+import type { Owner, UnitType, TerrainType, DepositType } from "@empire/shared";
+import type { Loc, UnitState, CityState, DepositState, TurnEvent, PlayerAction } from "@empire/shared";
 
 // ─── Renderable State ───────────────────────────────────────────────────────
 
@@ -10,6 +10,9 @@ export interface RenderableTile {
   terrain: TerrainType;
   seen: number;         // turn last seen (-1 = never)
   cityOwner: Owner | null;
+  depositType: DepositType | null;  // null if no deposit or not seen
+  depositOwner: Owner | null;       // who controls the deposit
+  depositComplete: boolean;         // true if building built on deposit
 }
 
 /** A city visible to the player. */
@@ -26,6 +29,8 @@ export interface RenderableState {
   tiles: RenderableTile[];
   cities: RenderableCity[];
   units: UnitState[];
+  deposits: DepositState[];
+  resources: number[];        // player's [ore, oil, textile]
   mapWidth: number;
   mapHeight: number;
   owner: Owner;
@@ -56,6 +61,7 @@ export interface UIState {
   events: TurnEvent[];
   isGameOver: boolean;
   winner: Owner | null;
+  resources: number[];  // player's [ore, oil, textile]
 }
 
 // ─── Tile Highlights ────────────────────────────────────────────────────
@@ -87,4 +93,5 @@ export interface AssetBundle {
   moveHighlight: Texture;
   attackHighlight: Texture;
   units: Map<string, Texture>;
+  deposits: Map<string, Texture>;  // "ore", "oil", "textile"
 }

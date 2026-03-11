@@ -18,10 +18,24 @@ export function buildRenderableState(game: SinglePlayerGame): RenderableState {
   for (let i = 0; i < state.map.length; i++) {
     const cell = state.map[i];
     const view = viewMap[i];
+    // Deposit info (only if tile has been seen)
+    let depositType: import("@empire/shared").DepositType | null = null;
+    let depositOwner: Owner | null = null;
+    let depositComplete = false;
+    if (cell.depositId !== null && view.seen >= 0) {
+      const deposit = state.deposits[cell.depositId];
+      depositType = deposit.type;
+      depositOwner = deposit.owner;
+      depositComplete = deposit.buildingComplete;
+    }
+
     tiles[i] = {
       terrain: cell.terrain,
       seen: view.seen,
       cityOwner: cell.cityId !== null ? state.cities[cell.cityId].owner : null,
+      depositType,
+      depositOwner,
+      depositComplete,
     };
   }
 
@@ -43,11 +57,16 @@ export function buildRenderableState(game: SinglePlayerGame): RenderableState {
       production: c.owner === owner ? c.production : null,
     }));
 
+  // Visible deposits (only seen tiles)
+  const visibleDeposits = state.deposits.filter((d) => viewMap[d.loc].seen >= 0);
+
   return {
     turn: state.turn,
     tiles,
     cities,
     units: visibleUnits,
+    deposits: visibleDeposits,
+    resources: state.resources[owner],
     mapWidth: state.config.mapWidth,
     mapHeight: state.config.mapHeight,
     owner,

@@ -402,6 +402,7 @@ async function init() {
       unitCountsByType: new Array(NUM_UNIT_TYPES).fill(0),
       selectedUnit: null, selectedCity: null,
       pendingActionCount: 0, events: [], isGameOver: false, winner: null,
+      resources: [0, 0, 0],
     };
   }
 
@@ -431,6 +432,7 @@ async function init() {
       events: [...collector.turnEvents],
       isGameOver: game.isGameOver,
       winner: game.winner,
+      resources: state.resources[Owner.Player1],
     };
   }
 
@@ -443,6 +445,7 @@ async function init() {
         unitCountsByType: new Array(NUM_UNIT_TYPES).fill(0),
         selectedUnit: null, selectedCity: null,
         pendingActionCount: 0, events: [], isGameOver: false, winner: null,
+        resources: [0, 0, 0],
       };
     }
 
@@ -481,6 +484,7 @@ async function init() {
       events: [...mp.turnEvents],
       isGameOver: mp.isGameOver,
       winner: mp.winner,
+      resources: [0, 0, 0], // TODO: server needs to send resource data
     };
   }
 

@@ -5,6 +5,7 @@ import {
   UNIT_ATTRIBUTES, Owner, UnitType, UnitBehavior,
   BEHAVIOR_NAMES, behaviorIndex, INFINITY,
   locRow, locCol,
+  UNIT_COSTS, DEPOSIT_NAMES, DepositType,
 } from "@empire/shared";
 import type { UnitState, CityState, GameState } from "@empire/shared";
 
@@ -208,6 +209,19 @@ export function createUnitInfoPanel(): UnitInfoPanel {
           parts.push(`<span class="info-label">Building</span>`);
           parts.push(`<span class="info-value" style="text-transform:capitalize">${prodAttrs.name}</span>`);
           parts.push(`</div>`);
+
+          // Resource cost
+          const cost = UNIT_COSTS[city.production];
+          const costParts: string[] = [];
+          if (cost[0] > 0) costParts.push(`<span style="color:#c08040">${cost[0]} ore</span>`);
+          if (cost[1] > 0) costParts.push(`<span style="color:#8888aa">${cost[1]} oil</span>`);
+          if (cost[2] > 0) costParts.push(`<span style="color:#60b050">${cost[2]} txt</span>`);
+          if (costParts.length > 0) {
+            parts.push(`<div class="info-row">`);
+            parts.push(`<span class="info-label">Cost</span>`);
+            parts.push(`<span class="info-value">${costParts.join(" ")}</span>`);
+            parts.push(`</div>`);
+          }
 
           // Progress bar
           parts.push(`<div class="info-section">`);

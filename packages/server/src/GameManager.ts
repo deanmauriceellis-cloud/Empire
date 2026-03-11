@@ -17,6 +17,9 @@ import {
   MAP_HEIGHT,
   MAP_SIZE,
   NUM_CITY,
+  STARTING_ORE,
+  STARTING_OIL,
+  STARTING_TEXTILE,
   configureMapDimensions,
   generateMap,
   initViewMap,
@@ -175,6 +178,13 @@ export class GameManager {
         [Owner.Player2]: initViewMap(),
       },
       rngState: config.seed,
+      resources: {
+        [Owner.Unowned]: [0, 0, 0],
+        [Owner.Player1]: [STARTING_ORE, STARTING_OIL, STARTING_TEXTILE],
+        [Owner.Player2]: [STARTING_ORE, STARTING_OIL, STARTING_TEXTILE],
+      },
+      deposits: mapResult.deposits,
+      nextDepositId: mapResult.deposits.length,
     };
 
     // Assign starting cities

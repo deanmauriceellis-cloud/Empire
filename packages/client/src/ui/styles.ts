@@ -89,6 +89,23 @@ const CSS = `
   font-size: 12px;
 }
 
+#hud-top .resources {
+  display: inline-flex;
+  gap: 10px;
+  margin-left: 8px;
+  font-size: 12px;
+}
+
+#hud-top .res-ore::before { content: "Ore "; color: #c08040; }
+#hud-top .res-oil::before { content: "Oil "; color: #8888aa; }
+#hud-top .res-txt::before { content: "Txt "; color: #60b050; }
+
+#hud-top .res-ore,
+#hud-top .res-oil,
+#hud-top .res-txt {
+  color: var(--color-accent-light);
+}
+
 /* ─── Bottom Bar ────────────────────────────────────────────────────────── */
 
 #hud-bottom {

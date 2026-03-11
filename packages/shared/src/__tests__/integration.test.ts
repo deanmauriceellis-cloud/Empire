@@ -48,6 +48,9 @@ function createFullGameState(seed: number): GameState {
       [Owner.Player2]: initViewMap(),
     },
     rngState: seed,
+    resources: { [Owner.Unowned]: [0,0,0], [Owner.Player1]: [150,100,150], [Owner.Player2]: [150,100,150] },
+    deposits: [],
+    nextDepositId: 0,
   };
 
   // Create starting armies at each player's starting city
@@ -262,6 +265,7 @@ describe("Integration: AI vs AI", () => {
         terrain: (isTopIsland || isBottomIsland) && onBoard ? TerrainType.Land : TerrainType.Sea,
         onBoard,
         cityId: null,
+        depositId: null,
       });
     }
 
@@ -270,6 +274,9 @@ describe("Integration: AI vs AI", () => {
       turn: 0, map, cities: [], units: [], nextUnitId: 1, nextCityId: 1,
       viewMaps: { [Owner.Unowned]: initViewMap(), [Owner.Player1]: initViewMap(), [Owner.Player2]: initViewMap() },
       rngState: 42,
+      resources: { [Owner.Unowned]: [0,0,0], [Owner.Player1]: [150,100,150], [Owner.Player2]: [150,100,150] },
+      deposits: [],
+      nextDepositId: 0,
     };
 
     // P1 city on top island, P2 city on bottom island

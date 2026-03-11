@@ -3,7 +3,7 @@
 // No server needed — same GameState + executeTurn interface.
 
 import { type GameState, type GameConfig, type PlayerAction, type TurnResult } from "./types.js";
-import { Owner, MAP_WIDTH, MAP_HEIGHT, NUM_CITY, configureMapDimensions } from "./constants.js";
+import { Owner, MAP_WIDTH, MAP_HEIGHT, NUM_CITY, configureMapDimensions, STARTING_ORE, STARTING_OIL, STARTING_TEXTILE } from "./constants.js";
 import { generateMap } from "./mapgen.js";
 import { initViewMap, scan, executeTurn } from "./game.js";
 import { computeAITurn } from "./ai.js";
@@ -55,6 +55,13 @@ export function createSinglePlayerGame(configOverrides?: Partial<GameConfig>): S
       [Owner.Player2]: initViewMap(),
     },
     rngState: config.seed,
+    resources: {
+      [Owner.Unowned]: [0, 0, 0],
+      [Owner.Player1]: [STARTING_ORE, STARTING_OIL, STARTING_TEXTILE],
+      [Owner.Player2]: [STARTING_ORE, STARTING_OIL, STARTING_TEXTILE],
+    },
+    deposits: mapResult.deposits,
+    nextDepositId: mapResult.deposits.length,
   };
 
   // Assign starting cities

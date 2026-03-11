@@ -14,8 +14,12 @@ import {
   UnitBehavior,
   MOVE_ORDER,
   INFINITY,
+  ResourceType,
+  DEPOSIT_RESOURCE,
+  DEPOSIT_INCOME,
+  NUM_RESOURCE_TYPES,
 } from "./constants.js";
-import { UNIT_ATTRIBUTES, canTraverse } from "./units.js";
+import { UNIT_ATTRIBUTES, canTraverse, UNIT_COSTS, canAffordUnit } from "./units.js";
 import type {
   Loc,
   MapCell,
@@ -629,6 +633,8 @@ export function setProduction(
 
 /**
  * Tick city production for a given owner.
+ * Resources are consumed when production starts (work transitions from <=0 to 1).
+ * If the player can't afford the unit, the city stalls with a "stall" event.
  * Cities that complete production spawn a unit and reset work.
  * Returns production events.
  */
@@ -637,9 +643,31 @@ export function tickCityProduction(
   owner: Owner,
 ): TurnEvent[] {
   const events: TurnEvent[] = [];
+  const res = state.resources[owner];
 
   for (const city of state.cities) {
     if (city.owner !== owner) continue;
+
+    // If city is about to start production (work <= 0 → will reach 1), check resources
+    if (city.work <= 0) {
+      const cost = UNIT_COSTS[city.production];
+      if (!canAffordUnit(res, city.production)) {
+        // Stall — don't advance work
+        events.push({
+          type: "stall",
+          loc: city.loc,
+          description: `City stalled: insufficient resources for ${UNIT_ATTRIBUTES[city.production].article}`,
+          data: { cityId: city.id, unitType: city.production },
+        });
+        continue;
+      }
+      // Consume resources when production starts (work goes from 0 to 1)
+      if (city.work === 0) {
+        for (let i = 0; i < NUM_RESOURCE_TYPES; i++) {
+          res[i] -= cost[i];
+        }
+      }
+    }
 
     city.work += 1;
 
@@ -660,6 +688,44 @@ export function tickCityProduction(
         data: { cityId: city.id, unitType: city.production, unitId: unit.id },
       });
     }
+  }
+
+  return events;
+}
+
+/**
+ * Collect resource income from completed deposit buildings.
+ * Each completed building on a deposit owned by this player generates income per turn.
+ */
+export function collectResourceIncome(
+  state: GameState,
+  owner: Owner,
+): TurnEvent[] {
+  const events: TurnEvent[] = [];
+  const res = state.resources[owner];
+  let totalIncome = [0, 0, 0];
+
+  for (const deposit of state.deposits) {
+    if (deposit.owner !== owner) continue;
+    if (!deposit.buildingComplete) continue;
+
+    const resourceIdx = DEPOSIT_RESOURCE[deposit.type];
+    res[resourceIdx] += DEPOSIT_INCOME;
+    totalIncome[resourceIdx] += DEPOSIT_INCOME;
+  }
+
+  const hasIncome = totalIncome[0] > 0 || totalIncome[1] > 0 || totalIncome[2] > 0;
+  if (hasIncome) {
+    const parts: string[] = [];
+    if (totalIncome[0] > 0) parts.push(`+${totalIncome[0]} ore`);
+    if (totalIncome[1] > 0) parts.push(`+${totalIncome[1]} oil`);
+    if (totalIncome[2] > 0) parts.push(`+${totalIncome[2]} textile`);
+    events.push({
+      type: "income",
+      loc: 0,
+      description: `Resource income: ${parts.join(", ")}`,
+      data: { ore: totalIncome[0], oil: totalIncome[1], textile: totalIncome[2] },
+    });
   }
 
   return events;
@@ -1681,7 +1747,11 @@ export function executeTurn(
     events.push(...moveSatellite(state, sat));
   }
 
-  // Tick city production
+  // Collect resource income (before production, so new income can fund new builds)
+  events.push(...collectResourceIncome(state, Owner.Player1));
+  events.push(...collectResourceIncome(state, Owner.Player2));
+
+  // Tick city production (resources consumed when production starts)
   events.push(...tickCityProduction(state, Owner.Player1));
   events.push(...tickCityProduction(state, Owner.Player2));
 
