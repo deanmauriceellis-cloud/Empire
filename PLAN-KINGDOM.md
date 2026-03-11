@@ -11,17 +11,17 @@ Tick-based turns (1 per minute or slower) let players act when they can. When of
 
 ---
 
-## Current State (Sessions 001-050)
+## Current State (Sessions 001-051)
 
 **Complete:**
-- Phases 1-7 of PLAN-UNIFIED (Graphics, Unit Info, Economy, Construction, Buildings, Tech, Bombard & Defenses)
-- 15 unit types, 19 building types, AI, fog of war, save/load, multiplayer lobby, isometric renderer
-- 538 tests (510 shared + 28 server), 18 E2E tests
+- Phases 1-8 of PLAN-UNIFIED (Graphics, UI, Economy, Construction, Buildings, Tech, Bombard & Defenses, AI Economy)
+- 15 unit types, 19 building types, full AI economy & strategy, fog of war, save/load, multiplayer lobby, isometric renderer
+- 544 tests (516 shared + 28 server), 18 E2E tests
 - Resource economy (ore/oil/textile), deposits, construction units, tech trees (4 tracks, 5 levels)
 - Bombard mechanic, 7 defensive structures, 3 naval structures, mine triggers, bridge traversal
+- AI: construction management, defensive placement, tech strategy, bombard usage, economic surrender
 
 **Remaining from PLAN-UNIFIED:**
-- Phase 8: AI Economy & Strategy (critical for offline defense)
 - Phase 9: Movement Trails & Atmosphere (polish — defer to pre-launch)
 - Phase 10: Balance & Testing (polish — defer to pre-launch)
 

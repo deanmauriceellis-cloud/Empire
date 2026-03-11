@@ -1,23 +1,34 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-KINGDOM Phase 8 next** — AI Economy & Strategy (AI construction, defense placement, resource awareness)
+**PLAN-KINGDOM Phase 9 next** — N-Player Foundation (dynamic ownership, N-player turns)
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phases 1-7 of expansion plan complete (7A new units + 7B defensive/naval structures)
-- 538 tests passing (510 shared + 28 server)
+- Phases 1-8 of expansion plan complete (7A units + 7B structures + 8 AI economy)
+- 544 tests passing (516 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-KINGDOM.md** is the definitive plan (17 phases: gameplay → kingdom MMO → monetization)
 
 ## Latest commit
-session 050: Phase 7B — 10 defensive & naval structures, auto-attack, mines, bridges
+session 051: Phase 8 — AI Economy & Strategy (construction, defense, bombard, tech, surrender)
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
 - Armies adjacent to capturable neutral cities not always attacking (pre-existing)
 - Structure sprites not yet rendered on tilemap (visual polish deferred)
 - Economy review tabs not yet updated for structures
+
+## Completed (session 051) — Phase 8: AI Economy & Strategy
+- [x] 8A: Starvation-aware production switching, canAffordProduction() safety margin
+- [x] 8B: aiConstructionMove() with deposit/upgrade/defensive priority chain, findConstructionTarget() BFS
+- [x] 8C: pickDefensiveStructure() — frontier detection, chokepoint detection, mine/bunker/AA/coastal placement
+- [x] 8D: getUpgradePriority() — dynamic tech priority shifting (War when losing, Elec when outnavied)
+- [x] 8E: aiArtilleryMove(), aiMissileCruiserMove(), aiEngineerBoatMove() — bombard targeting, retreat, bridge/mine building
+- [x] 8F: shouldSurrenderEconomic() — resource/tech hopelessness checks
+- [x] Production integration: ratio tables updated, needMore() tech-gates, Construction production rules
+- [x] AI orchestrator: all 15 unit types dispatched, idle behaviors updated
+- [x] 34 new tests, 544 total shared passing
 
 ## Completed (session 050) — Phase 7B: Defensive & Naval Structures
 - [x] 10 new BuildingType enums: Bunker(9), AntiAir(10), CoastalBattery(11), RadarStation(12), ArtilleryFort(13), Minefield(14), SAMSite(15), Bridge(16), SeaMine(17), OffshorePlatform(18)
@@ -283,8 +294,8 @@ R1 and R5 can run in parallel (no dependencies). R2 and R3 depend on R1. R6 depe
 ## Next Steps (PLAN-KINGDOM phases)
 1. ~~**Phase 1-6**: Graphics, UI, Economy, Construction, Review, Tech~~ ✓ (sessions 041-047)
 2. ~~**Phase 7A**: New Units & Bombard~~ ✓ (session 049) | ~~**Phase 7B**: Defensive Structures~~ ✓ (session 050)
-3. **Phase 8**: AI Economy & Strategy — AI construction, defense placement (2-3 sessions, NEXT)
-4. **Phase 9**: N-Player Foundation — dynamic ownership, N-player turns (1-2 sessions)
+3. ~~**Phase 8**: AI Economy & Strategy~~ ✓ (session 051)
+4. **Phase 9**: N-Player Foundation — dynamic ownership, N-player turns (1-2 sessions, NEXT)
 5. **Phase 10**: Crown City & Kingdoms — capitals, territory, win condition (1-2 sessions)
 6. **Phase 11**: Tick-Based Server — timer turns, offline AI, shields (1 session)
 7. **Phase 12**: Dynamic Map & Spawning — island gen, isolation levels (1-2 sessions)

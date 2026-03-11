@@ -1,0 +1,85 @@
+Session 051 — 2026-03-11
+Phase 8: AI Economy & Strategy (PLAN-KINGDOM)
+
+GOAL
+Implement all Phase 8 sub-phases (8A–8F) so the AI plays the full economic
+and defensive game competently. This is critical for offline kingdom defense.
+
+COMPLETED — ALL 6 SUB-PHASES
+
+8A: AI Resource Awareness
+- Starvation-aware production: decideProduction() checks canAffordUnit() at work=0,
+  switches to cheapest affordable unit (Army/Fighter/Construction) when starved
+- canAffordProduction() with safety margin check exported from ai-economy.ts
+- Resource affordability integrated into production decisions
+
+8B: AI Construction Management
+- aiConstructionMove(): priority chain — build on deposit → build city upgrade →
+  build defensive structure → navigate to target via BFS
+- findConstructionTarget(): BFS to find unclaimed deposits and cities needing upgrades,
+  tracks claimed targets to avoid competition between constructors
+- needsConstruction(): checks for unclaimed deposits or cities with empty upgrade slots
+- Construction production in decideProduction(): 1 per 4 cities, max 3 total,
+  only when economy needs it (needsConstruction() && canAffordProduction())
+- pickCityUpgrade(): dynamic priority — Academy → University → TechLab → Hospital →
+  Shipyard → Airfield, with military/naval situation awareness
+
+8C: AI Defensive Building
+- pickDefensiveStructure(): frontier detection (8-tile enemy radius), chokepoint
+  detection (≤3 adjacent land tiles near coast)
+- Minefield at chokepoints, Bunker at frontier cities
+- Anti-Air Battery and Coastal Battery based on air/naval threat detection
+- Tech gating respected (canBuildStructure checks)
+
+8D: AI Tech Strategy
+- getUpgradePriority(): dynamic tech priority shifting
+- Shifts War priority when losing militarily (enemy armies > 2x own)
+- Shifts Electronics when losing navally (enemy ships > 2x own)
+- Default priority: Academy(War) → University(Sci) → TechLab(Elec) → Hospital(Health)
+
+8E: AI Bombard Usage
+- aiArtilleryMove(): finds bombard targets in range, prioritizes structures (100+)
+  over units (50+), retreats from adjacent enemies to maintain bombardment distance
+- aiMissileCruiserMove(): bombard targets in range, falls through to ship movement
+- findBombardTarget(): shared targeting logic for both unit types
+- aiEngineerBoatMove(): builds bridges between landmasses, sea mines near enemies
+
+8F: AI Surrender Update
+- shouldSurrenderEconomic(): checks deposits=0 + stockpile<50 + enemy 3x cities,
+  or massive tech disadvantage (enemy tech sum > own * 2 + 50)
+- Integrated into computeAITurn surrender check chain
+
+INTEGRATION
+- ai.ts moveAIUnit() switch: SpecForces→aiArmyMove, AWACS→aiFighterMove,
+  Construction→aiConstructionMove, Artillery→aiArtilleryMove,
+  MissileCruiser→aiMissileCruiserMove+aiShipMove, EngineerBoat→aiEngineerBoatMove
+- assignIdleBehaviors(): Construction skipped (managed separately),
+  Artillery/SpecForces always explore (never sentry)
+- ai-helpers.ts ratio tables updated: RATIO_2 adds Artillery(10)+AWACS(5),
+  RATIO_3 adds SpecForces(10)+MissileCruiser(5), RATIO_4 full fleet
+- ai-production.ts needMore(): tech gating via canProduceUnit(), removed Phase 7
+  unit skip block so Artillery/SpecForces/AWACS/MissileCruiser enter production
+- index.ts: exports ai-economy.js
+
+FILES CHANGED
+- NEW: packages/shared/src/ai-economy.ts (~400 lines)
+- NEW: packages/shared/src/__tests__/ai-economy.test.ts (~650 lines, 34 tests)
+- MOD: packages/shared/src/ai.ts (imports, dispatcher, idle behaviors, surrender)
+- MOD: packages/shared/src/ai-production.ts (starvation, construction priority, tech gating)
+- MOD: packages/shared/src/ai-helpers.ts (ratio tables with Phase 7 units)
+- MOD: packages/shared/src/index.ts (export ai-economy)
+
+BUGS FIXED
+- Test helper addUnit() had swapped loc/owner arguments to createUnit()
+- require() calls in ESM context replaced with proper imports
+- aiEngineerBoatMove require() fallback removed
+
+TESTS
+- 34 new tests in ai-economy.test.ts
+- 544 total tests passing (all 17 test files)
+- Coverage: construction management, city upgrades, production integration,
+  artillery/cruiser bombard, resource awareness, starvation switching,
+  dynamic tech priority, engineer boat, surrender, ratio tables
+
+NEXT
+- Phase 9: N-Player Foundation (dynamic ownership, N-player turns)

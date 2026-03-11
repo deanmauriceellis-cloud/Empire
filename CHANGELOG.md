@@ -1,5 +1,18 @@
 # Empire Reborn — Changelog
 
+## v0.40.0 — Session 051 (2026-03-11)
+
+### Phase 8: AI Economy & Strategy
+- **8A Resource Awareness**: starvation-aware production — switches to cheapest affordable unit when resources depleted; `canAffordProduction()` safety margin check
+- **8B Construction Management**: `aiConstructionMove()` priority chain (deposit → city upgrade → defensive structure → navigate); `findConstructionTarget()` BFS; `needsConstruction()` demand check; `pickCityUpgrade()` dynamic priority (Academy→University→TechLab→Hospital→Shipyard→Airfield)
+- **8C Defensive Building**: `pickDefensiveStructure()` — frontier detection (8-tile enemy radius), chokepoint detection (≤3 adjacent land), minefields at chokepoints, bunkers at frontiers, anti-air/coastal by threat type
+- **8D Tech Strategy**: `getUpgradePriority()` — shifts War when losing militarily, Electronics when losing navally
+- **8E Bombard Usage**: `aiArtilleryMove()` bombard + retreat-from-melee; `aiMissileCruiserMove()` bombard then ship AI; `aiEngineerBoatMove()` bridge/sea mine building; `findBombardTarget()` structures > units priority
+- **8F Surrender Update**: `shouldSurrenderEconomic()` — no deposits + low stockpile + enemy 3x cities, or massive tech disadvantage
+- **Production integration**: ratio tables include Artillery/SpecForces/AWACS/MissileCruiser at mid-late game tiers; `needMore()` tech-gates via `canProduceUnit()`; Construction production 1 per 4 cities (max 3)
+- **AI orchestrator**: `moveAIUnit()` dispatches all 15 unit types; idle behaviors skip Construction/always explore Artillery+SpecForces
+- 34 new tests (ai-economy.test.ts), 544 total (516 shared + 28 server)
+
 ## v0.39.0 — Session 050 (2026-03-11)
 
 ### Phase 7B: Defensive & Naval Structures
