@@ -64,6 +64,16 @@ export function configureMapDimensions(width: number, height: number): void {
 
 // ─── Ownership ───────────────────────────────────────────────────────────────
 
+/** Numeric player ID. 0 = Unowned/neutral, 1+ = active players. */
+export type PlayerId = number;
+
+/** Sentinel for unowned/neutral entities. */
+export const UNOWNED: PlayerId = 0;
+
+/**
+ * @deprecated Use PlayerId type + UNOWNED constant instead.
+ * Kept for backward compatibility during migration.
+ */
 export enum Owner {
   Unowned = 0,
   Player1 = 1, // "USER" in original

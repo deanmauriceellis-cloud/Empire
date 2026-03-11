@@ -2,7 +2,7 @@
 // Renders a 2px-per-tile overview on a dedicated <canvas>.
 // Performance: caches terrain ImageData, only redraws units + viewport each frame.
 
-import { TerrainType, Owner, DepositType, locRow, locCol } from "@empire/shared";
+import { TerrainType, DepositType, locRow, locCol, getPlayerColor, UNOWNED } from "@empire/shared";
 import type { RenderableState } from "../types.js";
 import type { Camera } from "../core/camera.js";
 import { isoToCart } from "../iso/coords.js";
@@ -79,9 +79,12 @@ export function createMinimap(camera: Camera): Minimap {
         if (tile.seen === -1) {
           r = 10; g = 10; b = 20;
         } else if (tile.cityOwner !== null) {
-          if (tile.cityOwner === Owner.Player1) { r = 68; g = 136; b = 255; }
-          else if (tile.cityOwner === Owner.Player2) { r = 255; g = 68; b = 68; }
-          else { r = 170; g = 170; b = 170; }
+          if (tile.cityOwner === UNOWNED) {
+            r = 170; g = 170; b = 170;
+          } else {
+            const c = getPlayerColor(tile.cityOwner);
+            r = (c >> 16) & 0xff; g = (c >> 8) & 0xff; b = c & 0xff;
+          }
         } else if (tile.terrain === TerrainType.Sea) {
           if (tile.seen < state.turn) { r = 15; g = 30; b = 50; }
           else { r = 26; g = 58; b = 92; }
@@ -156,16 +159,19 @@ export function createMinimap(camera: Camera): Minimap {
       for (const unit of state.units) {
         const col = locCol(unit.loc);
         const row = locRow(unit.loc);
-        const isP1 = unit.owner === Owner.Player1;
+        const uc = getPlayerColor(unit.owner);
+        const ur = (uc >> 16) & 0xff;
+        const ug = (uc >> 8) & 0xff;
+        const ub = uc & 0xff;
 
         for (let dy = 0; dy < SCALE; dy++) {
           for (let dx = 0; dx < SCALE; dx++) {
             const px = col * SCALE + dx;
             const py = row * SCALE + dy;
             const i = (py * canvas.width + px) * 4;
-            data[i] = isP1 ? 100 : 255;
-            data[i + 1] = isP1 ? 200 : 100;
-            data[i + 2] = isP1 ? 255 : 100;
+            data[i] = ur;
+            data[i + 1] = ug;
+            data[i + 2] = ub;
             data[i + 3] = 255;
           }
         }

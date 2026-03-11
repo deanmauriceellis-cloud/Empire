@@ -5,25 +5,36 @@
 
 ## Vision
 
-A persistent shared-world strategy game where every player builds a kingdom on a single global map. Players choose their isolation level — farm peacefully on a distant island or spawn in the thick of combat. Each kingdom has a **Crown City** (capital) that is sacred. Lose your crown, lose your kingdom. The ocean buffer around each kingdom is your moat — crossable, but it takes real effort.
+A persistent shared-world strategy game where every player owns a **100x100 kingdom tile** on a single contiguous map. The world radiates outward from a central AI kingdom — choose to spawn nearby for aggressive play or far out for a safe buildup. Each kingdom has a **Crown City** (capital). Lose your crown and become a **tributary** — paying tribute to your conqueror until you rebel or are freed.
 
-Tick-based turns (1 per minute or slower) let players act when they can. When offline, AI defends your kingdom. Monetization through cosmetics, time boosts, and season passes — not pay-to-win.
+The world is populated with AI kingdoms that play the full game: economy, tech, military, diplomacy. When human players disconnect, AI takes over seamlessly. Target: **100 players** (human + AI) on a single world map. Battles cross kingdom boundaries freely — the ocean channels between tiles are crossable borders, not walls.
+
+Tick-based turns (1 per minute or slower) let players act when they can. **Worlds reset monthly** — each world is a fresh 30-day season. Everyone starts over, stats and cosmetics carry forward, the game stays fresh and accessible. Monetization through cosmetics, time boosts, and season passes — not pay-to-win.
 
 ---
 
-## Current State (Sessions 001-051)
+## Current State (Sessions 001-052)
 
 **Complete:**
 - Phases 1-8 of PLAN-UNIFIED (Graphics, UI, Economy, Construction, Buildings, Tech, Bombard & Defenses, AI Economy)
+- **Phase 9: N-Player Foundation** (session 052) — 2-player assumption fully removed
 - 15 unit types, 19 building types, full AI economy & strategy, fog of war, save/load, multiplayer lobby, isometric renderer
-- 544 tests (516 shared + 28 server), 18 E2E tests
+- 572 tests (544 shared + 28 server), 18 E2E tests
 - Resource economy (ore/oil/textile), deposits, construction units, tech trees (4 tracks, 5 levels)
 - Bombard mechanic, 7 defensive structures, 3 naval structures, mine triggers, bridge traversal
 - AI: construction management, defensive placement, tech strategy, bombard usage, economic surrender
+- N-player: PlayerId system, dynamic player registry, N-player mapgen, AI multi-enemy awareness, 16-color palette
 
 **Remaining from PLAN-UNIFIED:**
 - Phase 9: Movement Trails & Atmosphere (polish — defer to pre-launch)
 - Phase 10: Balance & Testing (polish — defer to pre-launch)
+
+**Key Design Decisions (Session 052):**
+- Two-player assumption abandoned completely — all code is N-player native
+- Players join kingdoms dynamically; destroyed kingdoms are a future concern
+- AI players are full kingdom participants with all functionality preserved
+- When users disconnect, AI takes over seamlessly — "not our problem"
+- Lots of AI players (near and far) for testing from the start
 
 ---
 
@@ -31,16 +42,16 @@ Tick-based turns (1 per minute or slower) let players act when they can. When of
 
 ```
 GAMEPLAY FOUNDATION (finish PLAN-UNIFIED core)
-├── Phase 7:  Bombard & Defenses          ← 1-2 sessions
-├── Phase 8:  AI Economy & Strategy       ← 2-3 sessions
+├── Phase 7:  Bombard & Defenses          ✅ DONE (session 049-050)
+├── Phase 8:  AI Economy & Strategy       ✅ DONE (session 051)
 
 KINGDOM CORE
-├── Phase 9:  N-Player Foundation         ← 1-2 sessions
-├── Phase 10: Crown City & Kingdoms       ← 1-2 sessions
-├── Phase 11: Tick-Based Server           ← 1 session
+├── Phase 9:  N-Player Foundation         ✅ DONE (session 052)
+├── Phase 10: Crown City & Kingdom Map    ← 1-2 sessions
+├── Phase 11: Kingdom World Server        ← 1-2 sessions
 
 PERSISTENT WORLD
-├── Phase 12: Dynamic Map & Spawning      ← 1-2 sessions
+├── Phase 12: Dynamic Map & Player Join   ← 1-2 sessions
 ├── Phase 13: Accounts & Persistence      ← 1-2 sessions
 ├── Phase 14: Delta Sync & Scaling        ← 1-2 sessions
 
@@ -160,70 +171,100 @@ TOTAL: 13-22 sessions from current state
 
 ---
 
-## Phase 9: N-Player Foundation (1-2 sessions)
+## Phase 9: N-Player Foundation ✅ DONE (Session 052)
 
 **Goal**: Remove the 2-player ceiling. Support 2-50+ players in a single game.
 
-### 9A: Dynamic Owner System
-- Replace `Owner` enum with numeric IDs: `type PlayerId = number` (0 = Unowned, 1+ = players)
-- `GameState.players: PlayerInfo[]` — array of active players with metadata:
+### 9A: Dynamic Owner System ✅
+- `type PlayerId = number` (0 = Unowned, 1+ = players) in constants.ts
+- `Owner` enum kept but marked `@deprecated` for backward compatibility
+- `GameState.players: PlayerInfo[]` — dynamic player registry:
   ```typescript
   interface PlayerInfo {
-    id: PlayerId           // 1, 2, 3, ...
-    name: string           // display name
-    color: number          // player color (hex)
-    status: 'active' | 'defeated' | 'resigned' | 'offline'
-    joinedTurn: number     // when they entered the game
-    lastActiveTurn: number // for offline detection
+    id: PlayerId
+    name: string
+    color: number
+    isAI: boolean
+    status: 'active' | 'defeated' | 'resigned'
   }
   ```
-- All `Record<Owner, T>` becomes `Map<PlayerId, T>` or indexed arrays
-- `Owner.Player1`/`Owner.Player2` references replaced with dynamic player ID lookups
+- Per-player data: `viewMaps`, `resources`, `techResearch` keyed by `number`
+- New `player.ts`: PLAYER_COLORS (16-color palette), getPlayerIds, getEnemyIds, isEnemy, createPlayerInfo, initPlayerData, initAllPlayerData, countCitiesByPlayer, getStrongestEnemy
 
-### 9B: Turn Execution Refactor
-- `executeTurn()` signature: `(state, actions: Map<PlayerId, PlayerAction[]>) → TurnResult`
-- Process all players' actions in order (by player ID or randomized per turn for fairness)
-- `checkEndGame()`: configurable win conditions:
-  - **Elimination**: last player standing
-  - **Domination**: control X% of cities
-  - **Crown capture**: lose your capital, you're out (Phase 10)
+### 9B: Turn Execution Refactor ✅
+- `executeTurn(state, allActions: Map<number, PlayerAction[]>)` — iterates all players
+- `checkEndGame()`: per-player elimination (0 cities + 0 armies = defeated), simultaneous elimination handling, 2-player 3:1 resignation preserved for backward compat
 
-### 9C: N-Player Mapgen
-- `selectStartingCities()` returns `PlayerId → cityIndex` mapping for N players
-- Continent assignment: spread players across available continents
-- Distance maximization: players start as far apart as possible
-- Fair resource distribution: each starting area has similar deposit access
+### 9C: N-Player Mapgen ✅
+- `startingCities: number[]` (was `[number, number]`)
+- `pickNDistantCities()`: greedy distance maximization for N players
+- `placeDeposits()` accepts dynamic player count, creates per-player zones
 
-### 9D: AI Multi-Player Awareness
-- `computeAITurn()` identifies all enemies (everyone else)
-- Threat assessment: prioritize nearest/strongest enemy
-- Surrender: compare own strength vs combined enemies, or vs strongest enemy
-- Alliance potential (future): for now, everyone is hostile
+### 9D: AI Multi-Player Awareness ✅
+- Enemy detection: `isEnemy(owner) => owner !== aiOwner && owner !== 0` (replaces flip pattern)
+- `shouldSurrenderEconomic()`: compares against strongest enemy's tech total
+- All `enemyOwner` variables in ai-economy.ts replaced with `isEnemy()` closures
 
-### 9E: Vision & Fog of War
+### 9E: Vision & Fog of War ✅
 - `viewMaps` keyed by PlayerId for all players
-- `scan()` unchanged per-player (already owner-agnostic)
-- `getVisibleState()` filters per requesting player
+- `initAllPlayerData()` initializes per-player maps/resources/tech
 
-### 9F: Client Updates
-- Player color palette: 16+ distinct colors for N players
-- Minimap shows all player colors
-- HUD identifies current player vs all enemies
-- Unit info shows owner name and color
+### 9F: Client Updates ✅
+- 16-color palette: placeholders.ts generates N-player unit/city textures
+- Minimap: dynamic player colors via getPlayerColor
+- Unit info: generic "Player N" labels
+- War stats: N-player Map<number, stats> summary
+- actionCollector/bridge/actionPanel: accept playerOwner parameter
+- main.ts: module-level playerOwner variable replaces hardcoded Owner refs
 
-**Migration**: Existing 2-player games load with Player1=1, Player2=2. No save compatibility break.
+### 9G: Server Updates ✅
+- GameManager: `Map<number, WebSocket|null>` for N players
+- Lobby: join finds unconnected slots from state.players
+- Reconnection: only for in-progress games
+- Turn execution: AI computed for all AI players
 
-**Tests**: 3-player and 4-player game creation, turn execution, combat between non-adjacent player IDs, elimination with 3+ players, AI with multiple enemies.
+### 9H: Singleplayer ✅
+- Creates N PlayerInfo entries (player 1 = human, rest = AI)
+- submitTurn computes AI for all AI players, builds Map<number, PlayerAction[]>
+- Default: 6 players (1 human + 5 AI) for rich gameplay
+
+**Tests**: All 572 tests passing (544 shared + 28 server). Integration tests updated with players array, Map-based executeTurn, starting city assignment.
 
 ---
 
-## Phase 10: Crown City & Kingdom Model (1-2 sessions)
+## Phase 10: Crown City & Kingdom Map Model (1-2 sessions)
 
-**Goal**: Every player has a capital city. Kingdoms have identity, territory, and a win/loss condition tied to their crown.
+**Goal**: Every player owns a 100x100 kingdom tile region on a shared world map. Crown city = capital. Tributaries = vassal kingdoms paying tribute. Battles cross kingdom boundaries freely.
+
+### World Map Architecture
+
+The world is a single contiguous map composed of **kingdom tiles** — 100x100 tile regions arranged in a grid. The center kingdom tile is the **Origin Kingdom** (AI-controlled), and player/AI kingdoms radiate outward in concentric rings.
+
+```
+World map layout (each cell = one 100x100 kingdom tile):
+┌─────┬─────┬─────┬─────┬─────┐
+│ Far │ Far │ Far │ Far │ Far │
+├─────┼─────┼─────┼─────┼─────┤
+│ Far │Near │Near │Near │ Far │
+├─────┼─────┼─────┼─────┼─────┤
+│ Far │Near │ CTR │Near │ Far │
+├─────┼─────┼─────┼─────┼─────┤
+│ Far │Near │Near │Near │ Far │
+├─────┼─────┼─────┼─────┼─────┤
+│ Far │ Far │ Far │ Far │ Far │
+└─────┴─────┴─────┴─────┴─────┘
+CTR = Origin Kingdom (AI), Near = ring 1, Far = ring 2+
+```
+
+- **100 players target** — world grows as players join
+- Each kingdom tile generates its own terrain, cities (5-8), deposits (3-4), with internal variety
+- Kingdom boundaries are **permeable** — units cross freely, battles happen anywhere
+- Ocean channels between kingdom tiles (10-20 tiles wide) create natural borders but are crossable
+- The world map is a single flat array, not separate per-kingdom maps — seamless gameplay
 
 ### 10A: Crown City
 - One city per player is the **Crown City** (capital)
-- Initially: player's starting city
+- Initially: player's starting city (center of their kingdom tile)
 - Can be relocated (expensive action, long cooldown — 50 turns)
 - Crown city visual: larger sprite, golden glow, crown icon, unique particle effects
 
@@ -235,32 +276,40 @@ TOTAL: 13-22 sessions from current state
   - Permanent 4-tile vision reveal radius (like radar)
 - These bonuses represent the kingdom's concentrated power at its heart
 
-### 10C: Crown Capture Mechanic
+### 10C: Crown Capture & Tributaries
 - When an enemy army captures your Crown City:
-  - **Option A — Elimination**: player is eliminated, all remaining cities become unowned, units disbanded
-  - **Option B — Vassalage**: player becomes vassal of captor (pays 30% resource income as tribute). Can rebel by recapturing crown or building sufficient military.
-  - Start with Option A (simpler). Add vassalage later.
+  - **Vassalage**: defeated kingdom becomes **tributary** of captor
+  - Tributary pays 30% resource income as tribute to overlord each turn
+  - Tributary keeps their cities, units, and economy — but weakened
+  - Tributary can **rebel**: recapture own crown city OR build military > overlord's → auto-revolt
+  - Overlord can **release** tributaries voluntarily
+  - If overlord's crown is captured, all their tributaries are freed
 - Crown cities are harder to capture: garrison bonus (+5 effective strength for defenders)
+- A tributary's tributaries cascade — if A vassalizes B who vassalizes C, C pays B who pays A
+- **Full elimination**: only happens when a kingdom loses ALL cities (crown + every other city)
 
 ### 10D: Territory System
-- Each player has **territory**: all tiles within 4 tiles of any owned city
+- Each player's **territory** = their kingdom tile region (100x100) + tiles within 4 of any owned city outside their tile
 - Territory provides:
   - Vision (always visible, even without units)
   - Building rights (can place structures only on own territory)
   - Border display (subtle colored border on minimap and world map)
-- Territory expands as you capture more cities
+- Territory expands beyond kingdom tile as you capture cities in other kingdoms
 - Contested territory: overlapping zones create disputed borders
 
 ### 10E: Kingdom Identity
 - `KingdomState` added to GameState per player:
   ```typescript
   interface KingdomState {
-    crownCityId: number       // which city is the capital
-    territory: Set<number>    // tile indices in territory
-    tributeTarget?: PlayerId  // if vassal, who they pay
-    tributeRate: number       // 0.0 to 0.3
-    color: number             // kingdom color
-    banner: number            // cosmetic banner type (future monetization)
+    crownCityId: number          // which city is the capital
+    kingdomTile: { row: number; col: number } // position in kingdom grid
+    territory: Set<number>       // tile indices in territory
+    tributeTarget?: PlayerId     // if vassal, who they pay to
+    tributaries: PlayerId[]      // kingdoms paying tribute to this one
+    tributeRate: number          // 0.3 (30% of income)
+    color: number                // kingdom color
+    banner: number               // cosmetic banner type (future monetization)
+    distanceFromCenter: number   // ring number (0=center, 1=near, 2+=far)
   }
   ```
 - Kingdom name (player-chosen or auto-generated)
@@ -270,39 +319,49 @@ TOTAL: 13-22 sessions from current state
 - "Crown City" label in city panel
 - "Relocate Capital" button (if cooldown met)
 - Warning alert when Crown City is under attack
+- Tribute panel: income/expenses from tributary relationships
+- Rebel/Release buttons for tributary management
 - Special capture animation (crown shattering)
 
-**Tests**: Crown assignment, crown bonuses, crown capture elimination, territory calculation, territory vision, crown relocation cooldown.
+**Tests**: Crown assignment, crown bonuses, crown capture → vassalage, tribute income flow, rebellion trigger, cascade tribute, territory calculation, cross-kingdom combat.
 
 ---
 
-## Phase 11: Tick-Based Server (1 session)
+## Phase 11: Kingdom World Server (1-2 sessions)
 
-**Goal**: Server executes turns on a timer. Players act asynchronously. AI fills in for absent players.
+**Goal**: Server manages the kingdom world — tick-based turns, AI kingdoms everywhere, player join/disconnect with AI takeover.
 
-### 11A: Tick Engine
-- New server mode: `WorldServer` (alongside existing `GameManager` for classic mode)
+### 11A: World Initialization
+- World starts with the **Origin Kingdom** (AI) at center tile (0,0)
+- Populate ring 1 (8 tiles) and ring 2 (16 tiles) with AI kingdoms on creation
+- Total initial world: ~25 AI kingdoms on a 500x500 map (5x5 kingdom grid)
+- Each AI kingdom has its own generated terrain, cities, deposits, starting army
+- AI kingdoms play the full game: economy, tech, production, military, diplomacy
+
+### 11B: Tick Engine
+- `WorldServer` (alongside existing `GameManager` for classic mode)
 - Configurable tick interval: 60s (fast), 300s (standard), 900s (slow), 3600s (epic)
 - Tick cycle:
   ```
   1. Tick timer fires
   2. Collect all pending actions from connected players
-  3. For disconnected/idle players: run computeAITurn()
+  3. For disconnected/AI players: run computeAITurn()
   4. Execute turn with all action sets
-  5. Broadcast results to connected players
-  6. Save state
-  7. Reset action buffers
-  8. Schedule next tick
+  5. Process tribute income transfers
+  6. Broadcast results to connected players
+  7. Save state
+  8. Reset action buffers
+  9. Schedule next tick
   ```
 
-### 11B: Action Buffering
+### 11C: Action Buffering
 - Players submit actions anytime between ticks
 - Actions queue server-side per player: `pendingActions: Map<PlayerId, PlayerAction[]>`
 - Actions validated on receipt (not just at execution)
 - Client shows "Actions queued: 5" indicator and countdown to next tick
 - Player can cancel/modify pending actions before tick
 
-### 11C: Offline AI Takeover
+### 11D: Offline AI Takeover
 - Player marked offline after 2 missed ticks (no WebSocket connection)
 - AI computes actions for offline players each tick
 - When player reconnects, AI stops, player resumes control
@@ -312,7 +371,7 @@ TOTAL: 13-22 sessions from current state
   - After shield expires: AI defends normally
   - Shield recharges: 1 hour of online play → 1 hour of shield stored (max 8 hours)
 
-### 11D: Tick Synchronization
+### 11E: Tick Synchronization
 - Client displays:
   - Countdown timer to next tick ("Next turn in: 0:43")
   - "Your actions submitted" confirmation
@@ -320,76 +379,110 @@ TOTAL: 13-22 sessions from current state
 - Server broadcasts tick results as `TurnResult` (existing type)
 - Late-joining client receives full visible state on connect
 
-### 11E: Classic Mode Preserved
-- Existing `GameManager` untouched — classic 2-player mode still works
-- Menu offers: "Classic Game" (2-player, manual turns) vs "Kingdom World" (persistent, ticked)
+### 11F: Monthly World Reset (Seasons)
+- Each world has a **30-day lifespan** — worlds self-destruct at end of season
+- Season cycle:
+  ```
+  Day 0:  World created, AI kingdoms populate, players can join
+  Day 1-28: Normal gameplay, players join/leave, kingdoms fight
+  Day 28: "Final Days" warning — 48 hours until reset
+  Day 30: World closes, final standings calculated, rewards distributed
+  Day 30+: New world created, everyone can join fresh
+  ```
+- End-of-season rewards:
+  - Leaderboard rankings (most cities, strongest military, longest-surviving kingdom)
+  - Cosmetic badges based on achievement (survivor, conqueror, economist)
+  - Season stats summary (total battles, cities captured, tribute collected)
+- Player data that persists across seasons: account, cosmetics, badges, stats history
+- Player data that resets: kingdom, territory, units, cities, tech, resources
+- Multiple worlds can run concurrently (different tick speeds, different ages)
+- Players can join a mid-season world (they start fresh, others are established — challenge mode)
+
+### 11G: Classic Mode Preserved
+- Existing `GameManager` untouched — classic N-player mode still works
+- Menu offers: "Classic Game" (manual turns) vs "Kingdom World" (persistent, ticked)
 - Both modes share all game logic — only the turn trigger differs
 
-**Tests**: Tick timing accuracy, action buffering/cancellation, AI takeover on disconnect, shield activation/expiration, reconnection state sync.
+**Tests**: Tick timing accuracy, action buffering/cancellation, AI takeover on disconnect, shield activation/expiration, reconnection state sync, tribute processing per tick.
 
 ---
 
-## Phase 12: Dynamic Map & Spawning (1-2 sessions)
+## Phase 12: Dynamic Map & Player Join (1-2 sessions)
 
-**Goal**: Players join an existing world. Their kingdom island generates and attaches to the map. Isolation level determines placement.
+**Goal**: Players join an existing world. Server generates their kingdom tile and places it on the world map. Players choose distance from center.
 
-### 12A: Island Generation
-- When a player joins a world, generate their starting island:
-  - 20x20 to 40x40 land area (based on map size preset)
-  - 3-5 cities on island (1 Crown City + 2-4 neutrals)
-  - 2-3 deposits (1 of each type)
-  - Varied terrain (not just flat land)
-- Island is self-contained: enough resources and cities to build up before venturing out
+### 12A: Kingdom Tile Generation
+- When a player joins, server generates a 100x100 kingdom tile:
+  - Varied terrain (land/water mix, not uniform)
+  - 5-8 cities (1 Crown City at center + 4-7 neutrals)
+  - 3-4 deposits (balanced ore/oil/textile)
+  - Internal water features (rivers, lakes) for strategic variety
+  - Coastal edges that mesh with ocean channels between kingdoms
+- Each kingdom tile is self-contained: enough to build economy before expanding
 
-### 12B: Isolation Levels
-Players choose on join:
+### 12B: Distance Selection
+Players choose how far from center they want to be:
 
-| Level | Ocean Buffer | Description | Playstyle |
-|-------|-------------|-------------|-----------|
-| **Extreme** | 80-100 tiles | Remote island, nearly unreachable | Pure builder/farmer. Leisurely tech up. |
-| **Far** | 50-70 tiles | Distant but findable | Defensive player. Time to prepare. |
-| **Near** | 30-40 tiles | Moderate distance | Balanced risk. Engage when ready. |
-| **Center** | 10-20 tiles | Near the action | Aggressive. Immediate neighbors. |
+| Ring | Distance | Grid Positions | Description | Playstyle |
+|------|----------|---------------|-------------|-----------|
+| **Center** | Ring 0 | 1 tile (origin) | AI-only origin kingdom | World anchor |
+| **Inner** | Ring 1 | 8 tiles | Adjacent to origin | Aggressive. Immediate conflict. |
+| **Middle** | Ring 2 | 16 tiles | One kingdom gap from center | Balanced. Time to prepare. |
+| **Outer** | Ring 3+ | 24+ tiles per ring | Far from center | Defensive. Build up safely. |
 
-- Buffer is ocean tiles between player's island edge and nearest other island
-- Extreme isolation means transports need 40-50 turns to cross — massive expedition
+- Ocean channels (10-20 tiles wide) between kingdom tiles = natural borders
+- Inner ring: ~10 ocean tiles between kingdoms (fast transport crossing)
+- Outer rings: ~15-20 ocean tiles (longer crossing, more safe buildup time)
+- Player picks a ring, server assigns best available tile in that ring
 
 ### 12C: World Map Expansion
-- World starts as ocean (or small seed continent)
-- Each new player's island placed at optimal position:
-  - Respect requested isolation level
-  - Maximize distance from existing players (at requested tier)
-  - "Center" players placed near map center cluster
-  - "Extreme" players placed at map edges
-- Map dimensions grow as needed (expand grid when new island needs space)
-- Existing players' maps are never modified
-
-### 12D: Map Stitching
-- New island seamlessly integrates into existing world grid:
+- World starts as 5x5 grid (25 kingdom tiles, mostly AI) = 500x500 tiles
+- When players request outer rings beyond current grid, world expands:
   ```
-  Before: 200x200 world, new "Far" player joins
-  After:  200x260 world (expanded south), new island at south edge with 60-tile ocean gap
+  Before: 5x5 grid (500x500), player requests ring 3
+  After:  7x7 grid (700x700), new kingdom placed in expanded ring
   ```
-- All existing tile indices remain valid (expand in +x or +y direction only)
-- Connected clients receive map expansion notification + new tile data (delta update)
+- Map grows by adding rows/columns to the grid (expand in +x/+y only)
+- All existing tile indices remain valid (tiles only added, never moved)
+- Connected clients receive map expansion notification + new tile data
 - Minimap scales to show full world
+
+### 12D: AI Kingdom Population
+- World pre-populates with AI kingdoms:
+  - Origin (ring 0): 1 AI kingdom — the "ancient empire" at world center
+  - Ring 1: 8 AI kingdoms (always present, provides conflict for inner-ring players)
+  - Ring 2: 8-16 AI kingdoms (partially filled, leaves room for human players)
+  - Ring 3+: generated on demand as humans join outer rings
+- AI kingdoms near center are stronger (more starting units, higher tech)
+- AI kingdoms at outer rings are weaker (fresh start, like the human player)
+- This creates a natural difficulty gradient: center = hard, edges = easy
 
 ### 12E: World Browser
 - Before joining, player can see:
-  - World overview (minimap-style, fog of war hides other kingdoms)
-  - Player count and average isolation level
-  - World age (how many ticks have elapsed)
-  - Available spawn zones highlighted per isolation level
-- Player picks a zone, server generates island there
+  - World overview (minimap showing kingdom grid, fog of war hides interiors)
+  - Ring labels with descriptions ("Inner: 3/8 slots, aggressive gameplay")
+  - Available slots per ring highlighted
+  - World age (ticks elapsed), player count
+  - AI kingdom count and approximate strength indicator per ring
+- Player picks a ring → server assigns tile, generates terrain, places kingdom
 
 ### 12F: Spawn Protection
-- New player's island is shielded for first 100 ticks (configurable)
-- Shield prevents all foreign unit entry
+- New player's kingdom tile is shielded for first 100 ticks (configurable)
+- Shield prevents all foreign unit entry into their kingdom tile
 - Shield countdown visible on world map
 - Gives new players time to build economy, tech up, build defenses
-- After shield drops, the ocean buffer is their only protection
+- After shield drops, ocean channels are their natural border defense
+- AI kingdoms do NOT get spawn protection (they're always "ready")
 
-**Tests**: Island generation quality (cities, deposits, terrain), isolation distance verification, map expansion without breaking existing tiles, spawn protection enforcement.
+### 12G: Cross-Kingdom Mechanics
+- Units move freely across kingdom tile boundaries (seamless map)
+- No gameplay distinction between "own kingdom tile" and "foreign tile" for movement
+- Territory = owned cities + radius, NOT kingdom tile boundaries
+- Building rights: on own territory only (not entire kingdom tile)
+- Combat: happens anywhere on the map, no restrictions
+- Vision: normal fog of war rules, kingdom tile boundaries are invisible
+
+**Tests**: Kingdom tile generation quality (cities, deposits, terrain), ring placement, world expansion without breaking tiles, AI kingdom strength gradient, spawn protection, cross-kingdom unit movement, tribute flow after crown capture.
 
 ---
 
@@ -523,11 +616,12 @@ Join World → Generate Island → Spawn Protection (100 ticks)
 ### 14F: Performance Targets
 | Metric | Target | Current |
 |--------|--------|---------|
-| Players per world | 50+ | 2 |
-| Map size | 500x500+ | 200x120 max |
-| Tick computation | <5s for 50 players | <100ms for 2 |
-| State broadcast | <1s for 50 clients | <10ms for 2 |
-| Memory per world | <500MB | <50MB |
+| Players per world | 100+ (human + AI) | 6 (singleplayer) |
+| Map size | 700x700+ (7x7 kingdom grid) | 200x120 max |
+| Tick computation | <10s for 100 players | <100ms for 2 |
+| State broadcast | <2s for 100 clients | <10ms for 2 |
+| Memory per world | <1GB | <50MB |
+| Kingdom tiles | 49+ (7x7 grid) | N/A |
 
 **Tests**: Delta accuracy (no missed changes), filtered delta correctness, reconnection with missed ticks, compression ratio, broadcast timing under load.
 
@@ -669,22 +763,26 @@ Join World → Generate Island → Spawn Protection (100 ticks)
 - New units: Artillery/Special Forces/Missile Cruiser balanced but not OP
 
 ### 17B: Multi-Player Balance
-- 4-player test games: no 2v1 snowball advantage
-- Spawn protection: 100 ticks is enough to establish viable defense
-- Isolation parity: "extreme" players aren't permanently safe (eventually reachable)
+- 25-kingdom AI world runs stably: kingdoms expand, fight, tribute, rebel
+- Inner ring is genuinely dangerous — center AI kingdom is formidable
+- Outer ring gives enough breathing room to tech up before contact
+- Tribute system creates shifting alliances — not permanent domination
+- Cross-kingdom battles feel natural (no artificial boundary effects)
 - Economy scaling: more cities = more income but also more defense needed
 
 ### 17C: AI Competence
-- AI vs AI 4-player simulations: all sides build economy, tech up, use new units
+- AI vs AI 25-kingdom simulations: all sides build economy, tech up, use new units
 - AI offline defense: holds territory against equal-strength attacker for 50+ ticks
 - AI doesn't waste units (no suicide attacks, no unescorted construction units)
 - AI adapts to multiple threats (doesn't tunnel-vision on one enemy)
+- AI manages tributaries: demands tribute, responds to rebellion
+- Center AI kingdom is strongest — acts as world "boss" challenge
 
 ### 17D: Performance Testing
-- 20-player world simulation: tick completes in <5s
-- 50-player world simulation: tick completes in <10s
-- Large map (500x500): rendering stays above 30fps
-- Memory: <500MB for 50-player world
+- 25-kingdom AI world: tick completes in <5s
+- 100-kingdom world (with 50 human players): tick completes in <10s
+- Large map (700x700): rendering stays above 30fps
+- Memory: <1GB for 100-kingdom world
 
 ### 17E: Launch Checklist
 - [ ] All tests pass (unit, integration, E2E)
@@ -708,11 +806,11 @@ Join World → Generate Island → Spawn Protection (100 ticks)
 | 7: Bombard & Defenses | 1-2 | Ranged combat, fortifications, bridges, mines, 5 new units |
 | 8: AI Economy & Strategy | 2-3 | AI builds economy, places defenses, uses bombard |
 | **KINGDOM CORE** | | |
-| 9: N-Player Foundation | 1-2 | 2-50+ players in one game, dynamic ownership |
-| 10: Crown City & Kingdoms | 1-2 | Capitals, territory, kingdom identity, win condition |
-| 11: Tick-Based Server | 1 | Timer-driven turns, offline AI, shield mechanic |
+| 9: N-Player Foundation | ✅ | N-player engine, PlayerId, AI multi-enemy, 16-color palette |
+| 10: Crown City & Kingdom Map | 1-2 | 100x100 kingdom tiles, crown capture, tributaries |
+| 11: Kingdom World Server | 1-2 | Tick engine, AI kingdoms, offline takeover, monthly reset |
 | **PERSISTENT WORLD** | | |
-| 12: Dynamic Map & Spawning | 1-2 | Island generation, isolation levels, expandable map |
+| 12: Dynamic Map & Player Join | 1-2 | Ring-based placement, world expansion, AI population |
 | 13: Accounts & Persistence | 1-2 | Auth, player profiles, kingdom persistence |
 | 14: Delta Sync & Scaling | 1-2 | Efficient updates for 50+ players |
 | **MONETIZATION & POLISH** | | |
@@ -728,22 +826,24 @@ Join World → Generate Island → Spawn Protection (100 ticks)
 ### New Files (Kingdom Phases)
 ```
 packages/shared/src/
-├── kingdom.ts           # Crown city, territory, kingdom state (~300 lines)
-├── world.ts             # Tick engine, world config, player management (~400 lines)
-├── player.ts            # PlayerId system, player info, status tracking (~200 lines)
+├── kingdom.ts           # Crown city, territory, tribute, kingdom state (~400 lines)
+├── world.ts             # Tick engine, world config, kingdom grid management (~500 lines)
+├── player.ts            # PlayerId system, player info, status tracking (~200 lines) ✅ EXISTS
+├── kingdom-mapgen.ts    # Kingdom tile generation (100x100 regions) (~300 lines)
 
 packages/server/src/
-├── WorldServer.ts       # Tick-based persistent world server (~500 lines)
+├── WorldServer.ts       # Tick-based persistent world server (~600 lines)
 ├── auth.ts              # Registration, login, JWT, middleware (~300 lines)
 ├── store.ts             # Stripe integration, purchases, entitlements (~400 lines)
 ├── admin.ts             # Admin API endpoints (~200 lines)
 
 packages/client/src/
 ├── ui/
-│   ├── worldBrowser.ts  # World selection, isolation picker (~300 lines)
+│   ├── worldBrowser.ts  # World grid view, ring picker, slot selection (~300 lines)
 │   ├── loginScreen.ts   # Auth UI (~200 lines)
 │   ├── store.ts         # In-game store (~300 lines)
-│   └── kingdomPanel.ts  # Kingdom info, territory, crown status (~200 lines)
+│   ├── kingdomPanel.ts  # Kingdom info, tribute panel, crown status (~300 lines)
+│   └── tributePanel.ts  # Tribute income/expenses, rebel/release buttons (~150 lines)
 ├── net/
 │   └── worldClient.ts   # Tick-based WebSocket client, delta handling (~300 lines)
 ```
@@ -751,27 +851,30 @@ packages/client/src/
 ### Files Modified (Kingdom Phases)
 ```
 packages/shared/src/
-├── constants.ts    # PlayerId type, remove Owner enum dependency
-├── types.ts        # PlayerInfo, KingdomState, TurnDelta, dynamic player structures
-├── game.ts         # N-player executeTurn, territory calculation
-├── mapgen.ts       # Island generation, map expansion, N-player placement
-├── ai.ts           # Multi-enemy threat assessment
+├── constants.ts    # PlayerId type ✅ DONE, kingdom tile constants
+├── types.ts        # PlayerInfo ✅ DONE, KingdomState, TurnDelta additions
+├── game.ts         # N-player executeTurn ✅ DONE, tribute processing, territory calc
+├── mapgen.ts       # N-player placement ✅ DONE, kingdom tile integration
+├── ai.ts           # Multi-enemy ✅ DONE, tribute/rebellion AI decisions
 
 packages/server/src/
 ├── database.ts     # Users, kingdoms, worlds tables
-├── GameManager.ts  # Classic mode preserved, routing to WorldServer
+├── GameManager.ts  # N-player ✅ DONE, routing to WorldServer
 ├── index.ts        # Auth middleware, new routes
 
 packages/client/src/
-├── main.ts         # Login flow, world selection, tick countdown
-├── ui/hud.ts       # Tick timer, shield indicator, territory info
-├── ui/minimap.ts   # N-player colors, territory borders, crown icons
-├── renderer/       # Shield dome, crown glow, territory borders
+├── main.ts         # N-player ✅ DONE, login flow, world selection, tick countdown
+├── ui/hud.ts       # Tick timer, shield indicator, tribute info
+├── ui/minimap.ts   # N-player colors ✅ DONE, kingdom tile borders, crown icons
+├── renderer/       # Shield dome, crown glow, kingdom borders
 ```
 
 ### Migration Strategy
-- Phase 9 is the breaking change (Owner enum → PlayerId)
-- All phases before 9 are backward-compatible
-- Classic 2-player mode preserved indefinitely (separate code path after Phase 11)
+- Phase 9 breaking change complete (Owner enum → PlayerId, session 052)
+- Owner enum preserved as @deprecated — existing code compiles but should migrate
+- Classic 2-player mode preserved via N-player engine (N=2)
+- All game logic is now N-player native — no separate 2-player code path
+- AI players are full participants: same economy, strategy, production as human players
+- Player disconnect → AI takeover is the default, no special handling needed
 - Database migrations run automatically on server start
-- Existing saves work in classic mode; new saves required for kingdom mode
+- Existing saves need players[] array added on load (future migration)

@@ -96,4 +96,5 @@ export interface AssetBundle {
   attackHighlight: Texture;
   units: Map<string, Texture>;
   deposits: Map<string, Texture>;  // "ore", "oil", "textile"
+  cityTextures?: Map<number, Texture>;  // owner ID → city texture (N-player)
 }

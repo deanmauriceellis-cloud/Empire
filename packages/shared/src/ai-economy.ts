@@ -274,13 +274,13 @@ function getResourceScarcity(state: GameState, aiOwner: Owner, depositType: Depo
  * Shifts: War when losing militarily, Electronics when losing navally.
  */
 function getUpgradePriority(state: GameState, aiOwner: Owner): BuildingType[] {
-  const enemyOwner = aiOwner === Owner.Player1 ? Owner.Player2 : Owner.Player1;
+  const isEnemy = (owner: number) => owner !== aiOwner && owner !== 0;
   const aiArmies = state.units.filter(u => u.owner === aiOwner && u.type === UnitType.Army).length;
-  const enemyArmies = state.units.filter(u => u.owner === enemyOwner && u.type === UnitType.Army).length;
+  const enemyArmies = state.units.filter(u => isEnemy(u.owner) && u.type === UnitType.Army).length;
   const aiShips = state.units.filter(u => u.owner === aiOwner &&
     (u.type === UnitType.Patrol || u.type === UnitType.Destroyer || u.type === UnitType.Submarine ||
      u.type === UnitType.Battleship || u.type === UnitType.MissileCruiser)).length;
-  const enemyShips = state.units.filter(u => u.owner === enemyOwner &&
+  const enemyShips = state.units.filter(u => isEnemy(u.owner) &&
     (u.type === UnitType.Patrol || u.type === UnitType.Destroyer || u.type === UnitType.Submarine ||
      u.type === UnitType.Battleship || u.type === UnitType.MissileCruiser)).length;
 
@@ -363,7 +363,7 @@ function pickDefensiveStructure(
   // Don't build if there's already a structure here
   if (state.buildings.some(b => b.loc === loc && isStructureType(b.type))) return null;
 
-  const enemyOwner = aiOwner === Owner.Player1 ? Owner.Player2 : Owner.Player1;
+  const isEnemy = (owner: number) => owner !== aiOwner && owner !== 0;
   const adj = getAdjacentLocs(loc);
 
   // Evaluate location context
@@ -393,7 +393,7 @@ function pickDefensiveStructure(
   let enemySeaNearby = false;
 
   for (const u of state.units) {
-    if (u.owner !== enemyOwner) continue;
+    if (!isEnemy(u.owner)) continue;
     const d = dist(loc, u.loc);
     if (d <= 8) isFrontier = true;
     if (d <= 5) {
@@ -411,7 +411,7 @@ function pickDefensiveStructure(
   }
   // Also check enemy cities visible within 10 tiles
   for (const city of state.cities) {
-    if (city.owner === enemyOwner && dist(loc, city.loc) <= 10) {
+    if (isEnemy(city.owner) && dist(loc, city.loc) <= 10) {
       isFrontier = true;
       break;
     }
@@ -466,7 +466,7 @@ export function aiArtilleryMove(
   viewMap: ViewMapCell[],
 ): PlayerAction[] {
   const actions: PlayerAction[] = [];
-  const enemyOwner = aiOwner === Owner.Player1 ? Owner.Player2 : Owner.Player1;
+  const isEnemy = (owner: number) => owner !== aiOwner && owner !== 0;
   const movesLeft = UNIT_ATTRIBUTES[unit.type].speed - unit.moved;
   if (movesLeft <= 0) return actions;
 
@@ -483,14 +483,14 @@ export function aiArtilleryMove(
   // Check if any enemy is adjacent — if so, don't move closer
   const adj = getAdjacentLocs(unit.loc);
   const enemyAdjacent = adj.some(a =>
-    state.units.some(u => u.owner === enemyOwner && u.loc === a && u.shipId === null),
+    state.units.some(u => isEnemy(u.owner) && u.loc === a && u.shipId === null),
   );
   if (enemyAdjacent) {
     // Already in danger zone — try to move away
     for (const a of adj) {
       if (state.map[a].terrain === TerrainType.Land && !state.units.some(u => u.loc === a && u.shipId === null)) {
         // Check if this moves us further from enemy
-        const nearestEnemy = state.units.find(u => u.owner === enemyOwner && u.shipId === null && dist(unit.loc, u.loc) <= 2);
+        const nearestEnemy = state.units.find(u => isEnemy(u.owner) && u.shipId === null && dist(unit.loc, u.loc) <= 2);
         if (nearestEnemy && dist(a, nearestEnemy.loc) > dist(unit.loc, nearestEnemy.loc)) {
           aiLog(`  Artillery #${unit.id}: retreating from adjacent enemy`);
           actions.push({ type: "move", unitId: unit.id, loc: a });
@@ -566,7 +566,7 @@ function findBombardTarget(
   if (range <= 0) return null;
   if (unit.moved >= attrs.speed) return null; // no moves left
 
-  const enemyOwner = aiOwner === Owner.Player1 ? Owner.Player2 : Owner.Player1;
+  const isEnemy = (owner: number) => owner !== aiOwner && owner !== 0;
 
   // Scan for enemy targets within bombard range (1 < dist <= range)
   type BombardCandidate = { loc: Loc; priority: number };
@@ -574,7 +574,7 @@ function findBombardTarget(
 
   // Enemy structures first (high value)
   for (const b of state.buildings) {
-    if (b.owner !== enemyOwner || !b.complete) continue;
+    if (!isEnemy(b.owner) || !b.complete) continue;
     if (!isStructureType(b.type)) continue;
     const d = chebyshevDist(state, unit.loc, b.loc);
     if (d > 0 && d <= range) {
@@ -584,7 +584,7 @@ function findBombardTarget(
 
   // Enemy units
   for (const u of state.units) {
-    if (u.owner !== enemyOwner || u.shipId !== null) continue;
+    if (!isEnemy(u.owner) || u.shipId !== null) continue;
     const d = chebyshevDist(state, unit.loc, u.loc);
     if (d > 0 && d <= range) {
       // Prioritize by strength (higher = more valuable target)
@@ -667,10 +667,10 @@ export function canAffordProduction(state: GameState, aiOwner: Owner, unitType: 
  * Enhanced surrender check that factors in economic hopelessness.
  */
 export function shouldSurrenderEconomic(state: GameState, aiOwner: Owner): boolean {
-  const enemyOwner = aiOwner === Owner.Player1 ? Owner.Player2 : Owner.Player1;
+  const isEnemy = (owner: number) => owner !== aiOwner && owner !== 0;
 
   const aiCities = state.cities.filter(c => c.owner === aiOwner).length;
-  const enemyCities = state.cities.filter(c => c.owner === enemyOwner).length;
+  const enemyCities = state.cities.filter(c => isEnemy(c.owner)).length;
   if (aiCities === 0) return true;
   if (enemyCities === 0) return false;
 
@@ -679,11 +679,16 @@ export function shouldSurrenderEconomic(state: GameState, aiOwner: Owner): boole
   const aiRes = state.resources[aiOwner];
   const totalStockpile = aiRes[0] + aiRes[1] + aiRes[2];
 
-  // Factor: tech disadvantage
+  // Factor: tech disadvantage (compare against strongest enemy's tech)
   const aiTech = state.techResearch[aiOwner];
-  const enemyTech = state.techResearch[enemyOwner];
   const aiTechTotal = aiTech.reduce((a, b) => a + b, 0);
-  const enemyTechTotal = enemyTech.reduce((a, b) => a + b, 0);
+  let enemyTechTotal = 0;
+  for (const p of state.players) {
+    if (isEnemy(p.id) && state.techResearch[p.id]) {
+      const total = state.techResearch[p.id].reduce((a: number, b: number) => a + b, 0);
+      if (total > enemyTechTotal) enemyTechTotal = total;
+    }
+  }
 
   // Surrender if economically hopeless
   if (aiCities <= 2 && aiDeposits === 0 && totalStockpile < 50 && enemyCities > aiCities * 3) {
@@ -692,7 +697,7 @@ export function shouldSurrenderEconomic(state: GameState, aiOwner: Owner): boole
 
   // Surrender if tech disadvantage is massive and military weak
   const aiArmies = state.units.filter(u => u.owner === aiOwner && u.type === UnitType.Army).length;
-  const enemyArmies = state.units.filter(u => u.owner === enemyOwner && u.type === UnitType.Army).length;
+  const enemyArmies = state.units.filter(u => isEnemy(u.owner) && u.type === UnitType.Army).length;
   if (enemyTechTotal > aiTechTotal * 3 && aiArmies < enemyArmies / 4 && aiCities < enemyCities / 3) {
     return true;
   }
@@ -714,7 +719,7 @@ export function aiEngineerBoatMove(
   viewMap: ViewMapCell[],
 ): PlayerAction[] {
   const actions: PlayerAction[] = [];
-  const enemyOwner = aiOwner === Owner.Player1 ? Owner.Player2 : Owner.Player1;
+  const isEnemy = (owner: number) => owner !== aiOwner && owner !== 0;
   const movesLeft = UNIT_ATTRIBUTES[unit.type].speed - unit.moved;
   if (movesLeft <= 0) return actions;
 
@@ -745,9 +750,9 @@ export function aiEngineerBoatMove(
   // 2. Build sea mine near enemy ships/cities
   if (canBuildStructure(state, aiOwner, BuildingType.SeaMine)) {
     const nearEnemy = state.units.some(u =>
-      u.owner === enemyOwner && dist(unit.loc, u.loc) <= 3,
+      isEnemy(u.owner) && dist(unit.loc, u.loc) <= 3,
     ) || state.cities.some(c =>
-      c.owner === enemyOwner && dist(unit.loc, c.loc) <= 3,
+      isEnemy(c.owner) && dist(unit.loc, c.loc) <= 3,
     );
     const noExistingStructure = !state.buildings.some(b => b.loc === unit.loc && isStructureType(b.type));
     if (nearEnemy && noExistingStructure) {

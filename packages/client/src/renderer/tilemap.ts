@@ -3,7 +3,7 @@
 // animated water, and smooth fog transitions.
 
 import { Container, Sprite, type Texture } from "pixi.js";
-import { TerrainType, Owner, DepositType } from "@empire/shared";
+import { TerrainType, Owner, DepositType, UNOWNED } from "@empire/shared";
 import { cartToIso, getVisibleTileBounds } from "../iso/coords.js";
 import {
   HALF_TILE_W, HALF_TILE_H,
@@ -148,8 +148,10 @@ export class TilemapRenderer {
 
   private getTerrainTexture(terrain: TerrainType, cityOwner: Owner | null): Texture {
     if (terrain === TerrainType.City || cityOwner !== null) {
-      if (cityOwner === Owner.Player1) return this.assets.terrain.cityPlayer1;
-      if (cityOwner === Owner.Player2) return this.assets.terrain.cityPlayer2;
+      // Use N-player city texture map if available, fall back to legacy fields
+      if (this.assets.cityTextures && cityOwner !== null) {
+        return this.assets.cityTextures.get(cityOwner) ?? this.assets.terrain.cityNeutral;
+      }
       return this.assets.terrain.cityNeutral;
     }
     if (terrain === TerrainType.Sea) return this.assets.terrain.sea; // default, overridden below

@@ -1,6 +1,6 @@
 // Empire Reborn — Core Game State Interfaces
 
-import type { Owner, UnitType, UnitBehavior, TerrainType, DepositType, BuildingType } from "./constants.js";
+import type { Owner, PlayerId, UnitType, UnitBehavior, TerrainType, DepositType, BuildingType } from "./constants.js";
 
 // ─── Coordinates ─────────────────────────────────────────────────────────────
 
@@ -27,6 +27,17 @@ export interface MapCell {
 export interface ViewMapCell {
   contents: string;  // terrain char, unit char, or city
   seen: number;      // turn number when last updated (-1 = never)
+}
+
+// ─── Player Info ────────────────────────────────────────────────────────────
+
+/** Metadata for a player in the game. */
+export interface PlayerInfo {
+  id: PlayerId;                // 1, 2, 3, ... (0 is reserved for Unowned)
+  name: string;                // display name
+  color: number;               // player color (hex, e.g. 0x00ff00)
+  isAI: boolean;               // true if controlled by AI
+  status: "active" | "defeated" | "resigned";
 }
 
 // ─── Deposit State ───────────────────────────────────────────────────────────
@@ -95,6 +106,7 @@ export interface GameConfig {
   minCityDist: number;         // minimum distance between cities
   seed: number;                // RNG seed for map generation
   mapType?: string;            // map generation type: "standard" (default) or "river"
+  numPlayers?: number;         // total players (human + AI), default 2
 }
 
 // ─── Game State ──────────────────────────────────────────────────────────────
@@ -108,14 +120,17 @@ export interface GameState {
   nextUnitId: number;
   nextCityId: number;
 
-  // Per-player view maps
-  viewMaps: Record<Owner, ViewMapCell[]>;
+  // Player registry — all active players in the game
+  players: PlayerInfo[];
+
+  // Per-player view maps (keyed by PlayerId)
+  viewMaps: Record<number, ViewMapCell[]>;
 
   // Seedable PRNG state for game logic (combat, satellite directions)
   rngState: number;
 
-  // Economy — resource stockpiles per player [ore, oil, textile]
-  resources: Record<Owner, number[]>;
+  // Economy — resource stockpiles per player [ore, oil, textile] (keyed by PlayerId)
+  resources: Record<number, number[]>;
 
   // Map deposits (ore veins, oil wells, textile farms)
   deposits: DepositState[];
@@ -125,8 +140,8 @@ export interface GameState {
   buildings: BuildingState[];
   nextBuildingId: number;
 
-  // Tech research accumulation per player [science, health, electronics, war]
-  techResearch: Record<Owner, number[]>;
+  // Tech research accumulation per player [science, health, electronics, war] (keyed by PlayerId)
+  techResearch: Record<number, number[]>;
 }
 
 // ─── Player Actions ──────────────────────────────────────────────────────────
@@ -158,15 +173,15 @@ export interface TurnEvent {
 export interface TurnResult {
   turn: number;
   events: TurnEvent[];
-  winner: Owner | null;        // null if game continues
+  winner: PlayerId | null;     // null if game continues
   winType: "elimination" | "resignation" | null;
 }
 
 // ─── Continent Analysis ──────────────────────────────────────────────────────
 
 export interface ScanCounts {
-  playerCities: Record<Owner, number>;
-  playerUnits: Record<Owner, Record<UnitType, number>>;
+  playerCities: Record<number, number>;
+  playerUnits: Record<number, Record<UnitType, number>>;
   size: number;
   unownedCities: number;
   unexplored: number;

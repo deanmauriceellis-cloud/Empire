@@ -1511,41 +1511,78 @@ export function collectTechResearch(state: GameState, owner: Owner): void {
  */
 export function checkEndGame(
   state: GameState,
-): { winner: Owner; winType: "elimination" | "resignation" } | null {
-  let p1Cities = 0, p1Armies = 0;
-  let p2Cities = 0, p2Armies = 0;
-
-  for (const city of state.cities) {
-    if (city.owner === Owner.Player1) p1Cities++;
-    else if (city.owner === Owner.Player2) p2Cities++;
+): { winner: number; winType: "elimination" | "resignation" } | null {
+  const activePlayers = state.players.filter(p => p.status === "active");
+  if (activePlayers.length <= 1) {
+    // Last player standing wins
+    if (activePlayers.length === 1) {
+      return { winner: activePlayers[0].id, winType: "elimination" };
+    }
+    return null; // no players (shouldn't happen)
   }
 
-  for (const unit of state.units) {
-    if (unit.type === UnitType.Army) {
-      if (unit.owner === Owner.Player1) p1Armies++;
-      else if (unit.owner === Owner.Player2) p2Armies++;
+  // Count cities and armies per active player
+  const cityCounts = new Map<number, number>();
+  const armyCounts = new Map<number, number>();
+  for (const p of activePlayers) {
+    cityCounts.set(p.id, 0);
+    armyCounts.set(p.id, 0);
+  }
+
+  for (const city of state.cities) {
+    if (cityCounts.has(city.owner)) {
+      cityCounts.set(city.owner, cityCounts.get(city.owner)! + 1);
     }
   }
 
-  // Elimination: 0 cities AND 0 armies (only after both players have had cities)
-  // Don't trigger if neither player has anything
-  const p1Total = p1Cities + p1Armies;
-  const p2Total = p2Cities + p2Armies;
-  if (p1Total === 0 && p2Total === 0) return null;
-
-  if (p1Cities === 0 && p1Armies === 0 && p2Total > 0) {
-    return { winner: Owner.Player2, winType: "elimination" };
-  }
-  if (p2Cities === 0 && p2Armies === 0 && p1Total > 0) {
-    return { winner: Owner.Player1, winType: "elimination" };
+  for (const unit of state.units) {
+    if (unit.type === UnitType.Army && armyCounts.has(unit.owner)) {
+      armyCounts.set(unit.owner, armyCounts.get(unit.owner)! + 1);
+    }
   }
 
-  // 3:1 resignation
-  if (p2Cities > 0 && p1Cities > p2Cities * 3 && p1Armies > p2Armies * 3) {
-    return { winner: Owner.Player1, winType: "resignation" };
+  // Check for eliminated players (0 cities AND 0 armies)
+  const eliminated: typeof activePlayers = [];
+  for (const p of activePlayers) {
+    const cities = cityCounts.get(p.id)!;
+    const armies = armyCounts.get(p.id)!;
+    if (cities === 0 && armies === 0) {
+      eliminated.push(p);
+    }
   }
-  if (p1Cities > 0 && p2Cities > p1Cities * 3 && p2Armies > p1Armies * 3) {
-    return { winner: Owner.Player2, winType: "resignation" };
+
+  // Don't eliminate everyone at once — if all would be eliminated, it's a draw (no winner)
+  if (eliminated.length > 0 && eliminated.length < activePlayers.length) {
+    for (const p of eliminated) {
+      p.status = "defeated";
+    }
+  } else if (eliminated.length === activePlayers.length) {
+    // All players eliminated simultaneously — shouldn't happen but handle gracefully
+    return null;
+  }
+
+  // Check if only one active player remains after eliminations
+  const remaining = state.players.filter(p => p.status === "active");
+  if (remaining.length === 1) {
+    return { winner: remaining[0].id, winType: "elimination" };
+  }
+  if (remaining.length === 0) return null;
+
+  // 3:1 resignation: strongest player dominates all others combined
+  // (Only in 2-player for now; N-player uses individual surrender via AI)
+  if (remaining.length === 2) {
+    const [a, b] = remaining;
+    const aCities = cityCounts.get(a.id) ?? 0;
+    const bCities = cityCounts.get(b.id) ?? 0;
+    const aArmies = armyCounts.get(a.id) ?? 0;
+    const bArmies = armyCounts.get(b.id) ?? 0;
+
+    if (bCities > 0 && aCities > bCities * 3 && aArmies > bArmies * 3) {
+      return { winner: a.id, winType: "resignation" };
+    }
+    if (aCities > 0 && bCities > aCities * 3 && bArmies > aArmies * 3) {
+      return { winner: b.id, winType: "resignation" };
+    }
   }
 
   return null;
@@ -2497,96 +2534,106 @@ export function processUnitBehaviors(
 
 export function executeTurn(
   state: GameState,
-  player1Actions: PlayerAction[],
-  player2Actions: PlayerAction[],
+  allActions: Map<number, PlayerAction[]>,
 ): TurnResult {
   const events: TurnEvent[] = [];
-  const movedUnits1 = new Set<number>();
-  const movedUnits2 = new Set<number>();
+  const movedUnitsMap = new Map<number, Set<number>>();
+  const activePlayers = state.players.filter(p => p.status === "active");
 
-  // Check for resignation
-  for (const action of player1Actions) {
-    if (action.type === "resign") {
-      return {
-        turn: state.turn,
-        events: [{ type: "combat", loc: 0, description: "Player 1 resigned", data: {} }],
-        winner: Owner.Player2,
-        winType: "resignation",
-      };
+  // Check for resignations
+  for (const player of activePlayers) {
+    const actions = allActions.get(player.id) ?? [];
+    for (const action of actions) {
+      if (action.type === "resign") {
+        player.status = "resigned";
+        events.push({
+          type: "combat", loc: 0,
+          description: `${player.name} resigned`, data: {},
+        });
+      }
     }
   }
-  for (const action of player2Actions) {
-    if (action.type === "resign") {
-      return {
-        turn: state.turn,
-        events: [{ type: "combat", loc: 0, description: "Player 2 resigned", data: {} }],
-        winner: Owner.Player1,
-        winType: "resignation",
-      };
-    }
+
+  // If resignation reduced to 1 active player, they win
+  const postResignActive = state.players.filter(p => p.status === "active");
+  if (postResignActive.length === 1 && activePlayers.length > 1) {
+    state.turn += 1;
+    return {
+      turn: state.turn,
+      events,
+      winner: postResignActive[0].id,
+      winType: "resignation",
+    };
   }
 
   // Track which units moved for repair purposes
-  const trackMoves = (actions: PlayerAction[], movedSet: Set<number>) => {
+  for (const player of postResignActive) {
+    const actions = allActions.get(player.id) ?? [];
+    const movedSet = new Set<number>();
     for (const a of actions) {
       if (a.type === "move" || a.type === "attack") {
         movedSet.add(a.unitId);
       }
     }
-  };
-  trackMoves(player1Actions, movedUnits1);
-  trackMoves(player2Actions, movedUnits2);
-
-  // Process Player1 actions
-  for (const action of player1Actions) {
-    events.push(...processAction(state, action, Owner.Player1));
+    movedUnitsMap.set(player.id, movedSet);
   }
 
-  // Process Player2 actions
-  for (const action of player2Actions) {
-    events.push(...processAction(state, action, Owner.Player2));
+  // Process actions for all active players
+  for (const player of postResignActive) {
+    const actions = allActions.get(player.id) ?? [];
+    for (const action of actions) {
+      events.push(...processAction(state, action, player.id));
+    }
   }
 
-  // Process unit behaviors (explore, sentry wake-up, etc.)
-  events.push(...processUnitBehaviors(state, Owner.Player1, movedUnits1));
-  events.push(...processUnitBehaviors(state, Owner.Player2, movedUnits2));
+  // Process unit behaviors for all players
+  for (const player of postResignActive) {
+    events.push(...processUnitBehaviors(state, player.id, movedUnitsMap.get(player.id) ?? new Set()));
+  }
 
-  // Defensive structure auto-attack (fire at nearby enemies)
-  events.push(...autoAttackStructures(state, Owner.Player1));
-  events.push(...autoAttackStructures(state, Owner.Player2));
+  // Defensive structure auto-attack for all players
+  for (const player of postResignActive) {
+    events.push(...autoAttackStructures(state, player.id));
+  }
 
-  // Move satellites (for both players)
+  // Move satellites (all players)
   const satellites = state.units.filter((u) => u.type === UnitType.Satellite);
   for (const sat of satellites) {
     events.push(...moveSatellite(state, sat));
   }
 
-  // Collect resource income (before production, so new income can fund new builds)
-  events.push(...collectResourceIncome(state, Owner.Player1));
-  events.push(...collectResourceIncome(state, Owner.Player2));
+  // Collect resource income for all players
+  for (const player of postResignActive) {
+    events.push(...collectResourceIncome(state, player.id));
+  }
 
-  // Collect offshore platform income
-  collectPlatformIncome(state, Owner.Player1);
-  collectPlatformIncome(state, Owner.Player2);
+  // Collect offshore platform income for all players
+  for (const player of postResignActive) {
+    collectPlatformIncome(state, player.id);
+  }
 
-  // Tick city production (resources consumed when production starts)
-  events.push(...tickCityProduction(state, Owner.Player1));
-  events.push(...tickCityProduction(state, Owner.Player2));
+  // Tick city production for all players
+  for (const player of postResignActive) {
+    events.push(...tickCityProduction(state, player.id));
+  }
 
   // Tick building construction (advance work, complete buildings, consume constructors)
   events.push(...tickBuildingConstruction(state));
 
-  // Collect tech research from completed city upgrades
-  collectTechResearch(state, Owner.Player1);
-  collectTechResearch(state, Owner.Player2);
+  // Collect tech research for all players
+  for (const player of postResignActive) {
+    collectTechResearch(state, player.id);
+  }
 
-  // Scan vision from structures with visionRadius (Radar Stations)
-  scanStructureVision(state, Owner.Player1);
-  scanStructureVision(state, Owner.Player2);
+  // Scan vision from structures for all players
+  for (const player of postResignActive) {
+    scanStructureVision(state, player.id);
+  }
 
-  // Repair ships in port
-  repairShips(state, Owner.Player1, movedUnits1);
-  repairShips(state, Owner.Player2, movedUnits2);
+  // Repair ships in port for all players
+  for (const player of postResignActive) {
+    repairShips(state, player.id, movedUnitsMap.get(player.id) ?? new Set());
+  }
 
   // Reset moved counters and refuel fighters in cities/carriers
   for (const unit of state.units) {

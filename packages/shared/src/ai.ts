@@ -184,7 +184,7 @@ export function computeAITurn(
   // 2. Production decisions
   {
     const ownCities = state.cities.filter(c => c.owner === aiOwner);
-    aiLog(`=== Turn ${state.turn} (${aiOwner === Owner.Player1 ? "P1" : "P2"}) — ${ownCities.length} cities, ${state.units.filter(u => u.owner === aiOwner).length} units ===`);
+    aiLog(`=== Turn ${state.turn} (P${aiOwner}) — ${ownCities.length} cities, ${state.units.filter(u => u.owner === aiOwner).length} units ===`);
     for (const c of ownCities) {
       const a = UNIT_ATTRIBUTES[c.production];
       aiLog(`  City #${c.id}: building ${a.name} (work=${c.work}/${a.buildTime})`);
@@ -239,9 +239,9 @@ export function computeAITurn(
   // 5. Check for surrender (includes economic hopelessness)
   const aiCities = state.cities.filter(c => c.owner === aiOwner).length;
   const aiArmies = state.units.filter(u => u.owner === aiOwner && u.type === UnitType.Army).length;
-  const enemyOwner = aiOwner === Owner.Player1 ? Owner.Player2 : Owner.Player1;
-  const enemyCities = state.cities.filter(c => c.owner === enemyOwner).length;
-  const enemyArmies = state.units.filter(u => u.owner === enemyOwner && u.type === UnitType.Army).length;
+  // Sum all enemies' cities and armies
+  const enemyCities = state.cities.filter(c => c.owner !== aiOwner && c.owner !== 0).length;
+  const enemyArmies = state.units.filter(u => u.owner !== aiOwner && u.owner !== 0 && u.type === UnitType.Army).length;
 
   if (aiCities === 0 && aiArmies === 0) {
     actions.push({ type: "resign" });

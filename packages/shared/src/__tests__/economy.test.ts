@@ -16,7 +16,7 @@ import {
   STARTING_TEXTILE,
   NUM_RESOURCE_TYPES,
 } from "../index.js";
-import type { GameState, CityState, MapCell, DepositState } from "../types.js";
+import type { GameState, CityState, MapCell, DepositState, PlayerInfo } from "../types.js";
 import {
   initViewMap,
   tickCityProduction,
@@ -81,6 +81,10 @@ function createTestState(): GameState {
       [Owner.Player1]: [0, 0, 0, 0],
       [Owner.Player2]: [0, 0, 0, 0],
     },
+    players: [
+      { id: 1, name: "Player 1", color: 0x00cc00, isAI: false, status: "active" as const },
+      { id: 2, name: "Player 2", color: 0xcc0000, isAI: true, status: "active" as const },
+    ],
   };
 }
 
@@ -558,7 +562,7 @@ describe("Economy in executeTurn", () => {
     addCity(state, rowColLoc(10, 10), Owner.Player2, UnitType.Army);
 
     const p1OreBefore = state.resources[Owner.Player1][0];
-    executeTurn(state, [{ type: "endTurn" }], [{ type: "endTurn" }]);
+    executeTurn(state, new Map([[1, [{ type: "endTurn" }]], [2, [{ type: "endTurn" }]]]));
 
     // Army costs 5 ore, city passive income adds 2 ore
     expect(state.resources[Owner.Player1][0]).toBe(p1OreBefore + 2 - 5);
@@ -571,7 +575,7 @@ describe("Economy in executeTurn", () => {
     addCity(state, rowColLoc(10, 10), Owner.Player2, UnitType.Army);
     // No deposits — only passive city income: +2 ore, +1 oil, +2 textile per city
     // Army costs 5 ore, 0 oil, 5 textile — not enough from 1 city (2 ore, 2 textile)
-    const result = executeTurn(state, [{ type: "endTurn" }], [{ type: "endTurn" }]);
+    const result = executeTurn(state, new Map([[1, [{ type: "endTurn" }]], [2, [{ type: "endTurn" }]]]));
 
     const city = state.cities[0];
     expect(city.work).toBe(0); // stalled — can't afford army

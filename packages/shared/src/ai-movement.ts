@@ -22,7 +22,7 @@ export function aiArmyMove(
   viewMap: ViewMapCell[],
 ): PlayerAction[] {
   const actions: PlayerAction[] = [];
-  const enemyOwner = aiOwner === Owner.Player1 ? Owner.Player2 : Owner.Player1;
+  // In N-player, "enemy" means any non-self, non-unowned player
   const movesLeft = objMoves(unit) - unit.moved;
   if (movesLeft <= 0) return actions;
 

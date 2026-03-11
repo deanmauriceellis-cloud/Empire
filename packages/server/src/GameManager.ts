@@ -10,6 +10,7 @@ import {
   type CityState,
   type UnitState,
   type ViewMapCell,
+  type PlayerInfo,
   Owner,
   UnitType,
   UnitBehavior,
@@ -20,6 +21,7 @@ import {
   STARTING_ORE,
   STARTING_OIL,
   STARTING_TEXTILE,
+  UNOWNED,
   configureMapDimensions,
   generateMap,
   initViewMap,
@@ -27,6 +29,8 @@ import {
   executeTurn,
   computeAITurn,
   isOnBoard,
+  createPlayerInfo,
+  initAllPlayerData,
 } from "@empire/shared";
 import type {
   ClientMessage,
@@ -41,7 +45,7 @@ import type { GameDatabase } from "./database.js";
 
 interface PlayerConnection {
   ws: WebSocket;
-  owner: Owner;
+  owner: number; // PlayerId
   gameId: string;
 }
 
@@ -51,10 +55,10 @@ interface ActiveGame {
   id: string;
   phase: GamePhase;
   state: GameState;
-  players: Map<Owner, WebSocket | null>; // null = disconnected
-  pendingActions: Map<Owner, PlayerAction[]>;
-  turnEnded: Set<Owner>;
-  disconnectTimers: Map<Owner, ReturnType<typeof setTimeout>>;
+  players: Map<number, WebSocket | null>; // PlayerId → ws (null = disconnected)
+  pendingActions: Map<number, PlayerAction[]>;
+  turnEnded: Set<number>;
+  disconnectTimers: Map<number, ReturnType<typeof setTimeout>>;
   createdAt: number;
 }
 
@@ -155,13 +159,23 @@ export class GameManager {
     const h = configOverrides?.mapHeight ?? DEFAULT_CONFIG.mapHeight;
     configureMapDimensions(w, h);
 
+    const numPlayers = configOverrides?.numPlayers ?? 2;
+
     const config: GameConfig = {
       ...DEFAULT_CONFIG,
       numCities: NUM_CITY, // auto-scaled by configureMapDimensions
       seed: Math.floor(Math.random() * 2 ** 32),
       ...configOverrides,
+      numPlayers,
     };
     const mapResult = generateMap(config);
+
+    // Create player roster: player 1 = human creator, player 2 = AI (for classic 2-player)
+    // For N-player, remaining slots are AI by default
+    const playerInfos: PlayerInfo[] = [];
+    for (let i = 1; i <= numPlayers; i++) {
+      playerInfos.push(createPlayerInfo(i, undefined, i > 1));
+    }
 
     // Build initial game state
     const state: GameState = {
@@ -172,55 +186,53 @@ export class GameManager {
       units: [],
       nextUnitId: 0,
       nextCityId: mapResult.cities.length,
-      viewMaps: {
-        [Owner.Unowned]: [],
-        [Owner.Player1]: initViewMap(),
-        [Owner.Player2]: initViewMap(),
-      },
+      players: playerInfos,
+      viewMaps: {},
       rngState: config.seed,
-      resources: {
-        [Owner.Unowned]: [0, 0, 0],
-        [Owner.Player1]: [STARTING_ORE, STARTING_OIL, STARTING_TEXTILE],
-        [Owner.Player2]: [STARTING_ORE, STARTING_OIL, STARTING_TEXTILE],
-      },
+      resources: {},
       deposits: mapResult.deposits,
       nextDepositId: mapResult.deposits.length,
       buildings: [],
       nextBuildingId: 0,
-      techResearch: {
-        [Owner.Unowned]: [0, 0, 0, 0],
-        [Owner.Player1]: [0, 0, 0, 0],
-        [Owner.Player2]: [0, 0, 0, 0],
-      },
+      techResearch: {},
     };
 
-    // Assign starting cities
-    const [city1Id, city2Id] = mapResult.startingCities;
-    state.cities[city1Id].owner = Owner.Player1;
-    state.cities[city2Id].owner = Owner.Player2;
+    // Initialize per-player data (viewMaps, resources, tech)
+    initAllPlayerData(state);
 
-    // Initial vision scan for player 1 (player 2 scanned when they join)
-    scan(state, Owner.Player1, state.cities[city1Id].loc);
+    // Assign starting cities
+    for (let i = 0; i < numPlayers && i < mapResult.startingCities.length; i++) {
+      const cityId = mapResult.startingCities[i];
+      const playerId = i + 1;
+      state.cities[cityId].owner = playerId as any;
+      scan(state, playerId, state.cities[cityId].loc);
+    }
+
+    // Set up WebSocket connections — only human creator initially
+    // AI players don't get WS entries (they're managed server-side)
+    const playerMap = new Map<number, WebSocket | null>();
+    const pendingActions = new Map<number, PlayerAction[]>();
+    playerMap.set(1, ws);
+    for (let i = 1; i <= numPlayers; i++) {
+      pendingActions.set(i, []);
+    }
 
     const game: ActiveGame = {
       id: gameId,
       phase: "lobby",
       state,
-      players: new Map([[Owner.Player1, ws]]),
-      pendingActions: new Map([
-        [Owner.Player1, []],
-        [Owner.Player2, []],
-      ]),
+      players: playerMap,
+      pendingActions,
       turnEnded: new Set(),
       disconnectTimers: new Map(),
       createdAt: Date.now(),
     };
 
     this.games.set(gameId, game);
-    this.playerConnections.set(ws, { ws, owner: Owner.Player1, gameId });
+    this.playerConnections.set(ws, { ws, owner: 1, gameId });
 
-    this.send(ws, { type: "game_created", gameId, owner: Owner.Player1 });
-    console.log(`Game ${gameId} created by Player 1`);
+    this.send(ws, { type: "game_created", gameId, owner: 1 as any });
+    console.log(`Game ${gameId} created by Player 1 (${numPlayers} players)`);
   }
 
   // ─── Join Game ──────────────────────────────────────────────────────────
@@ -232,57 +244,72 @@ export class GameManager {
       return;
     }
 
-    // Check if this is a reconnection
-    for (const [owner, existingWs] of game.players) {
-      if (existingWs === null) {
-        // Reconnect
-        game.players.set(owner, ws);
-        this.playerConnections.set(ws, { ws, owner, gameId });
-
-        // Clear disconnect timer
-        const timer = game.disconnectTimers.get(owner);
-        if (timer) {
-          clearTimeout(timer);
-          game.disconnectTimers.delete(owner);
-        }
-
-        this.send(ws, { type: "game_joined", gameId, owner, phase: game.phase });
-
-        // Notify other player
-        this.broadcastToGame(game, { type: "player_reconnected", gameId }, owner);
-
-        // Send current state
-        this.sendVisibleState(game, owner);
-
-        console.log(`Player ${owner} reconnected to game ${gameId}`);
-        return;
-      }
-    }
-
-    // New player joining
+    // In-progress games: check for reconnection (disconnected player slots are null)
     if (game.phase !== "lobby") {
+      for (const [owner, existingWs] of game.players) {
+        if (existingWs === null) {
+          // Reconnect
+          game.players.set(owner, ws);
+          this.playerConnections.set(ws, { ws, owner, gameId });
+
+          // Clear disconnect timer
+          const timer = game.disconnectTimers.get(owner);
+          if (timer) {
+            clearTimeout(timer);
+            game.disconnectTimers.delete(owner);
+          }
+
+          this.send(ws, { type: "game_joined", gameId, owner: owner as any, phase: game.phase });
+          this.broadcastToGame(game, { type: "player_reconnected", gameId }, owner);
+          this.sendVisibleState(game, owner);
+
+          console.log(`Player ${owner} reconnected to game ${gameId}`);
+          return;
+        }
+      }
       this.send(ws, { type: "error", message: "Game already in progress" });
       return;
     }
 
-    if (game.players.size >= 2) {
+    // Lobby: new player joining — find next available slot
+    // AI players aren't in game.players yet, so find one from state.players
+    let joinSlot: number | null = null;
+    for (const p of game.state.players) {
+      if (!game.players.has(p.id)) {
+        joinSlot = p.id;
+        break;
+      }
+    }
+
+    if (joinSlot === null) {
       this.send(ws, { type: "error", message: "Game is full" });
       return;
     }
 
-    game.players.set(Owner.Player2, ws);
-    this.playerConnections.set(ws, { ws, owner: Owner.Player2, gameId });
+    // Mark this player as human
+    const playerInfo = game.state.players.find(p => p.id === joinSlot);
+    if (playerInfo) playerInfo.isAI = false;
 
-    // Initial vision scan for player 2
-    const p2City = game.state.cities.find((c) => c.owner === Owner.Player2);
-    if (p2City) {
-      scan(game.state, Owner.Player2, p2City.loc);
+    game.players.set(joinSlot, ws);
+    this.playerConnections.set(ws, { ws, owner: joinSlot, gameId });
+
+    // Scan vision for the joining player
+    const joinCity = game.state.cities.find(c => c.owner === joinSlot);
+    if (joinCity) {
+      scan(game.state, joinSlot, joinCity.loc);
     }
 
-    this.send(ws, { type: "game_joined", gameId, owner: Owner.Player2, phase: game.phase });
+    this.send(ws, { type: "game_joined", gameId, owner: joinSlot as any, phase: game.phase });
 
-    // Start the game
-    this.startGame(game);
+    // Check if all human slots are filled — start the game
+    const humanPlayers = game.state.players.filter(p => !p.isAI);
+    const allHumansConnected = humanPlayers.every(p => game.players.get(p.id) !== null);
+    if (allHumansConnected && humanPlayers.length >= 2) {
+      this.startGame(game);
+    } else if (game.state.players.length === 2) {
+      // Classic 2-player: start when second player joins
+      this.startGame(game);
+    }
   }
 
   // ─── Start Game ─────────────────────────────────────────────────────────
@@ -290,7 +317,7 @@ export class GameManager {
   private startGame(game: ActiveGame): void {
     game.phase = "playing";
 
-    // Notify both players
+    // Notify all connected players
     for (const [owner, ws] of game.players) {
       if (ws) {
         this.send(ws, { type: "game_started", gameId: game.id });
@@ -337,12 +364,11 @@ export class GameManager {
 
   // ─── Validate Action ───────────────────────────────────────────────────
 
-  private validateAction(state: GameState, owner: Owner, action: PlayerAction): boolean {
+  private validateAction(state: GameState, owner: number, action: PlayerAction): boolean {
     switch (action.type) {
       case "move": {
         const unit = state.units.find((u) => u.id === action.unitId);
         if (!unit || unit.owner !== owner) return false;
-        // Validate target location is on the board
         if (typeof action.loc !== "number" || action.loc < 0 || action.loc >= MAP_SIZE || !isOnBoard(action.loc)) return false;
         return true;
       }
@@ -355,7 +381,6 @@ export class GameManager {
       case "setBehavior": {
         const unit = state.units.find((u) => u.id === action.unitId);
         if (!unit || unit.owner !== owner) return false;
-        // Validate behavior is a valid enum value
         const validBehaviors = Object.values(UnitBehavior);
         if (!validBehaviors.includes(action.behavior)) return false;
         return true;
@@ -380,7 +405,6 @@ export class GameManager {
       case "setProduction": {
         const city = state.cities.find((c) => c.id === action.cityId);
         if (!city || city.owner !== owner) return false;
-        // Validate unit type is a valid enum value
         const validUnitTypes = Object.values(UnitType).filter((v) => typeof v === "number");
         if (!validUnitTypes.includes(action.unitType)) return false;
         return true;
@@ -410,8 +434,10 @@ export class GameManager {
 
     game.turnEnded.add(conn.owner);
 
-    // Check if both players have ended their turn
-    if (game.turnEnded.has(Owner.Player1) && game.turnEnded.has(Owner.Player2)) {
+    // Check if all human players have ended their turn
+    const humanPlayers = game.state.players.filter(p => !p.isAI && p.status === "active");
+    const allHumansEnded = humanPlayers.every(p => game.turnEnded.has(p.id));
+    if (allHumansEnded) {
       this.executeTurn(game);
     }
   }
@@ -433,25 +459,37 @@ export class GameManager {
 
     // Add resign action and force turn execution
     game.pendingActions.get(conn.owner)!.push({ type: "resign" });
-    game.turnEnded.add(Owner.Player1);
-    game.turnEnded.add(Owner.Player2);
+    // Mark all players as ended to trigger execution
+    for (const p of game.state.players) {
+      if (p.status === "active") game.turnEnded.add(p.id);
+    }
     this.executeTurn(game);
   }
 
   // ─── Execute Turn ───────────────────────────────────────────────────────
 
   private executeTurn(game: ActiveGame): void {
-    const p1Actions = game.pendingActions.get(Owner.Player1) || [];
-    const p2Actions = game.pendingActions.get(Owner.Player2) || [];
+    // Compute AI actions for AI players
+    for (const p of game.state.players) {
+      if (p.isAI && p.status === "active") {
+        const aiActions = computeAITurn(game.state, p.id);
+        game.pendingActions.set(p.id, aiActions);
+      }
+    }
 
-    const result: TurnResult = executeTurn(game.state, p1Actions, p2Actions);
+    // Build action map
+    const allActions = new Map<number, PlayerAction[]>();
+    for (const p of game.state.players) {
+      allActions.set(p.id, game.pendingActions.get(p.id) ?? []);
+    }
+
+    const result: TurnResult = executeTurn(game.state, allActions);
 
     // Broadcast turn result
     for (const [owner, ws] of game.players) {
       if (ws) {
-        // Filter events: only send events the player can see
+        const viewMap = game.state.viewMaps[owner];
         const visibleEvents = result.events.filter((e) => {
-          const viewMap = game.state.viewMaps[owner];
           return viewMap && viewMap[e.loc] && viewMap[e.loc].seen >= 0;
         });
         this.send(ws, {
@@ -471,34 +509,34 @@ export class GameManager {
           this.send(ws, {
             type: "game_over",
             gameId: game.id,
-            winner: result.winner,
+            winner: result.winner as any,
             winType: result.winType!,
           });
         }
       }
-      // Persist completed game
       this.persistGame(game);
       console.log(`Game ${game.id} over: Player ${result.winner} wins by ${result.winType}`);
       return;
     }
 
     // Reset turn state
-    game.pendingActions.set(Owner.Player1, []);
-    game.pendingActions.set(Owner.Player2, []);
+    for (const p of game.state.players) {
+      game.pendingActions.set(p.id, []);
+    }
     game.turnEnded.clear();
 
     // Autosave after each turn
     this.persistGame(game);
 
-    // Send updated visible state to each player
-    for (const [owner] of game.players) {
-      this.sendVisibleState(game, owner);
+    // Send updated visible state to each connected player
+    for (const [owner, ws] of game.players) {
+      if (ws) this.sendVisibleState(game, owner);
     }
   }
 
   // ─── Visible State ──────────────────────────────────────────────────────
 
-  private getVisibleState(game: ActiveGame, owner: Owner): VisibleGameState {
+  private getVisibleState(game: ActiveGame, owner: number): VisibleGameState {
     const { state } = game;
     const viewMap = state.viewMaps[owner];
 
@@ -527,15 +565,15 @@ export class GameManager {
     return {
       turn: state.turn,
       phase: game.phase,
-      owner,
-      viewMap: [...viewMap], // shallow copy
+      owner: owner as any,
+      viewMap: [...viewMap],
       cities: visibleCities,
       units: visibleUnits,
       config: state.config,
     };
   }
 
-  private sendVisibleState(game: ActiveGame, owner: Owner): void {
+  private sendVisibleState(game: ActiveGame, owner: number): void {
     const ws = game.players.get(owner);
     if (!ws) return;
 
@@ -570,7 +608,7 @@ export class GameManager {
     // Persist game immediately so state is safe even if server crashes
     this.persistGame(game);
 
-    // Notify other player
+    // Notify other players
     this.broadcastToGame(game, { type: "player_disconnected", gameId: game.id }, conn.owner);
 
     // Set reconnection timeout — remove game from memory after grace period
@@ -594,7 +632,7 @@ export class GameManager {
     }
   }
 
-  private broadcastToGame(game: ActiveGame, msg: ServerMessage, excludeOwner?: Owner): void {
+  private broadcastToGame(game: ActiveGame, msg: ServerMessage, excludeOwner?: number): void {
     for (const [owner, ws] of game.players) {
       if (ws && owner !== excludeOwner) {
         this.send(ws, msg);
@@ -645,18 +683,20 @@ export class GameManager {
     // Restore map dimensions from saved config
     configureMapDimensions(saved.state.config.mapWidth, saved.state.config.mapHeight);
 
+    // Set up player connections (all disconnected initially)
+    const playerMap = new Map<number, WebSocket | null>();
+    const pendingActions = new Map<number, PlayerAction[]>();
+    for (const p of saved.state.players) {
+      playerMap.set(p.id, null);
+      pendingActions.set(p.id, []);
+    }
+
     const game: ActiveGame = {
       id: gameId,
       phase: saved.phase,
       state: saved.state,
-      players: new Map([
-        [Owner.Player1, null],
-        [Owner.Player2, null],
-      ]),
-      pendingActions: new Map([
-        [Owner.Player1, []],
-        [Owner.Player2, []],
-      ]),
+      players: playerMap,
+      pendingActions,
       turnEnded: new Set(),
       disconnectTimers: new Map(),
       createdAt: Date.now(),

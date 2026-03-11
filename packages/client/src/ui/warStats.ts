@@ -40,11 +40,11 @@ function unitName(type: UnitType): string {
 }
 
 function ownerLabel(owner: Owner): string {
-  return owner === Owner.Player1 ? "P1" : "P2";
+  return "P" + owner;
 }
 
 function ownerClass(owner: Owner): string {
-  return owner === Owner.Player1 ? "p1" : "p2";
+  return "p" + owner;
 }
 
 // ─── Summarize deaths into a compact string ─────────────────────────────────
@@ -100,11 +100,28 @@ function buildBattles(turn: number, events: TurnEvent[]): BattleRecord[] {
         loserType: e.data.loserType as UnitType,
         deaths: deathsByLoc.get(e.loc) ?? [],
       };
-      // Determine owners from death events
-      for (const d of battle.deaths) {
-        if (d.unitType === battle.loserType && battle.loserOwner === undefined) {
-          battle.loserOwner = d.owner;
-          battle.winnerOwner = d.owner === Owner.Player1 ? Owner.Player2 : Owner.Player1;
+      // Determine owners from combat event data if available
+      if (e.data.winnerOwner !== undefined) {
+        battle.winnerOwner = e.data.winnerOwner as Owner;
+      }
+      if (e.data.loserOwner !== undefined) {
+        battle.loserOwner = e.data.loserOwner as Owner;
+      }
+      // Fallback: infer from death events
+      if (battle.loserOwner === undefined) {
+        for (const d of battle.deaths) {
+          if (d.unitType === battle.loserType && battle.loserOwner === undefined) {
+            battle.loserOwner = d.owner;
+          }
+        }
+      }
+      // If we know the loser but not the winner, infer winner from deaths of the other side
+      if (battle.winnerOwner === undefined && battle.loserOwner !== undefined) {
+        for (const d of battle.deaths) {
+          if (d.owner !== battle.loserOwner) {
+            battle.winnerOwner = d.owner;
+            break;
+          }
         }
       }
       battles.push(battle);
@@ -206,32 +223,36 @@ export function createWarStats(camera: Camera): WarStats {
   element.appendChild(filters);
   element.appendChild(list);
 
-  function computeSummary(): { p1Kills: number; p2Kills: number; p1Captures: number; p2Captures: number; p1Losses: number; p2Losses: number } {
-    let p1Kills = 0, p2Kills = 0, p1Captures = 0, p2Captures = 0, p1Losses = 0, p2Losses = 0;
+  function computeSummary(): Map<number, { kills: number; captures: number; losses: number }> {
+    const stats = new Map<number, { kills: number; captures: number; losses: number }>();
+    function getStats(owner: number) {
+      let s = stats.get(owner);
+      if (!s) { s = { kills: 0, captures: 0, losses: 0 }; stats.set(owner, s); }
+      return s;
+    }
     for (const b of allBattles) {
-      if (b.kind === "unit") {
-        if (b.winnerOwner === Owner.Player1) p1Kills++;
-        else p2Kills++;
+      if (b.kind === "unit" && b.winnerOwner !== undefined) {
+        getStats(b.winnerOwner).kills++;
       }
-      if (b.kind === "city_capture") {
-        if (b.attackerOwner === Owner.Player1) p1Captures++;
-        else p2Captures++;
+      if (b.kind === "city_capture" && b.attackerOwner !== undefined) {
+        getStats(b.attackerOwner).captures++;
       }
       for (const d of b.deaths) {
-        if (d.owner === Owner.Player1) p1Losses++;
-        else p2Losses++;
+        getStats(d.owner).losses++;
       }
     }
-    return { p1Kills, p2Kills, p1Captures, p2Captures, p1Losses, p2Losses };
+    return stats;
   }
 
   function renderBattles(): void {
     const stats = computeSummary();
-    summary.innerHTML =
-      `<div class="summary-row">` +
-      `<span class="summary-p1"><b>Player 1</b> — ${stats.p1Kills} wins, ${stats.p1Captures} captures, ${stats.p1Losses} units lost</span>` +
-      `<span class="summary-p2"><b>Player 2</b> — ${stats.p2Kills} wins, ${stats.p2Captures} captures, ${stats.p2Losses} units lost</span>` +
-      `</div>`;
+    const summaryParts: string[] = [];
+    for (const [owner, s] of [...stats.entries()].sort((a, b) => a[0] - b[0])) {
+      summaryParts.push(
+        `<span class="summary-p${owner}"><b>Player ${owner}</b> — ${s.kills} wins, ${s.captures} captures, ${s.losses} units lost</span>`
+      );
+    }
+    summary.innerHTML = `<div class="summary-row">${summaryParts.join("")}</div>`;
 
     const filtered = activeFilter === "all"
       ? allBattles

@@ -3,7 +3,7 @@
 // Enhanced effects: more particles, lingering smoke, richer explosions.
 
 import { Container, Graphics } from "pixi.js";
-import { locRow, locCol, Owner } from "@empire/shared";
+import { locRow, locCol, Owner, getPlayerColor } from "@empire/shared";
 import type { Loc } from "@empire/shared";
 import { cartToIso } from "../iso/coords.js";
 import { COLORS } from "../constants.js";
@@ -116,7 +116,7 @@ export class ParticleSystem {
 
   emitDeath(loc: Loc, owner: Owner): void {
     const { x, y } = this.locToWorld(loc);
-    const color = owner === Owner.Player1 ? COLORS.PLAYER1 : COLORS.PLAYER2;
+    const color = getPlayerColor(owner);
     this.emit(x, y, 14, color, { speedMin: 10, speedMax: 35, life: 0.9, spread: Math.PI });
     // Small debris
     this.emit(x, y, 6, 0x555555, { speedMin: 15, speedMax: 40, life: 0.6, sizeMin: 1, sizeMax: 2 });
@@ -124,7 +124,7 @@ export class ParticleSystem {
 
   emitCapture(loc: Loc, captor: Owner): void {
     const { x, y } = this.locToWorld(loc);
-    const color = captor === Owner.Player1 ? COLORS.PLAYER1 : COLORS.PLAYER2;
+    const color = getPlayerColor(captor);
     // Ring burst outward
     for (let i = 0; i < 16; i++) {
       const angle = (i / 16) * Math.PI * 2;

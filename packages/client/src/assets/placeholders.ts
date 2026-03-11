@@ -2,7 +2,7 @@
 // Generates colored geometric textures for all game elements.
 
 import { Graphics, type Renderer, type Texture } from "pixi.js";
-import { UnitType, Owner, DepositType } from "@empire/shared";
+import { UnitType, Owner, DepositType, getPlayerColor, UNOWNED } from "@empire/shared";
 import { TILE_WIDTH, TILE_HEIGHT, HALF_TILE_W, HALF_TILE_H, COLORS } from "../constants.js";
 import type { AssetBundle } from "../types.js";
 
@@ -21,9 +21,8 @@ function drawDiamond(g: Graphics, fill: number, stroke: number, alpha = 1): void
 }
 
 function ownerColor(owner: Owner): number {
-  if (owner === Owner.Player1) return COLORS.PLAYER1;
-  if (owner === Owner.Player2) return COLORS.PLAYER2;
-  return COLORS.CITY_NEUTRAL;
+  if (owner === UNOWNED) return COLORS.CITY_NEUTRAL;
+  return getPlayerColor(owner);
 }
 
 // ─── Terrain Textures ───────────────────────────────────────────────────────
@@ -702,14 +701,14 @@ function makeDepositTexture(renderer: Renderer, depositType: DepositType): Textu
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
-export function generateAssets(renderer: Renderer): AssetBundle {
+export function generateAssets(renderer: Renderer, playerCount = 16): AssetBundle {
   const units = new Map<string, Texture>();
 
-  // Generate unit textures for both players
-  for (const owner of [Owner.Player1, Owner.Player2]) {
+  // Generate unit textures for all possible players (on-demand caching)
+  for (let owner = 1; owner <= playerCount; owner++) {
     for (let t = UnitType.Army; t <= UnitType.EngineerBoat; t++) {
       const key = `unit_${t}_${owner}`;
-      units.set(key, makeUnitTexture(renderer, t, owner));
+      units.set(key, makeUnitTexture(renderer, t, owner as Owner));
     }
   }
 
@@ -718,6 +717,13 @@ export function generateAssets(renderer: Renderer): AssetBundle {
   deposits.set("ore", makeDepositTexture(renderer, DepositType.OreVein));
   deposits.set("oil", makeDepositTexture(renderer, DepositType.OilWell));
   deposits.set("textile", makeDepositTexture(renderer, DepositType.TextileFarm));
+
+  // Generate city textures for all players + neutral
+  const cityTextures = new Map<number, Texture>();
+  cityTextures.set(UNOWNED, makeCityTexture(renderer, COLORS.CITY_NEUTRAL));
+  for (let owner = 1; owner <= playerCount; owner++) {
+    cityTextures.set(owner, makeCityTexture(renderer, getPlayerColor(owner)));
+  }
 
   return {
     terrain: {
@@ -728,8 +734,8 @@ export function generateAssets(renderer: Renderer): AssetBundle {
       seaShore: makeSeaShoreTexture(renderer),
       shoreFoam: makeShoreFoamTexture(renderer),
       cityNeutral: makeCityTexture(renderer, COLORS.CITY_NEUTRAL),
-      cityPlayer1: makeCityTexture(renderer, COLORS.PLAYER1),
-      cityPlayer2: makeCityTexture(renderer, COLORS.PLAYER2),
+      cityPlayer1: makeCityTexture(renderer, getPlayerColor(1)),
+      cityPlayer2: makeCityTexture(renderer, getPlayerColor(2)),
     },
     fog: makeFogTexture(renderer),
     selection: makeSelectionTexture(renderer),
@@ -738,5 +744,6 @@ export function generateAssets(renderer: Renderer): AssetBundle {
     attackHighlight: makeAttackHighlightTexture(renderer),
     units,
     deposits,
+    cityTextures,
   };
 }

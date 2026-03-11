@@ -18,6 +18,7 @@ export interface ActionPanel {
     selectedCityId: number | null,
     gameState: GameState,
     hasHighlights: boolean,
+    playerOwner?: Owner,
   ): void;
   /** Returns the action key if a panel button was clicked, or null. */
   consumeClick(): string | null;
@@ -48,7 +49,7 @@ export function createActionPanel(): ActionPanel {
   return {
     element,
 
-    update(selectedUnit, selectedCityId, gameState, hasHighlights): void {
+    update(selectedUnit, selectedCityId, gameState, hasHighlights, playerOwner: Owner = Owner.Player1): void {
       if (!selectedUnit && selectedCityId === null) {
         element.innerHTML = `<div class="section-label">No selection</div>` +
           `<div style="color:#555;font-size:11px;margin-top:4px">Click a unit or city</div>`;
@@ -221,7 +222,7 @@ export function createActionPanel(): ActionPanel {
 
       if (selectedCityId !== null) {
         const city = gameState.cities.find((c) => c.id === selectedCityId);
-        if (city && city.owner === Owner.Player1) {
+        if (city && city.owner === playerOwner) {
           parts.push(`<div class="section-label">City</div>`);
           parts.push(btn("Change Production", "P", "open-city-panel"));
         }

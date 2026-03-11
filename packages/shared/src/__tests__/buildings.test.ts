@@ -19,7 +19,7 @@ import {
   BUILDING_NAMES,
   MAX_CITY_UPGRADES,
 } from "../index.js";
-import type { GameState, CityState, MapCell, DepositState, BuildingState } from "../types.js";
+import type { GameState, CityState, MapCell, DepositState, BuildingState, PlayerInfo } from "../types.js";
 import {
   initViewMap,
   tickCityProduction,
@@ -99,6 +99,10 @@ function createTestState(): GameState {
       [Owner.Player1]: [0, 0, 0, 0],
       [Owner.Player2]: [0, 0, 0, 0],
     },
+    players: [
+      { id: 1, name: "Player 1", color: 0x00cc00, isAI: false, status: "active" as const },
+      { id: 2, name: "Player 2", color: 0xcc0000, isAI: true, status: "active" as const },
+    ],
   };
 }
 
@@ -616,8 +620,7 @@ describe("processAction — build actions", () => {
 
     const result = executeTurn(
       state,
-      [{ type: "buildOnDeposit", unitId: unit.id }],
-      [],
+      new Map([[1, [{ type: "buildOnDeposit", unitId: unit.id }]], [2, []]]),
     );
 
     expect(result.events.some((e) => e.type === "building")).toBe(true);
@@ -634,8 +637,7 @@ describe("processAction — build actions", () => {
 
     const result = executeTurn(
       state,
-      [{ type: "buildCityUpgrade", unitId: unit.id, cityId: city.id, buildingType: BuildingType.Hospital }],
-      [],
+      new Map([[1, [{ type: "buildCityUpgrade", unitId: unit.id, cityId: city.id, buildingType: BuildingType.Hospital }]], [2, []]]),
     );
 
     expect(result.events.some((e) => e.type === "building")).toBe(true);
@@ -665,7 +667,7 @@ describe("full construction lifecycle", () => {
     // Tick through build time (Farm = 4 turns)
     const buildTime = state.buildings[0].buildTime;
     for (let t = 0; t < buildTime; t++) {
-      const result = executeTurn(state, [], []);
+      const result = executeTurn(state, new Map([[1, []], [2, []]]));
     }
 
     // Building should be complete, constructor consumed
@@ -692,7 +694,7 @@ describe("full construction lifecycle", () => {
     // Tick through build time (University = 8 turns)
     const buildTime = state.buildings[0].buildTime;
     for (let t = 0; t < buildTime; t++) {
-      executeTurn(state, [], []);
+      executeTurn(state, new Map([[1, []], [2, []]]));
     }
 
     expect(state.buildings[0].complete).toBe(true);
@@ -701,7 +703,7 @@ describe("full construction lifecycle", () => {
     // Tech research should have accumulated (1 per turn after completion)
     // Since it completed at the end of a turn, research starts accumulating on the NEXT turn
     const techBefore = state.techResearch[Owner.Player1][TechType.Science];
-    executeTurn(state, [], []);
+    executeTurn(state, new Map([[1, []], [2, []]]));
     expect(state.techResearch[Owner.Player1][TechType.Science]).toBe(techBefore + 1);
   });
 });

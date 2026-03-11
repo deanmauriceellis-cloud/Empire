@@ -10,7 +10,7 @@ import {
   UNIT_ATTRIBUTES,
   INFINITY,
 } from "../index.js";
-import type { GameState, CityState, UnitState, MapCell, ViewMapCell } from "../types.js";
+import type { GameState, CityState, UnitState, MapCell, ViewMapCell, PlayerInfo } from "../types.js";
 import {
   createUnit,
   killUnit,
@@ -70,6 +70,10 @@ function createTestState(): GameState {
     buildings: [],
     nextBuildingId: 0,
     techResearch: { [Owner.Unowned]: [0,0,0,0], [Owner.Player1]: [0,0,0,0], [Owner.Player2]: [0,0,0,0] },
+    players: [
+      { id: 1, name: "Player 1", color: 0x00cc00, isAI: false, status: "active" as const },
+      { id: 2, name: "Player 2", color: 0xcc0000, isAI: true, status: "active" as const },
+    ],
   };
 }
 

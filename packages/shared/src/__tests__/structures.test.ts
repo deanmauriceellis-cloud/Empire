@@ -17,7 +17,7 @@ import {
   configureMapDimensions, MAP_WIDTH, MAP_HEIGHT, MAP_SIZE,
   ResourceType,
 } from "../index.js";
-import type { GameState, MapCell, ViewMapCell, CityState, BuildingState } from "../index.js";
+import type { GameState, MapCell, ViewMapCell, CityState, BuildingState, PlayerInfo } from "../index.js";
 
 // ─── Test Helpers ────────────────────────────────────────────────────────────
 
@@ -59,6 +59,10 @@ function createTestState(width = 20, height = 20): GameState {
       [Owner.Player1]: [0, 0, 0, 0],
       [Owner.Player2]: [0, 0, 0, 0],
     },
+    players: [
+      { id: 1, name: "Player 1", color: 0x00cc00, isAI: false, status: "active" as const },
+      { id: 2, name: "Player 2", color: 0xcc0000, isAI: true, status: "active" as const },
+    ],
   };
 }
 
@@ -793,7 +797,7 @@ describe("executeTurn with structures", () => {
     const enemy = createUnit(state, UnitType.Army, Owner.Player2, loc(5, 6));
     enemy.hits = 10;
 
-    const result = executeTurn(state, [], []);
+    const result = executeTurn(state, new Map([[1, []], [2, []]]));
     // Bunker should have fired at enemy
     expect(enemy.hits).toBeLessThan(10);
   });
@@ -806,7 +810,7 @@ describe("executeTurn with structures", () => {
     addCompletedStructure(state, loc(5, 5), BuildingType.OffshorePlatform, Owner.Player1);
 
     const oilBefore = state.resources[Owner.Player1][ResourceType.Oil];
-    executeTurn(state, [], []);
+    executeTurn(state, new Map([[1, []], [2, []]]));
     expect(state.resources[Owner.Player1][ResourceType.Oil]).toBeGreaterThan(oilBefore);
   });
 });

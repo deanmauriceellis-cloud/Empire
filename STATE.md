@@ -1,23 +1,36 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-KINGDOM Phase 9 next** — N-Player Foundation (dynamic ownership, N-player turns)
+**PLAN-KINGDOM Phase 10 next** — Crown City & Kingdom Map (100x100 kingdom tiles, tributaries)
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phases 1-8 of expansion plan complete (7A units + 7B structures + 8 AI economy)
-- 544 tests passing (516 shared + 28 server)
+- Phases 1-9 of expansion plan complete (7A units + 7B structures + 8 AI economy + 9 N-player)
+- 572 tests passing (544 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-KINGDOM.md** is the definitive plan (17 phases: gameplay → kingdom MMO → monetization)
 
 ## Latest commit
-session 051: Phase 8 — AI Economy & Strategy (construction, defense, bombard, tech, surrender)
+session 052: Phase 9 — N-Player Foundation (PlayerId, N-player engine, AI multi-enemy, kingdom plan)
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
 - Armies adjacent to capturable neutral cities not always attacking (pre-existing)
 - Structure sprites not yet rendered on tilemap (visual polish deferred)
 - Economy review tabs not yet updated for structures
+
+## Completed (session 052) — Phase 9: N-Player Foundation
+- [x] 9A: PlayerId type (0=Unowned, 1+=players), Owner enum @deprecated
+- [x] 9B: executeTurn(state, Map<number, PlayerAction[]>) — N-player turn execution
+- [x] 9C: pickNDistantCities for N-player mapgen, placeDeposits dynamic zones
+- [x] 9D: AI multi-enemy awareness (isEnemy closure, getStrongestEnemy for surrender)
+- [x] 9E: Per-player viewMaps/resources/techResearch keyed by number
+- [x] 9F: 16-color palette, N-player minimap/warStats/unitInfo, playerOwner params
+- [x] 9G: GameManager N-player lobby/reconnection, AI for all AI players
+- [x] 9H: Singleplayer N-player support, client defaults to 6 players
+- [x] New file: player.ts — PLAYER_COLORS, helpers, initAllPlayerData
+- [x] 9 test files updated, 572 total (544 shared + 28 server)
+- [x] PLAN-KINGDOM.md rewritten: kingdom tiles, tributaries, monthly reset, 100 players
 
 ## Completed (session 051) — Phase 8: AI Economy & Strategy
 - [x] 8A: Starvation-aware production switching, canAffordProduction() safety margin
@@ -295,10 +308,10 @@ R1 and R5 can run in parallel (no dependencies). R2 and R3 depend on R1. R6 depe
 1. ~~**Phase 1-6**: Graphics, UI, Economy, Construction, Review, Tech~~ ✓ (sessions 041-047)
 2. ~~**Phase 7A**: New Units & Bombard~~ ✓ (session 049) | ~~**Phase 7B**: Defensive Structures~~ ✓ (session 050)
 3. ~~**Phase 8**: AI Economy & Strategy~~ ✓ (session 051)
-4. **Phase 9**: N-Player Foundation — dynamic ownership, N-player turns (1-2 sessions, NEXT)
-5. **Phase 10**: Crown City & Kingdoms — capitals, territory, win condition (1-2 sessions)
-6. **Phase 11**: Tick-Based Server — timer turns, offline AI, shields (1 session)
-7. **Phase 12**: Dynamic Map & Spawning — island gen, isolation levels (1-2 sessions)
+4. ~~**Phase 9**: N-Player Foundation~~ ✓ (session 052)
+5. **Phase 10**: Crown City & Kingdom Map — 100x100 tiles, tributaries, territory (1-2 sessions, NEXT)
+6. **Phase 11**: Kingdom World Server — tick engine, AI kingdoms, monthly reset (1-2 sessions)
+7. **Phase 12**: Dynamic Map & Player Join — ring placement, world expansion (1-2 sessions)
 8. **Phase 13**: Accounts & Persistence — auth, player DB, kingdom lifecycle (1-2 sessions)
 9. **Phase 14**: Delta Sync & Scaling — efficient updates for 50+ players (1-2 sessions)
 10. **Phase 15**: Monetization — Stripe, cosmetics, VIP, season pass (2-3 sessions)

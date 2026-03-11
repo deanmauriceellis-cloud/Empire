@@ -437,8 +437,8 @@ interface ContinentPair {
 }
 
 /**
- * Select two starting cities on appropriate continents.
- * Returns [player1StartCity, player2StartCity] indices.
+ * Select N starting cities spread across continents.
+ * Returns array of city indices (one per player).
  */
 export function selectStartingCities(
   continents: Continent[],
@@ -448,9 +448,9 @@ export function selectStartingCities(
   map?: MapCell[],
   mapWidth?: number,
   mapHeight?: number,
-): [number, number] {
+  numPlayers: number = 2,
+): number[] {
   // Minimum continent area: 2% of map size ensures enough room to explore
-  // while waiting for transports (e.g., 120 tiles on a 100x60 map)
   const minArea = mapSize ? Math.floor(mapSize * 0.02) : 100;
 
   // Score and filter viable continents
@@ -459,52 +459,92 @@ export function selectStartingCities(
     .filter((s) => s.value >= 0)
     .sort((a, b) => b.value - a.value);
 
-  if (scored.length < 2) {
-    // Fallback: if fewer than 2 viable continents, pick 2 distant ocean-shore cities
-    return pickDistantCities(cities, rng, map, mapWidth, mapHeight, continents);
+  if (scored.length < 2 && numPlayers <= 2) {
+    // Fallback: pick 2 distant ocean-shore cities
+    const [c1, c2] = pickDistantCities(cities, rng, map, mapWidth, mapHeight, continents);
+    return [c1, c2];
   }
 
-  // Create pairs ranked by balance (smallest diff first = fairest)
-  // Heavily penalize pairs where city counts differ by more than 2x
-  const pairs: ContinentPair[] = [];
-  for (let i = 0; i < scored.length; i++) {
-    for (let j = i + 1; j < scored.length; j++) {
-      let diff = Math.abs(scored[i].value - scored[j].value);
-      // Penalize unbalanced city counts — ensures both players have similar neutral city access
-      const cities1 = scored[i].cont.cities.length;
-      const cities2 = scored[j].cont.cities.length;
-      const cityRatio = Math.max(cities1, cities2) / Math.max(Math.min(cities1, cities2), 1);
-      if (cityRatio > 2) {
-        diff += (cityRatio - 2) * 50000; // heavy penalty for >2x city imbalance
-      }
-      pairs.push({
-        cont1: scored[i].cont,
-        cont2: scored[j].cont,
-        diff,
-      });
-    }
-  }
-  pairs.sort((a, b) => a.diff - b.diff);
-
-  // Pick the most balanced pair (easiest start)
-  const pair = pairs[0];
-
-  // Pick the pair of shore cities (one per continent) that maximizes distance
-  let bestDist = -1;
-  let bestC1 = pair.cont1.shoreCities[0];
-  let bestC2 = pair.cont2.shoreCities[0];
-  for (const c1 of pair.cont1.shoreCities) {
-    for (const c2 of pair.cont2.shoreCities) {
-      const d = dist(cities[c1].loc, cities[c2].loc);
-      if (d > bestDist) {
-        bestDist = d;
-        bestC1 = c1;
-        bestC2 = c2;
+  if (numPlayers <= 2) {
+    // Legacy 2-player balanced pair selection
+    const pairs: ContinentPair[] = [];
+    for (let i = 0; i < scored.length; i++) {
+      for (let j = i + 1; j < scored.length; j++) {
+        let diff = Math.abs(scored[i].value - scored[j].value);
+        const cities1 = scored[i].cont.cities.length;
+        const cities2 = scored[j].cont.cities.length;
+        const cityRatio = Math.max(cities1, cities2) / Math.max(Math.min(cities1, cities2), 1);
+        if (cityRatio > 2) {
+          diff += (cityRatio - 2) * 50000;
+        }
+        pairs.push({ cont1: scored[i].cont, cont2: scored[j].cont, diff });
       }
     }
+    pairs.sort((a, b) => a.diff - b.diff);
+    const pair = pairs[0];
+
+    let bestDist = -1;
+    let bestC1 = pair.cont1.shoreCities[0];
+    let bestC2 = pair.cont2.shoreCities[0];
+    for (const c1 of pair.cont1.shoreCities) {
+      for (const c2 of pair.cont2.shoreCities) {
+        const d = dist(cities[c1].loc, cities[c2].loc);
+        if (d > bestDist) {
+          bestDist = d;
+          bestC1 = c1;
+          bestC2 = c2;
+        }
+      }
+    }
+    return [bestC1, bestC2];
   }
 
-  return [bestC1, bestC2];
+  // N-player starting city selection: maximize minimum distance between all starts
+  // Greedy approach: pick cities one at a time, each maximizing min-dist to all prior picks
+  const candidates = scored.flatMap(s => s.cont.shoreCities);
+  if (candidates.length < numPlayers) {
+    // Not enough shore cities — fall back to all cities
+    const allCandidates = cities.map((_, i) => i);
+    return pickNDistantCities(allCandidates, cities, numPlayers, rng);
+  }
+  return pickNDistantCities(candidates, cities, numPlayers, rng);
+}
+
+/** Pick N cities from candidates that maximize minimum pairwise distance. */
+function pickNDistantCities(
+  candidates: number[],
+  cities: CityState[],
+  n: number,
+  rng: () => number,
+): number[] {
+  if (candidates.length <= n) return candidates.slice(0, n);
+
+  // Start with a random candidate
+  const picked: number[] = [candidates[Math.floor(rng() * candidates.length)]];
+
+  while (picked.length < n) {
+    let bestCandidate = -1;
+    let bestMinDist = -1;
+
+    for (const c of candidates) {
+      if (picked.includes(c)) continue;
+      // Minimum distance from this candidate to any already-picked city
+      let minDist = Infinity;
+      for (const p of picked) {
+        const d = dist(cities[c].loc, cities[p].loc);
+        if (d < minDist) minDist = d;
+      }
+      if (minDist > bestMinDist) {
+        bestMinDist = minDist;
+        bestCandidate = c;
+      }
+    }
+
+    if (bestCandidate === -1) break;
+    picked.push(bestCandidate);
+  }
+
+  return picked;
 }
 
 /** Fallback: pick two cities that are maximally far apart, preferring ocean shore.
@@ -589,7 +629,7 @@ function pickDistantCities(
 export function placeDeposits(
   map: MapCell[],
   cities: CityState[],
-  startingCities: [number, number],
+  startingCities: number[],
   width: number,
   height: number,
   rng: () => number,
@@ -604,9 +644,8 @@ export function placeDeposits(
   const minCityDist = 2;
 
   // Find starting city locations
-  const start1 = cities[startingCities[0]].loc;
-  const start2 = cities[startingCities[1]].loc;
-  const midCol = Math.floor(width / 2);
+  const startLocs = startingCities.map(cid => cities[cid].loc);
+  const numPlayers = startingCities.length;
 
   // Collect candidate land tiles (not cities, not map edges)
   const candidates: Loc[] = [];
@@ -629,26 +668,39 @@ export function placeDeposits(
 
   if (candidates.length === 0) return deposits;
 
-  // Categorize candidates by zone: near player 1, near player 2, contested middle
-  const d1Max = dist(start1, start2) * 0.4;  // within 40% of inter-start distance
-  const d2Max = d1Max;
+  // Categorize candidates by zone: one zone per player + contested middle
+  // Each candidate belongs to the nearest player's zone if within 40% of inter-start distance
+  const avgDist = numPlayers >= 2
+    ? startLocs.reduce((sum, loc, i) => {
+        for (let j = i + 1; j < startLocs.length; j++) sum += dist(loc, startLocs[j]);
+        return sum;
+      }, 0) / Math.max(1, numPlayers * (numPlayers - 1) / 2)
+    : 50;
+  const zoneRadius = avgDist * 0.4;
 
-  const zone1: Loc[] = [];  // near player 1
-  const zone2: Loc[] = [];  // near player 2
+  const playerZones: Loc[][] = startLocs.map(() => []);
   const zoneM: Loc[] = [];  // contested middle
 
   for (const loc of candidates) {
-    const d1 = dist(loc, start1);
-    const d2 = dist(loc, start2);
-    if (d1 <= d1Max && d1 < d2) zone1.push(loc);
-    else if (d2 <= d2Max && d2 < d1) zone2.push(loc);
-    else zoneM.push(loc);
+    let nearest = -1;
+    let nearestDist = Infinity;
+    for (let p = 0; p < numPlayers; p++) {
+      const d = dist(loc, startLocs[p]);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = p;
+      }
+    }
+    if (nearestDist <= zoneRadius) {
+      playerZones[nearest].push(loc);
+    } else {
+      zoneM.push(loc);
+    }
   }
 
   // Plan deposit distribution: equal per player zone, rest contested
-  // Each zone gets roughly equal count of each type
-  const perZone = Math.max(2, Math.floor(numDeposits / 3));
-  const contested = numDeposits - perZone * 2;
+  const perZone = Math.max(2, Math.floor(numDeposits / (numPlayers + 1)));
+  const contested = numDeposits - perZone * numPlayers;
 
   // Helper: pick a deposit location from a zone, respecting min distance to existing deposits
   function pickFromZone(zone: Loc[]): Loc | null {
@@ -717,8 +769,9 @@ export function placeDeposits(
     }
   }
 
-  placeInZone(zone1, perZone);
-  placeInZone(zone2, perZone);
+  for (const zone of playerZones) {
+    placeInZone(zone, perZone);
+  }
   placeInZone(zoneM, contested);
 
   return deposits;
@@ -729,7 +782,7 @@ export function placeDeposits(
 export interface MapGenerationResult {
   map: MapCell[];
   cities: CityState[];
-  startingCities: [number, number]; // [player1CityId, player2CityId]
+  startingCities: number[]; // city indices for each player (length = numPlayers)
   continents: Continent[];
   deposits: DepositState[];
 }
@@ -765,7 +818,8 @@ function generateStandardMap(config: GameConfig): MapGenerationResult {
 
   // Step 2.4: Continent detection & starting cities
   const continents = findContinents(map, cities, mapWidth, mapHeight);
-  const startingCities = selectStartingCities(continents, cities, rng, mapWidth * mapHeight, map, mapWidth, mapHeight);
+  const numPlayers = config.numPlayers ?? 2;
+  const startingCities = selectStartingCities(continents, cities, rng, mapWidth * mapHeight, map, mapWidth, mapHeight, numPlayers);
 
   // Step 2.5: Deposit placement
   const deposits = placeDeposits(map, cities, startingCities, mapWidth, mapHeight, rng, heights, waterline);
@@ -1062,7 +1116,7 @@ function generateRiverMap(config: GameConfig): MapGenerationResult {
   if (startWest === -1) startWest = westCities.length > 0 ? westCities[0] : 0;
   if (startEast === -1) startEast = eastCities.length > 0 ? eastCities[0] : Math.min(1, cities.length - 1);
 
-  const startingCities: [number, number] = [startWest, startEast];
+  const startingCities: number[] = [startWest, startEast];
 
   // ─── Step 8: Detect continents ─────────────────────────────────────────
   const continents = findContinents(map, cities, mapWidth, mapHeight);

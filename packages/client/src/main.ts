@@ -63,6 +63,7 @@ async function init() {
   let mode: GameMode = "none";
   let game: SinglePlayerGame;
   let collector: ActionCollector;
+  let playerOwner: Owner = Owner.Player1;  // the human player's owner ID
 
   // ─── Camera (single instance, reused across games) ──────────────────
   const camera = createCamera(100, 60);
@@ -103,7 +104,7 @@ async function init() {
     if (mode !== "singleplayer") return new Set();
     const locked = new Set<number>();
     for (let i = 0; i < NUM_UNIT_TYPES; i++) {
-      if (!canProduceUnit(game.state, Owner.Player1, i as UnitType)) {
+      if (!canProduceUnit(game.state, playerOwner, i as UnitType)) {
         locked.add(i);
       }
     }
@@ -238,7 +239,7 @@ async function init() {
 
     if (mode === "singleplayer") {
       const unit = game.state.units.find((u) => u.id === selection.selectedUnitId);
-      if (!unit || unit.owner !== Owner.Player1) {
+      if (!unit || unit.owner !== playerOwner) {
         currentHighlights = [];
         return;
       }
@@ -291,7 +292,9 @@ async function init() {
 
   function startSinglePlayer(options?: GameSetupOptions): void {
     mode = "singleplayer";
-    const configOverrides: Partial<GameConfig> = {};
+    const configOverrides: Partial<GameConfig> = {
+      numPlayers: 6, // 1 human + 5 AI kingdoms
+    };
     if (options) {
       configOverrides.mapWidth = options.mapSize.width;
       configOverrides.mapHeight = options.mapSize.height;
@@ -302,12 +305,13 @@ async function init() {
       }
     }
     game = createSinglePlayerGame(configOverrides);
-    collector = createActionCollector(game);
+    playerOwner = Owner.Player1;
+    collector = createActionCollector(game, playerOwner);
 
     // Reconfigure camera for the new map dimensions
     camera.reconfigure(game.state.config.mapWidth, game.state.config.mapHeight);
 
-    const playerCity = game.state.cities.find((c) => c.owner === Owner.Player1);
+    const playerCity = game.state.cities.find((c) => c.owner === playerOwner);
     if (playerCity) {
       camera.centerOnTile(locCol(playerCity.loc), locRow(playerCity.loc));
     }
@@ -349,10 +353,15 @@ async function init() {
     if (mode !== "singleplayer") return;
     const flags = ui.debug.flags;
     if (flags.revealMap) {
-      revealMapForOwner(Owner.Player1);
+      revealMapForOwner(playerOwner);
     }
     if (flags.aiOmniscient) {
-      revealMapForOwner(Owner.Player2);
+      // Reveal map for all AI players
+      for (const p of game.state.players) {
+        if (p.id !== playerOwner) {
+          revealMapForOwner(p.id as Owner);
+        }
+      }
     }
   }
 
@@ -433,26 +442,26 @@ async function init() {
       ? state.cities.find((c) => c.id === selection.selectedCityId) ?? null
       : null;
 
-    const playerUnits = state.units.filter((u) => u.owner === Owner.Player1);
+    const playerUnits = state.units.filter((u) => u.owner === playerOwner);
     const unitCountsByType = new Array(NUM_UNIT_TYPES).fill(0);
     for (const u of playerUnits) unitCountsByType[u.type]++;
 
     // Compute per-turn resource income
-    const playerCities = state.cities.filter((c) => c.owner === Owner.Player1);
+    const playerCities = state.cities.filter((c) => c.owner === playerOwner);
     const income = [0, 0, 0];
     for (let i = 0; i < 3; i++) income[i] += playerCities.length * CITY_INCOME[i];
     for (const dep of state.deposits) {
-      if (dep.owner === Owner.Player1 && dep.buildingComplete) {
+      if (dep.owner === playerOwner && dep.buildingComplete) {
         income[DEPOSIT_RESOURCE[dep.type]] += DEPOSIT_INCOME;
       }
     }
 
     return {
       turn: state.turn,
-      owner: Owner.Player1,
+      owner: playerOwner,
       playerCityCount: playerCities.length,
       playerUnitCount: playerUnits.length,
-      enemyCityCount: state.cities.filter((c) => c.owner === Owner.Player2).length,
+      enemyCityCount: state.cities.filter((c) => c.owner !== playerOwner && c.owner !== Owner.Unowned).length,
       unitCountsByType,
       selectedUnit,
       selectedCity,
@@ -460,9 +469,9 @@ async function init() {
       events: [...collector.turnEvents],
       isGameOver: game.isGameOver,
       winner: game.winner,
-      resources: state.resources[Owner.Player1],
+      resources: state.resources[playerOwner],
       resourceIncome: income,
-      techResearch: state.techResearch[Owner.Player1],
+      techResearch: state.techResearch[playerOwner],
     };
   }
 
@@ -558,15 +567,15 @@ async function init() {
     }
 
     // ─── Click on own unit → select (re-click cycles to city) ─────
-    const playerOwner = mode === "singleplayer" ? Owner.Player1 : mp.owner;
+    const clickOwner = mode === "singleplayer" ? playerOwner : mp.owner;
     const units = mode === "singleplayer" ? game.state.units : (mp.visibleState?.units ?? []);
     const playerUnit = units.find(
-      (u) => u.loc === loc && u.owner === playerOwner && u.shipId === null,
+      (u) => u.loc === loc && u.owner === clickOwner && u.shipId === null,
     );
 
     // Debug: log what's at the clicked tile
     const allAtLoc = units.filter((u) => u.loc === loc);
-    console.log(`[Click] screen=(${screenX},${screenY}) tile=(${tile.row},${tile.col}) loc=${loc} unitsHere=${allAtLoc.length} playerOwner=${playerOwner}`);
+    console.log(`[Click] screen=(${screenX},${screenY}) tile=(${tile.row},${tile.col}) loc=${loc} unitsHere=${allAtLoc.length} playerOwner=${clickOwner}`);
     if (allAtLoc.length > 0) {
       console.log(`[Click]   units:`,
         allAtLoc.map(u => `#${u.id} ${UNIT_ATTRIBUTES[u.type].name} owner=${u.owner} shipId=${u.shipId}`));
@@ -576,7 +585,7 @@ async function init() {
     const cities = mode === "singleplayer"
       ? game.state.cities
       : (mp.visibleState?.cities ?? []);
-    const city = cities.find((c) => c.loc === loc && c.owner === playerOwner);
+    const city = cities.find((c) => c.loc === loc && c.owner === clickOwner);
 
     if (playerUnit) {
       // If this unit is already selected and there's a city here, cycle to city
@@ -721,12 +730,12 @@ async function init() {
       audio.playExplosion();
       shake.trigger(0.6);
     } else if (event.type === "capture") {
-      const owner = mode === "singleplayer" ? Owner.Player1 : (mp.owner ?? Owner.Player1);
+      const owner = mode === "singleplayer" ? playerOwner : (mp.owner ?? Owner.Player1);
       particles.emitCapture(event.loc, owner);
       audio.playCapture();
       shake.trigger(0.3);
     } else if (event.type === "death") {
-      const owner = event.data?.owner as number ?? Owner.Player2;
+      const owner = event.data?.owner as number ?? Owner.Unowned;
       particles.emitDeath(event.loc, owner);
       audio.playDeath();
       shake.trigger(0.4);
@@ -778,7 +787,7 @@ async function init() {
   async function handleEndTurn(): Promise<void> {
     if (mode === "singleplayer") {
       // Show economy review screen first, then execute turn on confirm
-      await ui.economyReview.open(game.state, Owner.Player1, [...collector.turnEvents]);
+      await ui.economyReview.open(game.state, playerOwner, [...collector.turnEvents]);
       audio.playTurnEnd();
       handleSinglePlayerEndTurn();
     } else if (mode === "multiplayer") {
@@ -798,7 +807,7 @@ async function init() {
     if (ui.debug.flags.playerAI) {
       // Apply debug vision BEFORE AI computes (so AI can see the full map if enabled)
       applyDebugFlags();
-      const aiP1Actions = computeAITurn(game.state, Owner.Player1);
+      const aiP1Actions = computeAITurn(game.state, playerOwner);
       result = game.submitTurn(aiP1Actions);
     } else {
       result = collector.endTurn();
@@ -811,11 +820,11 @@ async function init() {
     applyDebugFlags();
 
     const s = game.state;
-    const p1Units = s.units.filter(u => u.owner === Owner.Player1).length;
-    const p2Units = s.units.filter(u => u.owner === Owner.Player2).length;
-    const p1Cities = s.cities.filter(c => c.owner === Owner.Player1).length;
-    const p2Cities = s.cities.filter(c => c.owner === Owner.Player2).length;
-    console.log(`[TURN ${s.turn}] P1: ${p1Cities} cities, ${p1Units} units | P2: ${p2Cities} cities, ${p2Units} units | ${result.events.length} events`);
+    const playerUnitsCount = s.units.filter(u => u.owner === playerOwner).length;
+    const enemyUnitsCount = s.units.filter(u => u.owner !== playerOwner && u.owner !== Owner.Unowned).length;
+    const playerCitiesCount = s.cities.filter(c => c.owner === playerOwner).length;
+    const enemyCitiesCount = s.cities.filter(c => c.owner !== playerOwner && c.owner !== Owner.Unowned).length;
+    console.log(`[TURN ${s.turn}] Player: ${playerCitiesCount} cities, ${playerUnitsCount} units | Enemies: ${enemyCitiesCount} cities, ${enemyUnitsCount} units | ${result.events.length} events`);
 
     // Send diagnostic log to server if enabled
     if (capturing) {
@@ -836,10 +845,10 @@ async function init() {
     if (game.isGameOver) {
       const uiState = buildUIState();
       audio.stopAmbient();
-      audio.playGameOver(game.winner === Owner.Player1);
+      audio.playGameOver(game.winner === playerOwner);
       ui.menus.showGameOver(
         game.winner!,
-        Owner.Player1,
+        playerOwner,
         game.state.turn,
         uiState.playerCityCount,
         uiState.playerUnitCount,
@@ -880,7 +889,7 @@ async function init() {
     if (ui.cityPanel.isOpen) return;
     if (ui.economyReview.isOpen) return;
 
-    const playerOwner = mode === "singleplayer" ? Owner.Player1 : mp.owner;
+    const keyOwner = mode === "singleplayer" ? playerOwner : mp.owner;
 
     switch (key) {
       case " ":
@@ -952,7 +961,7 @@ async function init() {
             ? game.state.cities
             : (mp.visibleState?.cities ?? []);
           const city = cities.find((c: any) => c.id === selection.selectedCityId);
-          if (city && city.owner === playerOwner) {
+          if (city && city.owner === keyOwner) {
             ui.cityPanel.open(city as any, mode === "singleplayer" ? game.state.buildings : [], getLockedUnitTypes());
           }
         }
@@ -1074,8 +1083,8 @@ async function init() {
             ? game.state.cities
             : (mp.visibleState?.cities ?? []);
           const city = cities.find((c: any) => c.id === selection.selectedCityId);
-          const playerOwner = mode === "singleplayer" ? Owner.Player1 : mp.owner;
-          if (city && city.owner === playerOwner) {
+          const panelOwner = mode === "singleplayer" ? playerOwner : mp.owner;
+          if (city && city.owner === panelOwner) {
             ui.cityPanel.open(city as any, mode === "singleplayer" ? game.state.buildings : [], getLockedUnitTypes());
           }
         }
@@ -1301,6 +1310,7 @@ async function init() {
         selection.selectedCityId,
         actionPanelState,
         currentHighlights.length > 0,
+        mode === "singleplayer" ? playerOwner : mp.owner ?? Owner.Player1,
       );
       ui.unitInfo.update(
         uiState.selectedUnit,

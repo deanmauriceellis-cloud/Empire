@@ -7,7 +7,7 @@ import {
   getEffectiveStrength, getEffectiveMaxHp,
   configureMapDimensions, MAP_WIDTH, MAP_HEIGHT, MAP_SIZE,
 } from "../index.js";
-import type { GameState, MapCell, ViewMapCell, CityState } from "../index.js";
+import type { GameState, MapCell, ViewMapCell, CityState, PlayerInfo } from "../index.js";
 
 // ─── Test Helpers ────────────────────────────────────────────────────────────
 
@@ -49,6 +49,10 @@ function createTestState(width = 20, height = 20): GameState {
       [Owner.Player1]: [0, 0, 0, 0],
       [Owner.Player2]: [0, 0, 0, 0],
     },
+    players: [
+      { id: 1, name: "Player 1", color: 0x00cc00, isAI: false, status: "active" as const },
+      { id: 2, name: "Player 2", color: 0xcc0000, isAI: true, status: "active" as const },
+    ],
   };
 }
 

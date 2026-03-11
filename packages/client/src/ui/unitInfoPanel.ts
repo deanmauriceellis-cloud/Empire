@@ -9,6 +9,7 @@ import {
   BUILDING_NAMES,
   getEffectiveMaxHp, getEffectiveStrength, getEffectiveSpeed,
   getEffectiveFighterRange, getEffectiveSatelliteRange,
+  getPlayerColor, UNOWNED,
 } from "@empire/shared";
 import type { UnitState, CityState, GameState } from "@empire/shared";
 
@@ -30,11 +31,11 @@ function terrainLabel(terrain: string): string {
   return terrain;
 }
 
-// Owner color CSS class
+// Owner color as CSS hex string
 function ownerColor(owner: Owner): string {
-  if (owner === Owner.Player1) return "var(--color-green)";
-  if (owner === Owner.Player2) return "var(--color-red)";
-  return "var(--color-text-muted)";
+  if (owner === UNOWNED) return "var(--color-text-muted)";
+  const hex = getPlayerColor(owner);
+  return `#${hex.toString(16).padStart(6, "0")}`;
 }
 
 // Unit type character display with color
@@ -74,7 +75,7 @@ export function createUnitInfoPanel(): UnitInfoPanel {
             ? getEffectiveSatelliteRange(gameState, u.owner)
             : attrs.range;
         const movesLeft = effSpeed - u.moved;
-        const ownerLabel = u.owner === Owner.Player1 ? "Player" : "Computer";
+        const ownerLabel = "Player " + u.owner;
 
         // Header: icon + name + owner
         parts.push(`<div class="info-header">`);
@@ -247,8 +248,7 @@ export function createUnitInfoPanel(): UnitInfoPanel {
           const prodAttrs = UNIT_ATTRIBUTES[city.production];
           const pct = Math.max(0, Math.min(100, Math.floor((city.work / prodAttrs.buildTime) * 100)));
           const turnsLeft = Math.max(1, prodAttrs.buildTime - city.work);
-          const ownerLabel = city.owner === Owner.Player1 ? "Player"
-            : city.owner === Owner.Player2 ? "Computer" : "Neutral";
+          const ownerLabel = city.owner === UNOWNED ? "Neutral" : "Player " + city.owner;
 
           if (selectedUnit) {
             // Separator if both unit and city shown

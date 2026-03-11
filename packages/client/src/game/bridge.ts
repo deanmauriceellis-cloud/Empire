@@ -6,11 +6,11 @@ import type { RenderableState, RenderableTile, RenderableCity } from "../types.j
 
 /**
  * Build a RenderableState from a SinglePlayerGame.
- * The human player is always Player1.
+ * @param playerOwner The human player's owner ID (default Player1 for backward compat).
  */
-export function buildRenderableState(game: SinglePlayerGame): RenderableState {
+export function buildRenderableState(game: SinglePlayerGame, playerOwner: Owner = Owner.Player1): RenderableState {
   const state = game.state;
-  const owner = Owner.Player1;
+  const owner = playerOwner;
   const viewMap = state.viewMaps[owner];
 
   // Build renderable tiles: combine ground truth terrain with player's view

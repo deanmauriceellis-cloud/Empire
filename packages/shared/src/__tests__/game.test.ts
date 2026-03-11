@@ -10,7 +10,7 @@ import {
   UNIT_ATTRIBUTES,
   INFINITY,
 } from "../index.js";
-import type { GameState, CityState, UnitState, MapCell, ViewMapCell } from "../types.js";
+import type { GameState, CityState, UnitState, MapCell, ViewMapCell, PlayerInfo } from "../types.js";
 import {
   gameRandom,
   gameRandomInt,
@@ -87,6 +87,10 @@ function createTestState(): GameState {
     buildings: [],
     nextBuildingId: 0,
     techResearch: { [Owner.Unowned]: [0,0,0,0], [Owner.Player1]: [0,0,0,0], [Owner.Player2]: [0,0,0,0] },
+    players: [
+      { id: 1, name: "Player 1", color: 0x00cc00, isAI: false, status: "active" as const },
+      { id: 2, name: "Player 2", color: 0xcc0000, isAI: true, status: "active" as const },
+    ],
   };
 }
 
@@ -724,8 +728,7 @@ describe("Turn Execution", () => {
 
     const result = executeTurn(
       state,
-      [{ type: "move", unitId: unit.id, loc: newLoc }],
-      [],
+      new Map([[1, [{ type: "move", unitId: unit.id, loc: newLoc }]], [2, []]]),
     );
 
     expect(unit.loc).toBe(newLoc);
@@ -739,8 +742,7 @@ describe("Turn Execution", () => {
 
     const result = executeTurn(
       state,
-      [{ type: "resign" }],
-      [],
+      new Map([[1, [{ type: "resign" }]], [2, []]]),
     );
 
     expect(result.winner).toBe(Owner.Player2);
@@ -752,7 +754,7 @@ describe("Turn Execution", () => {
     const unit = createUnit(state, UnitType.Army, Owner.Player1, loc);
     unit.moved = 5;
 
-    executeTurn(state, [], []);
+    executeTurn(state, new Map([[1, []], [2, []]]));
     expect(unit.moved).toBe(0);
   });
 
@@ -761,7 +763,7 @@ describe("Turn Execution", () => {
     const city = addCity(state, cityLoc, Owner.Player1, UnitType.Army);
     city.work = 4; // will complete this turn
 
-    const result = executeTurn(state, [], []);
+    const result = executeTurn(state, new Map([[1, []], [2, []]]));
     expect(result.events.some((e) => e.type === "production")).toBe(true);
   });
 
@@ -771,7 +773,7 @@ describe("Turn Execution", () => {
 
     // Run 5 turns with no actions
     for (let i = 0; i < 5; i++) {
-      executeTurn(state, [], []);
+      executeTurn(state, new Map([[1, []], [2, []]]));
     }
 
     expect(state.turn).toBe(5);
@@ -792,8 +794,7 @@ describe("Turn Execution", () => {
 
     const result = executeTurn(
       state,
-      [],
-      [{ type: "resign" }],
+      new Map([[1, []], [2, [{ type: "resign" }]]]),
     );
 
     expect(result.winner).toBe(Owner.Player1);
@@ -807,7 +808,7 @@ describe("Turn Execution", () => {
     const sat = createUnit(state, UnitType.Satellite, Owner.Player1, rowColLoc(20, 20));
     const origLoc = sat.loc;
 
-    executeTurn(state, [], []);
+    executeTurn(state, new Map([[1, []], [2, []]]));
     // Satellite should have moved
     expect(sat.loc !== origLoc || findUnit(state, sat.id) === undefined).toBe(true);
   });

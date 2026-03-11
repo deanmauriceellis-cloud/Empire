@@ -62,18 +62,18 @@ export interface ActionCollector {
   reset(): void;
 }
 
-export function createActionCollector(game: SinglePlayerGame): ActionCollector {
+export function createActionCollector(game: SinglePlayerGame, playerOwner: Owner = Owner.Player1): ActionCollector {
   let actions: PlayerAction[] = [];
   let turnEvents: TurnEvent[] = [];
   let movedUnitIds = new Set<number>();
 
   function applyAction(action: PlayerAction): TurnEvent[] {
-    const events = processAction(game.state, action, Owner.Player1);
+    const events = processAction(game.state, action, playerOwner);
     // Update vision after moves
     if (action.type === "move") {
       const unit = findUnit(game.state, action.unitId);
       if (unit) {
-        scan(game.state, Owner.Player1, unit.loc);
+        scan(game.state, playerOwner, unit.loc);
       }
     }
     return events;
@@ -86,7 +86,7 @@ export function createActionCollector(game: SinglePlayerGame): ActionCollector {
 
     moveUnit(unitId: number, direction: Direction): boolean {
       const unit = findUnit(game.state, unitId);
-      if (!unit || unit.owner !== Owner.Player1) return false;
+      if (!unit || unit.owner !== playerOwner) return false;
       if (unit.moved >= objMoves(unit)) return false;
 
       const targetLoc = unit.loc + DIR_OFFSET[direction];
@@ -94,7 +94,7 @@ export function createActionCollector(game: SinglePlayerGame): ActionCollector {
       // Check if there's an enemy at targetLoc — if so, attack instead
       // (but ranged-only units like artillery can't melee)
       const enemyAtTarget = game.state.units.find(
-        (u) => u.loc === targetLoc && u.owner !== Owner.Player1 && u.shipId === null,
+        (u) => u.loc === targetLoc && u.owner !== playerOwner && u.owner !== Owner.Unowned && u.shipId === null,
       );
       if (enemyAtTarget) {
         // Non-combat units (str 0) and ranged-only units can't melee
@@ -108,7 +108,7 @@ export function createActionCollector(game: SinglePlayerGame): ActionCollector {
       const cell = game.state.map[targetLoc];
       if (cell && cell.cityId !== null) {
         const city = game.state.cities[cell.cityId];
-        if (city.owner !== Owner.Player1 && city.owner !== Owner.Unowned) {
+        if (city.owner !== playerOwner && city.owner !== Owner.Unowned) {
           return this.attackTarget(unitId, targetLoc);
         }
         // Unowned city — army can attack/capture
@@ -129,7 +129,7 @@ export function createActionCollector(game: SinglePlayerGame): ActionCollector {
 
     attackTarget(unitId: number, targetLoc: Loc): boolean {
       const unit = findUnit(game.state, unitId);
-      if (!unit || unit.owner !== Owner.Player1) return false;
+      if (!unit || unit.owner !== playerOwner) return false;
 
       const action: PlayerAction = { type: "attack", unitId, targetLoc };
       actions.push(action);
@@ -180,7 +180,7 @@ export function createActionCollector(game: SinglePlayerGame): ActionCollector {
 
     bombardTarget(unitId: number, targetLoc: Loc): boolean {
       const unit = findUnit(game.state, unitId);
-      if (!unit || unit.owner !== Owner.Player1) return false;
+      if (!unit || unit.owner !== playerOwner) return false;
       if (!canBombard(game.state, unit, targetLoc)) return false;
 
       const action: PlayerAction = { type: "bombard", unitId, targetLoc };

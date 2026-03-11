@@ -13,7 +13,7 @@ import {
   STARTING_TEXTILE,
   INFINITY,
 } from "../constants.js";
-import type { GameState, MapCell } from "../types.js";
+import type { GameState, MapCell, PlayerInfo } from "../types.js";
 import { initViewMap, createUnit, attackUnit, repairShips, objMoves, objCapacity } from "../game.js";
 import { UNIT_ATTRIBUTES } from "../units.js";
 import {
@@ -92,6 +92,10 @@ function createTestState(): GameState {
       [Owner.Player1]: [0, 0, 0, 0],
       [Owner.Player2]: [0, 0, 0, 0],
     },
+    players: [
+      { id: 1, name: "Player 1", color: 0x00cc00, isAI: false, status: "active" as const },
+      { id: 2, name: "Player 2", color: 0xcc0000, isAI: true, status: "active" as const },
+    ],
   };
 }
 

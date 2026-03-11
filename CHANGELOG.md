@@ -1,5 +1,22 @@
 # Empire Reborn — Changelog
 
+## v0.41.0 — Session 052 (2026-03-11)
+
+### Phase 9: N-Player Foundation
+- **PlayerId system**: `type PlayerId = number` (0=Unowned, 1+=players); `Owner` enum kept as `@deprecated`
+- **PlayerInfo**: `{ id, name, color, isAI, status }` — dynamic player registry in `GameState.players`
+- **New file `player.ts`**: 16-color palette, `getPlayerIds()`, `getEnemyIds()`, `isEnemy()`, `createPlayerInfo()`, `initPlayerData()`, `initAllPlayerData()`, `countCitiesByPlayer()`, `getStrongestEnemy()`
+- **N-player turn execution**: `executeTurn(state, Map<number, PlayerAction[]>)` — processes all players dynamically
+- **N-player end game**: `checkEndGame()` iterates all players, per-player elimination (0 cities + 0 armies), simultaneous elimination handling, 2-player 3:1 resignation preserved
+- **N-player mapgen**: `startingCities: number[]`, `pickNDistantCities()` greedy distance maximization, `placeDeposits()` dynamic per-player zones
+- **AI multi-enemy**: `isEnemy(owner)` closure replaces flip pattern; `shouldSurrenderEconomic()` compares against `getStrongestEnemy()`
+- **Server N-player**: `GameManager` uses `Map<number, WebSocket|null>`, lobby join finds unconnected slots, AI computed for all AI players
+- **Singleplayer N-player**: creates N `PlayerInfo` entries, computes AI for all AI players per turn
+- **Client N-player**: 16-color unit/city textures, dynamic minimap colors, N-player war stats, `playerOwner` params throughout
+- **Client default**: 6 players (1 human + 5 AI) for rich N-player gameplay
+- **PLAN-KINGDOM.md rewrite**: 100x100 kingdom tiles, center AI kingdom, ring-based player placement, tributary/vassal system, monthly world reset (30-day seasons), 100 player target, cross-kingdom battles
+- 9 test files updated, 572 total tests (544 shared + 28 server)
+
 ## v0.40.0 — Session 051 (2026-03-11)
 
 ### Phase 8: AI Economy & Strategy
