@@ -844,6 +844,149 @@ const CSS = `
   font-size: 13px;
 }
 
+/* ─── Unit Info Panel ──────────────────────────────────────────────────── */
+
+#unit-info-panel {
+  display: none;
+  padding: 8px;
+  border-bottom: 1px solid var(--color-border);
+  flex-direction: column;
+  gap: 2px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+#unit-info-panel.visible {
+  display: flex;
+}
+
+#unit-info-panel .info-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+#unit-info-panel .info-icon {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--color-text-bright);
+  flex-shrink: 0;
+}
+
+#unit-info-panel .info-city-icon {
+  font-size: 14px;
+}
+
+#unit-info-panel .info-title {
+  flex: 1;
+  min-width: 0;
+}
+
+#unit-info-panel .info-name {
+  color: var(--color-accent);
+  font-weight: bold;
+  font-size: 13px;
+  text-transform: capitalize;
+}
+
+#unit-info-panel .info-owner {
+  font-size: 10px;
+}
+
+#unit-info-panel .info-section {
+  margin: 3px 0;
+}
+
+#unit-info-panel .info-label {
+  color: var(--color-text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+#unit-info-panel .info-value {
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+#unit-info-panel .info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1px 0;
+}
+
+#unit-info-panel .info-loc {
+  margin-top: 4px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 4px;
+}
+
+#unit-info-panel .info-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 6px 0;
+}
+
+/* HP bar — segmented */
+#unit-info-panel .info-hp-bar {
+  display: flex;
+  gap: 2px;
+  margin: 2px 0;
+}
+
+#unit-info-panel .info-hp-seg {
+  flex: 1;
+  height: 6px;
+  background: #222;
+  border: 1px solid var(--color-border);
+  max-width: 16px;
+}
+
+#unit-info-panel .info-hp-seg.filled {
+  border-color: transparent;
+}
+
+/* Production progress */
+#unit-info-panel .info-progress-bar {
+  height: 6px;
+  background: #222;
+  border: 1px solid var(--color-border);
+  margin: 2px 0;
+}
+
+#unit-info-panel .info-progress-fill {
+  height: 100%;
+  background: var(--color-accent-hex);
+  transition: width 0.2s;
+}
+
+/* Cargo manifest */
+#unit-info-panel .info-cargo {
+  display: flex;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+#unit-info-panel .info-cargo-item {
+  width: 20px;
+  height: 20px;
+  background: rgba(var(--color-accent-rgb), 0.15);
+  border: 1px solid var(--color-border-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--color-accent-light);
+}
+
 /* ─── Debug Panel ──────────────────────────────────────────────────────── */
 
 #debug-panel {

@@ -33,6 +33,7 @@ import { UnitRenderer } from "./renderer/units.js";
 import { ParticleSystem } from "./renderer/particles.js";
 import { HighlightRenderer } from "./renderer/highlights.js";
 import { createScreenShake } from "./renderer/screenShake.js";
+import { MapOverlays } from "./renderer/mapOverlays.js";
 import { screenToTile } from "./iso/coords.js";
 import { createActionCollector, type ActionCollector } from "./game/actionCollector.js";
 import { computeHighlights, getClickAction } from "./game/moveCalc.js";
@@ -66,6 +67,7 @@ async function init() {
   const unitRenderer = new UnitRenderer(worldContainer, assets);
   const particles = new ParticleSystem(effectsContainer);
   const highlightRenderer = new HighlightRenderer(worldContainer, assets);
+  const mapOverlays = new MapOverlays(worldContainer);
 
   // ─── Audio ──────────────────────────────────────────────────────────
   const audio: AudioManager = createAudioManager();
@@ -1206,8 +1208,11 @@ async function init() {
       worldContainer.x += shake.offsetX;
       worldContainer.y += shake.offsetY;
 
-      // ─── Update UI ──────────────────────────────────────────────────
+      // ─── Map Overlays (vision ring, GoTo path) ───────────────────
       const uiState = buildUIState();
+      mapOverlays.update(uiState.selectedUnit, dt);
+
+      // ─── Update UI ──────────────────────────────────────────────────
       ui.hud.update(uiState);
       ui.minimap.update(currentState, camera, vw, vh);
 
@@ -1220,6 +1225,12 @@ async function init() {
         selection.selectedCityId,
         actionPanelState,
         currentHighlights.length > 0,
+      );
+      ui.unitInfo.update(
+        uiState.selectedUnit,
+        selection.selectedCityId,
+        actionPanelState,
+        currentState.mapWidth,
       );
     }
   });

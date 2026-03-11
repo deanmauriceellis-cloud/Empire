@@ -11,6 +11,7 @@ import { createTurnFlow, type TurnFlow } from "./turnFlow.js";
 import { createMenuScreens, type MenuScreens } from "./menuScreens.js";
 import { createDebugPanel, type DebugPanel } from "./debugPanel.js";
 import { createWarStats, type WarStats } from "./warStats.js";
+import { createUnitInfoPanel, type UnitInfoPanel } from "./unitInfoPanel.js";
 import type { Camera } from "../core/camera.js";
 
 export interface UIManager {
@@ -23,6 +24,7 @@ export interface UIManager {
   readonly menus: MenuScreens;
   readonly debug: DebugPanel;
   readonly warStats: WarStats;
+  readonly unitInfo: UnitInfoPanel;
 }
 
 export function createUIManager(camera: Camera): UIManager {
@@ -43,6 +45,7 @@ export function createUIManager(camera: Camera): UIManager {
   const menus = createMenuScreens();
   const debug = createDebugPanel();
   const warStats = createWarStats(camera);
+  const unitInfo = createUnitInfoPanel();
 
   // Wire war stats button into HUD top bar
   hud.setWarStatsButton(warStats.button);
@@ -51,6 +54,7 @@ export function createUIManager(camera: Camera): UIManager {
   const sidebar = document.createElement("div");
   sidebar.id = "sidebar-right";
   sidebar.appendChild(minimap.wrapper);
+  sidebar.appendChild(unitInfo.element);
   sidebar.appendChild(actionPanel.element);
   sidebar.appendChild(debug.element);
 
@@ -73,5 +77,6 @@ export function createUIManager(camera: Camera): UIManager {
     menus,
     debug,
     warStats,
+    unitInfo,
   };
 }
