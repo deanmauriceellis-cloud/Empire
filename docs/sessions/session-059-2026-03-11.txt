@@ -1,0 +1,54 @@
+Session 059 — 2026-03-11
+Phase 15: Monetization System
+
+## Summary
+Implemented the complete monetization system for Empire Reborn: Stripe payment integration,
+store catalog with 12 items (cosmetics, VIP subscription, season pass), entitlement management,
+VIP gameplay bonuses, cosmetic equip/unequip system, store UI, and comprehensive tests.
+
+## Files Created
+- packages/shared/src/store.ts (~175 lines) — Store types, item catalog, VIP constants, helpers
+- packages/server/src/store.ts (~200 lines) — StoreService with Stripe integration, entitlements
+- packages/client/src/net/storeClient.ts (~100 lines) — Client-side store WebSocket handler
+- packages/client/src/ui/storePanel.ts (~300 lines) — 4-tab store UI panel
+- packages/shared/src/__tests__/store.test.ts (19 tests) — Store catalog, VIP helpers
+- packages/shared/src/__tests__/vip-bonus.test.ts (4 tests) — VIP production bonus
+- packages/server/src/__tests__/store.test.ts (25 tests) — StoreService, DB methods
+- docs/archive/CHANGELOG-sessions-012-048.md — Archived changelog entries
+
+## Files Modified
+- packages/server/src/database.ts — purchases/entitlements tables, CRUD methods
+- packages/server/src/index.ts — StoreService, REST endpoints, WS routing
+- packages/server/src/WorldServer.ts — VIP status population, VIP shield bonus
+- packages/server/src/GameManager.ts — Added shields: {} to state
+- packages/shared/src/types.ts — vipPlayers optional field on GameState
+- packages/shared/src/game.ts — VIP build speed in tickCityProduction
+- packages/shared/src/protocol.ts — Store message types
+- packages/shared/src/index.ts — Export store module
+- packages/client/src/main.ts — Store client wiring
+- packages/client/src/ui/UIManager.ts — Store panel integration
+- packages/client/src/ui/menuScreens.ts — Store button in menu
+- packages/server/package.json — stripe dependency
+
+## Key Design Decisions
+1. VIP bonus uses optional GameState.vipPlayers field — no game engine coupling to store module
+2. Lazy Stripe import — server works without Stripe configured
+3. Dev-mode granting — full store testable without payment processing
+4. Per-category cosmetic equip — equipping auto-unequips same category
+5. Late-binding setActions() on StorePanel — resolves circular dependency in main.ts
+
+## Bugs Fixed
+- GameManager.ts missing shields: {} field (pre-existing from session 055)
+- Store equipCosmetic blanket-unequipping all items (was unequipping cross-category)
+
+## Test Results
+- 804 total tests (706 shared + 98 server)
+- 48 new tests this session
+- All passing
+
+## Deferred
+- Cosmetic preview system
+- VIP priority spawn placement
+- VIP extended action history
+- Season pass leaderboard access
+- Client-side cosmetic rendering (sprite/particle overrides)

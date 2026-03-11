@@ -1,17 +1,17 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-KINGDOM Phase 14 complete** — Delta Sync & Scaling (efficient state delivery for MMO scale)
+**PLAN-KINGDOM Phase 15 complete** — Monetization System (Stripe, cosmetics, VIP, store UI)
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phases 1-14 of expansion plan complete
-- 756 tests passing (683 shared + 73 server)
+- Phases 1-15 of expansion plan complete
+- 804 tests passing (706 shared + 98 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-KINGDOM.md** is the definitive plan (17 phases: gameplay → kingdom MMO → monetization)
 
 ## Latest commit
-session 058: Phase 14 — Delta Sync & Scaling
+session 059: Phase 15 — Monetization System
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
@@ -22,6 +22,26 @@ session 058: Phase 14 — Delta Sync & Scaling
 - Multiplayer server doesn't yet send kingdom data to client
 - World mode: monthly reset/season rewards not yet implemented
 - Spawn protection enforcement not yet in executeTurn (needs world context in game engine)
+
+## Completed (session 059) — Phase 15: Monetization System
+- [x] 15A: Store Infrastructure — Stripe integration (lazy import, checkout sessions, webhooks), purchase ledger, entitlement system
+- [x] 15A: Database schema — purchases table, entitlements table (upsert, expiry filtering, equip tracking)
+- [x] 15B: Store catalog — 12 items: 10 cosmetics (5 skins, 3 banners, 2 crowns, 2 particles, 2 map themes), VIP monthly ($4.99), season pass ($9.99)
+- [x] 15C: Store UI — 4-tab panel (Cosmetics, VIP, Season Pass, Inventory), accessible from main menu
+- [x] 15C: Client store integration — StoreClient WebSocket handler, late-binding setActions() pattern
+- [x] 15D: VIP production bonus — 10% faster builds via getEffectiveBuildTime(), GameState.vipPlayers optional field
+- [x] 15D: VIP shield bonus — +2 hours max shield (10hr vs 8hr) in WorldServer disconnect handler
+- [x] 15D: Cosmetic equip/unequip — per-category slot system, auto-unequip same category
+- [x] 15E: Balance protection — hard no-pay-to-win rules enforced, VIP capped at 10% build speed
+- [x] Server: REST endpoints (items, entitlements, webhook, dev-grant), WS store message routing
+- [x] Server: StoreService class, dev-mode granting without Stripe
+- [x] New files: shared/store.ts, server/store.ts, client/storeClient.ts, client/storePanel.ts
+- [x] 48 new tests (19 shared store + 4 VIP bonus + 25 server store), 804 total (706 shared + 98 server)
+- [ ] Deferred: Cosmetic preview system (see items before buying)
+- [ ] Deferred: Priority spawn placement for VIP
+- [ ] Deferred: Extended action history for VIP (50 turns vs 10)
+- [ ] Deferred: Seasonal leaderboard access for season pass
+- [ ] Deferred: Client-side cosmetic rendering (sprite/particle overrides)
 
 ## Completed (session 058) — Phase 14: Delta Sync & Scaling
 - [x] 14A: Change Tracking — TurnDelta types, PreTurnSnapshot, snapshotPreTurn(), computeDelta()
@@ -158,124 +178,12 @@ session 058: Phase 14 — Delta Sync & Scaling
 - [x] AI: safely skips new units, ratio tables extended to 15
 - [x] 42 new tests, 465 total passing
 
-## Completed (session 048) — Kingdom MMO Master Plan
-- [x] Architecture analysis: identified all 2-player hardcoded assumptions
-- [x] Feasibility confirmed: game logic is owner-agnostic, scales to N players
-- [x] PLAN-KINGDOM.md: 17-phase master plan (13-22 sessions estimated)
-- [x] Phases 7-8: Bombard & AI Economy (from PLAN-UNIFIED)
-- [x] Phases 9-11: Kingdom core — N-player, crown cities, tick-based server
-- [x] Phases 12-14: Persistent world — dynamic map, accounts, delta sync
-- [x] Phases 15-17: Monetization & polish — Stripe, cosmetics, VIP, balance
-- [x] Design decisions: crown city, territory, isolation levels, shields, monetization rules
-
-## Completed (session 047) — Tech System
-- [x] Tech thresholds [10, 30, 60, 100, 150] for levels 1-5
-- [x] Vision bonuses: Science 2 (+1 all), Electronics 1 (+1 ships)
-- [x] HP bonuses: Health 2 (Army +1), Health 3 (land +1), Health 5 (all +1)
-- [x] Strength bonuses: War 1-5 progressive (combat integration)
-- [x] Healing bonuses: Health 1 (2 HP/turn city), Health 4 (ships heal at sea)
-- [x] Range bonuses: Electronics 3 (+2 fighter), Electronics 4 (+100 satellite)
-- [x] Speed bonus: Science 4 (+1 construction)
-- [x] Unit unlock gating infrastructure (canProduceUnit)
-- [x] HUD: tech levels display (S:Lv2 format)
-- [x] Economy Review: enhanced tech tab with progress bars, bonuses, previews
-- [x] Unit info panel: effective stats with green (+N) indicators
-- [x] 57 new tests, 423 total passing
-
-## Completed (session 046) — Economy Review Screen
-- [x] Economy Review dialog: modal triggered by Enter, 6 tabs (Events/Resources/Cities/Tech/Construction/Buildings)
-- [x] Resources tab: stockpile + city income + deposit income + total per-turn
-- [x] Cities tab: production status, progress bars, retool/stall, upgrade list
-- [x] Tech tab: research points, income/turn, contributing buildings
-- [x] Construction tab: active builds with progress, idle/assigned constructors
-- [x] Buildings tab: completed buildings with type, level, output
-- [x] "Confirm & Execute Turn →" button, Escape/Enter also confirm
-- [x] HUD resource income: +N per-turn income next to stockpile in green
-- [x] Diagnostic enhancements: economy/deposits/buildings/tech state + stall/retool warnings
-- [x] Number keys 1-6 switch tabs, capture-phase keyboard isolation
-
-## Completed (session 045) — Construction & Buildings
-- [x] UnitType.Construction: land, speed 1, str 0, hp 1, buildTime 10, cost [10,0,5]
-- [x] BuildingType enum: Mine, OilWell, TextileFarm, University, Hospital, TechLab, MilitaryAcademy, Shipyard, Airfield
-- [x] BuildingState: id, loc, type, owner, level (1-3), work, buildTime, complete, constructorId
-- [x] Build on deposit: construction at deposit → mine/well/farm → consumes constructor
-- [x] Build city upgrade: construction at own city → choose from 6 types → max 4 slots → consumes constructor
-- [x] Building upgrades: Lv1→Lv2→Lv3 with increasing costs/times
-- [x] Tech research: University→Science, Hospital→Health, TechLab→Electronics, Academy→War; level=points/turn
-- [x] tickBuildingConstruction() in turn flow, collectTechResearch() per turn
-- [x] Construction unit sprite (hard hat + wrench)
-- [x] Action panel: context build buttons for construction units
-- [x] City panel: upgrade slot display (4 slots, filled/empty, status)
-- [x] Unit info panel: building progress for construction units
-- [x] HUD: tech research display (S/H/E/W)
-- [x] 43 new tests, 366 total passing
-
-## Completed (session 044) — Economy Debugging
-- [x] Passive city income: CITY_INCOME [2,1,2] per owned city per turn
-- [x] Retool stall bug fix: negative work ticks without affordability check
-- [x] Verified: 0 stalls across multiple test games (was 1808 stalls)
-
-## Completed (session 043) — Economy Foundation
-- [x] ResourceType, DepositType enums, UNIT_COSTS table
-- [x] DepositState, depositId on MapCell, resources/deposits on GameState
-- [x] placeDeposits() in mapgen: fair, balanced, height-based, deterministic
-- [x] Resources consumed on production start, city stalls if insufficient
-- [x] collectResourceIncome() — +3/turn from completed deposit buildings
-- [x] Deposit textures (mountain/derrick/plant), HUD resource display
-- [x] Minimap deposit dots, cost display in city panel and unit info panel
-- [x] 31 new economy tests
-
-## Completed (session 042) — Unit Info Panel & Vision
-- [x] Right-sidebar unit info panel: icon, HP bar, stats, behavior, GoTo ETA, cargo manifest
-- [x] City info in panel: production, progress bar, turns remaining
-- [x] Vision range overlay: blue diamond ring on adjacent tiles
-- [x] GoTo path overlay: animated dashed orange line with target marker
-
-## Completed (session 041) — Graphics Foundation
-- [x] Multi-depth ocean: deep/coastal/shore textures by adjacent land count
-- [x] Shore foam overlay with pulsing alpha and scale breathing
-- [x] Three-frequency wave animation with vertical tile bob and alpha oscillation
-- [x] All 9 unit types redrawn with detailed procedural sprites
-- [x] Enhanced selection glow: double-ring, multi-frequency pulse, scale breathing
-- [x] Segmented health bars with per-HP dividers
-- [x] Richer particle effects: 3-layer explosions, lingering smoke, debris
-
-## Completed (session 040) — Design Only
-- [x] PLAN-A.md — Graphics overhaul plan (ocean, unit sprites, info panel, vision overlays, GPU effects)
-- [x] PLAN-B.md — Economic expansion analysis (resources, construction, tech trees, AI strategy, balance)
-- [x] PLAN-UNIFIED.md — Merged 10-phase executable plan with complete unit/structure/tech catalogs
-- [x] Design decisions finalized: construction destroyed, buildings captured, linear tech, auto-AI, manual override
-- [x] 6 new unit types designed: Construction, Artillery, Special Forces, Missile Cruiser, AWACS, Engineer Boat
-- [x] 10 defensive/naval structures designed: Bunker, Anti-Air, Coastal Battery, Radar, Artillery Fort, Minefield, SAM, Bridge, Sea Mine, Offshore Platform
-- [x] 6 city upgrades designed: University, Hospital, Tech Lab, Military Academy, Shipyard, Airfield (3 levels each)
-- [x] 4 tech tracks designed: Science, Health, Electronics, War Research (5 levels each)
-- [x] Bombard mechanic designed: ranged combat for artillery/cruiser/defenses
-- [x] River defensive warfare dynamics designed
-
-## Completed (session 039)
-
-## Completed (session 038)
-- [x] War Stats dialog panel — battle tracking with unit types, casualties, clickable locations, filters
-- [x] Fix critical AI production bug — army cities could never switch (minCommitWork max(5,...)→max(2,...))
-- [x] Naval ratio rebalance — Patrol/Destroyer/Sub from 4 cities, Battleship from 11
-- [x] Fighter/ship idle fix — always explore, never sentry
-- [x] All 283 tests passing (255 shared + 28 server), client builds clean
-
-## Completed (session 037)
-- [x] Phase R5: CORS — environment-based origin restriction (wildcard in dev, whitelist in production)
-- [x] Phase R5: Request size limits — 1MB JSON body, 256KB WebSocket max payload
-- [x] Phase R5: Diagnostic logging endpoint restricted to dev mode only
-- [x] Phase R5: WebSocket rate limiting — 30 msgs/sec per connection
-- [x] Phase R5: Action queue size limit — max 500 actions per player per turn
-- [x] Phase R5: Graceful shutdown — SIGTERM/SIGINT save all games, close DB, drain connections
-- [x] Phase R5: Persist game immediately on player disconnect (not just after timeout)
-- [x] Phase R5: Enhanced action validation — bounds checking, enum validation, embark ship ownership
-- [x] Phase R5: Explicit OPTIONS preflight response (204)
-- [x] Phase R6: Fix fogAlphaMap memory leak — delete entries when alpha reaches 0 (was: set to 0 and keep forever)
-- [x] Phase R6: Input manager dispose() — named handlers with removeEventListener cleanup method
-- [x] Phase R6: Consolidate duplicate mousemove listeners into single handler
-- [x] Phase R6: Lazy viewMap caching in aiTransportMove — createUnloadViewMap, createTTLoadViewMap, createPortViewMap computed once per transport instead of up to 4×
-- [x] All 283 tests passing (255 shared + 28 server), client builds clean
+## Completed (sessions 037-048) — Summarized
+> Details in CHANGELOG archive files and PLAN-KINGDOM.md
+- Sessions 047-048: Tech System (thresholds, vision/HP/strength/heal/range/speed bonuses, HUD, economy review tech tab) + Kingdom MMO Master Plan (PLAN-KINGDOM.md)
+- Sessions 043-046: Economy Foundation → Economy Fixes → Construction & Buildings → Economy Review Screen
+- Sessions 040-042: Design (PLAN-A/B/UNIFIED) → Graphics Foundation → Unit Info Panel & Vision
+- Sessions 037-039: Security & Performance (CORS, rate limiting, graceful shutdown) → War Stats & AI Fixes → River War
 
 ## Completed (session 036)
 - [x] Phase R1a: Create `shared/src/viewmap-chars.ts` — VM_WATER, VM_LAND, VM_UNEXPLORED, VM_OWN_CITY, VM_ENEMY_CITY, VM_UNOWNED_CITY, VM_HOME_PORT, VM_PICKUP_SINGLE, VM_PICKUP_CLUSTER constants + isEnemyUnit(), isCity(), isTargetCity(), isTraversableLand(), isPickupMarker() helpers
@@ -395,9 +303,9 @@ R1 and R5 can run in parallel (no dependencies). R2 and R3 depend on R1. R6 depe
 6. ~~**Phase 11**: Kingdom World Server~~ ✓ (sessions 054-055)
 7. ~~**Phase 12**: Dynamic Map & Player Join~~ ✓ (session 056)
 8. ~~**Phase 13**: Accounts & Persistence~~ ✓ (session 057)
-9. **Phase 14**: Delta Sync & Scaling — efficient updates for 50+ players (1-2 sessions, NEXT)
-10. **Phase 15**: Monetization — Stripe, cosmetics, VIP, season pass (2-3 sessions)
-11. **Phase 16**: Movement Trails & Spectacle — visual polish (1 session)
+9. ~~**Phase 14**: Delta Sync & Scaling~~ ✓ (session 058)
+10. ~~**Phase 15**: Monetization System~~ ✓ (session 059)
+11. **Phase 16**: Movement Trails & Spectacle — visual polish (1 session, NEXT)
 12. **Phase 17**: Balance, Tuning & Launch — performance, AI, launch prep (1-2 sessions)
 
 ## Blockers
