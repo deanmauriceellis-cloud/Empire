@@ -10,7 +10,7 @@
 - **PLAN-UNIFIED.md** is the definitive plan for all future implementation
 
 ## Latest commit
-`pending` — session 040: design session (PLAN-A, PLAN-B, PLAN-UNIFIED)
+`2b9ba0d` — session 040: unified expansion plan — graphics + economy + defensive warfare
 
 ## Completed (session 040) — Design Only
 - [x] PLAN-A.md — Graphics overhaul plan (ocean, unit sprites, info panel, vision overlays, GPU effects)
