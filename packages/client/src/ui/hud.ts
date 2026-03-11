@@ -1,6 +1,6 @@
 // Empire Reborn — HUD (Top Bar + Bottom Bar)
 
-import { UNIT_ATTRIBUTES, GAME_VERSION, UnitBehavior, BEHAVIOR_NAMES, behaviorIndex, NUM_UNIT_TYPES, TECH_NAMES } from "@empire/shared";
+import { UNIT_ATTRIBUTES, GAME_VERSION, UnitBehavior, BEHAVIOR_NAMES, behaviorIndex, NUM_UNIT_TYPES, TECH_NAMES, getTechLevel, TECH_THRESHOLDS, MAX_TECH_LEVEL, TechType, techMaxHpBonus, techStrengthBonus, techConstructionSpeedBonus, UnitType } from "@empire/shared";
 import type { UIState } from "../types.js";
 
 export interface HUD {
@@ -52,15 +52,19 @@ export function createHUD(): HUD {
         `<span class="res-txt" title="Textile">${txt}${fmtInc(txtInc)}</span>` +
         `</span>`;
 
-      // Tech research display
+      // Tech research display — show levels (Lv0-5) with points as tooltip
       const tech = state.techResearch;
       const hasTech = tech[0] > 0 || tech[1] > 0 || tech[2] > 0 || tech[3] > 0;
+      const techColors = ["#66aaff", "#44cc88", "#ffaa44", "#ff6644"];
+      const techLabels = ["S", "H", "E", "W"];
       const techHtml = hasTech
-        ? `<span class="tech-display" title="Science / Health / Electronics / War">` +
-          `<span style="color:#66aaff">S:${tech[0]}</span>` +
-          `<span style="color:#44cc88">H:${tech[1]}</span>` +
-          `<span style="color:#ffaa44">E:${tech[2]}</span>` +
-          `<span style="color:#ff6644">W:${tech[3]}</span></span>`
+        ? `<span class="tech-display">` +
+          [0, 1, 2, 3].map(i => {
+            const lv = getTechLevel(tech[i]);
+            const next = lv < MAX_TECH_LEVEL ? TECH_THRESHOLDS[lv] : tech[i];
+            return `<span style="color:${techColors[i]}" title="${TECH_NAMES[i]}: ${tech[i]} pts (Lv${lv}/${MAX_TECH_LEVEL})">${techLabels[i]}:Lv${lv}</span>`;
+          }).join("") +
+          `</span>`
         : "";
 
       topContent.innerHTML = [
@@ -72,20 +76,29 @@ export function createHUD(): HUD {
         `<span style="margin-left:auto;color:#555">Empire Reborn v${GAME_VERSION}</span>`,
       ].join("");
 
-      // Bottom bar
+      // Bottom bar — compute tech-boosted stats from UIState.techResearch
+      const techLevels = state.techResearch
+        ? [getTechLevel(state.techResearch[0]), getTechLevel(state.techResearch[1]),
+           getTechLevel(state.techResearch[2]), getTechLevel(state.techResearch[3])]
+        : [0, 0, 0, 0];
+
       if (state.selectedUnit) {
         const u = state.selectedUnit;
         const attrs = UNIT_ATTRIBUTES[u.type];
-        const movesLeft = attrs.speed - u.moved;
+        const hpBonus = techMaxHpBonus(techLevels[TechType.Health], u.type);
+        const effMaxHp = attrs.maxHits + hpBonus;
+        const spdBonus = u.type === UnitType.Construction ? techConstructionSpeedBonus(techLevels[TechType.Science]) : 0;
+        const effSpeed = attrs.speed + spdBonus;
+        const movesLeft = effSpeed - u.moved;
         const behaviorName = u.func === UnitBehavior.None ? "awaiting orders"
           : BEHAVIOR_NAMES[behaviorIndex(u.func)];
 
         const parts = [
           `<span class="unit-name">${attrs.name}</span>`,
           `<span class="info-sep">|</span>`,
-          `<span>HP: ${u.hits}/${attrs.maxHits}</span>`,
+          `<span>HP: ${u.hits}/${effMaxHp}</span>`,
           `<span class="info-sep">|</span>`,
-          `<span>Moves: ${movesLeft}/${attrs.speed}</span>`,
+          `<span>Moves: ${movesLeft}/${effSpeed}</span>`,
         ];
         if (attrs.range < 10_000_000) {
           parts.push(`<span class="info-sep">|</span>`);

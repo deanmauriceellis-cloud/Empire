@@ -1336,27 +1336,46 @@ const CSS = `
 .er-tech-grid {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
 }
 
-.er-tech-row {
+.er-tech-track {
+  padding: 8px;
+  background: rgba(255,255,255,0.02);
+  border-radius: 4px;
+}
+
+.er-tech-track-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px;
-  background: rgba(255,255,255,0.02);
-  font-size: 12px;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
 .er-tech-name {
   font-weight: bold;
-  flex: 0 0 120px;
+  flex: 0 0 110px;
 }
 
-.er-tech-points {
-  flex: 0 0 60px;
-  text-align: right;
+.er-tech-level {
+  font-size: 13px;
+  font-weight: bold;
+  flex: 0 0 36px;
   color: var(--color-text);
+}
+
+.er-tech-dots {
+  display: flex;
+  gap: 2px;
+  font-size: 10px;
+}
+
+.er-tech-dot {
+  opacity: 0.2;
+}
+
+.er-tech-dot.filled {
+  opacity: 1;
 }
 
 .er-tech-income {
@@ -1364,6 +1383,53 @@ const CSS = `
   text-align: right;
   color: var(--color-green);
   font-size: 11px;
+}
+
+.er-tech-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.er-tech-bar-wrap .er-prog-bar {
+  flex: 1;
+}
+
+.er-tech-bar-label {
+  font-size: 10px;
+  color: #888;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.er-tech-preview {
+  font-size: 10px;
+  color: #777;
+  margin-top: 2px;
+  font-style: italic;
+}
+
+.er-tech-bonuses {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+.er-tech-bonus-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 6px;
+  font-size: 11px;
+}
+
+.er-tech-bonus-row > span:first-child {
+  flex: 0 0 100px;
+  font-weight: bold;
+}
+
+.er-tech-bonus-desc {
+  color: var(--color-text);
 }
 
 .er-tech-sources {

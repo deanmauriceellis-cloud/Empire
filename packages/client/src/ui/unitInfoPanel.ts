@@ -7,6 +7,8 @@ import {
   locRow, locCol,
   UNIT_COSTS, DEPOSIT_NAMES, DepositType,
   BUILDING_NAMES,
+  getEffectiveMaxHp, getEffectiveStrength, getEffectiveSpeed,
+  getEffectiveFighterRange, getEffectiveSatelliteRange,
 } from "@empire/shared";
 import type { UnitState, CityState, GameState } from "@empire/shared";
 
@@ -63,7 +65,15 @@ export function createUnitInfoPanel(): UnitInfoPanel {
       if (selectedUnit) {
         const u = selectedUnit;
         const attrs = UNIT_ATTRIBUTES[u.type];
-        const movesLeft = attrs.speed - u.moved;
+        const effMaxHp = getEffectiveMaxHp(gameState, u);
+        const effStrength = getEffectiveStrength(gameState, u);
+        const effSpeed = getEffectiveSpeed(gameState, u);
+        const effRange = u.type === UnitType.Fighter
+          ? getEffectiveFighterRange(gameState, u.owner)
+          : u.type === UnitType.Satellite
+            ? getEffectiveSatelliteRange(gameState, u.owner)
+            : attrs.range;
+        const movesLeft = effSpeed - u.moved;
         const ownerLabel = u.owner === Owner.Player1 ? "Player" : "Computer";
 
         // Header: icon + name + owner
@@ -74,24 +84,24 @@ export function createUnitInfoPanel(): UnitInfoPanel {
         parts.push(`<div class="info-owner" style="color:${ownerColor(u.owner)}">${ownerLabel}</div>`);
         parts.push(`</div></div>`);
 
-        // HP bar (segmented)
-        const hpPct = Math.round((u.hits / attrs.maxHits) * 100);
+        // HP bar (segmented) — use effective max HP
+        const hpPct = Math.round((u.hits / effMaxHp) * 100);
         const hpColor = hpPct > 60 ? "var(--color-green)" : hpPct > 30 ? "var(--color-orange)" : "var(--color-red)";
         parts.push(`<div class="info-section">`);
         parts.push(`<div class="info-label">Hit Points</div>`);
         parts.push(`<div class="info-hp-bar">`);
-        for (let i = 0; i < attrs.maxHits; i++) {
+        for (let i = 0; i < effMaxHp; i++) {
           const filled = i < u.hits;
           parts.push(`<div class="info-hp-seg${filled ? " filled" : ""}" style="${filled ? `background:${hpColor}` : ""}"></div>`);
         }
         parts.push(`</div>`);
-        parts.push(`<div class="info-value">${u.hits} / ${attrs.maxHits}</div>`);
+        parts.push(`<div class="info-value">${u.hits} / ${effMaxHp}${effMaxHp > attrs.maxHits ? ` <span style="color:var(--color-green)">(+${effMaxHp - attrs.maxHits})</span>` : ""}</div>`);
         parts.push(`</div>`);
 
         // Movement
         parts.push(`<div class="info-row">`);
         parts.push(`<span class="info-label">Moves</span>`);
-        parts.push(`<span class="info-value">${movesLeft} / ${attrs.speed}</span>`);
+        parts.push(`<span class="info-value">${movesLeft} / ${effSpeed}${effSpeed > attrs.speed ? ` <span style="color:var(--color-green)">(+${effSpeed - attrs.speed})</span>` : ""}</span>`);
         parts.push(`</div>`);
 
         // Terrain
@@ -103,14 +113,14 @@ export function createUnitInfoPanel(): UnitInfoPanel {
         // Strength
         parts.push(`<div class="info-row">`);
         parts.push(`<span class="info-label">Strength</span>`);
-        parts.push(`<span class="info-value">${attrs.strength}</span>`);
+        parts.push(`<span class="info-value">${effStrength}${effStrength > attrs.strength ? ` <span style="color:var(--color-green)">(+${effStrength - attrs.strength})</span>` : ""}</span>`);
         parts.push(`</div>`);
 
         // Range (fighters/satellites only)
         if (attrs.range < INFINITY) {
           parts.push(`<div class="info-row">`);
           parts.push(`<span class="info-label">Range</span>`);
-          parts.push(`<span class="info-value">${u.range} / ${attrs.range}</span>`);
+          parts.push(`<span class="info-value">${u.range} / ${effRange}${effRange > attrs.range ? ` <span style="color:var(--color-green)">(+${effRange - attrs.range})</span>` : ""}</span>`);
           parts.push(`</div>`);
         }
 

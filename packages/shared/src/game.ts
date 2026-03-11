@@ -59,6 +59,17 @@ import {
 } from "./pathfinding.js";
 import { mapContinent } from "./continent.js";
 import { VM_UNEXPLORED, VM_ENEMY_CITY, VM_OWN_CITY, VM_UNOWNED_CITY, isEnemyUnit } from "./viewmap-chars.js";
+import {
+  getPlayerTechLevels,
+  getEffectiveStrength,
+  getEffectiveMaxHp,
+  getEffectiveSpeed,
+  getEffectiveFighterRange,
+  getEffectiveSatelliteRange,
+  techVisionBonus,
+  techCityHealRate,
+  techShipsHealAtSea,
+} from "./tech.js";
 
 // ─── RNG ────────────────────────────────────────────────────────────────────────
 
@@ -114,20 +125,30 @@ export function findNonFullShip(
 
 // ─── Unit Stats ─────────────────────────────────────────────────────────────────
 
-/** Effective moves per turn (scales with damage). */
-export function objMoves(unit: UnitState): number {
+/** Effective moves per turn (scales with damage). Optionally tech-boosted. */
+export function objMoves(unit: UnitState, state?: GameState): number {
   const attrs = UNIT_ATTRIBUTES[unit.type];
+  let speed = attrs.speed;
+  let maxHits = attrs.maxHits;
+  if (state) {
+    speed = getEffectiveSpeed(state, unit);
+    maxHits = getEffectiveMaxHp(state, unit);
+  }
   return Math.floor(
-    (attrs.speed * unit.hits + attrs.maxHits - 1) / attrs.maxHits,
+    (speed * unit.hits + maxHits - 1) / maxHits,
   );
 }
 
 /** Effective cargo capacity (scales with damage for multi-hit ships). */
-export function objCapacity(unit: UnitState): number {
+export function objCapacity(unit: UnitState, state?: GameState): number {
   const attrs = UNIT_ATTRIBUTES[unit.type];
   if (attrs.capacity === 0) return 0;
+  let maxHits = attrs.maxHits;
+  if (state) {
+    maxHits = getEffectiveMaxHp(state, unit);
+  }
   return Math.floor(
-    (attrs.capacity * unit.hits + attrs.maxHits - 1) / attrs.maxHits,
+    (attrs.capacity * unit.hits + maxHits - 1) / maxHits,
   );
 }
 
@@ -141,17 +162,23 @@ export function createUnit(
   loc: Loc,
 ): UnitState {
   const attrs = UNIT_ATTRIBUTES[type];
+  const effectiveMaxHp = getEffectiveMaxHp(state, { type, owner });
+  const effectiveRange = type === UnitType.Fighter
+    ? getEffectiveFighterRange(state, owner)
+    : type === UnitType.Satellite
+      ? getEffectiveSatelliteRange(state, owner)
+      : attrs.range;
   const unit: UnitState = {
     id: state.nextUnitId++,
     type,
     owner,
     loc,
-    hits: attrs.maxHits,
+    hits: effectiveMaxHp,
     moved: 0,
     func: UnitBehavior.None,
     shipId: null,
     cargoIds: [],
-    range: attrs.range,
+    range: effectiveRange,
     targetLoc: null,
   };
 
@@ -284,15 +311,33 @@ function findTopUnitAtLoc(state: GameState, loc: Loc): UnitState | undefined {
 }
 
 /** Scan a location + 8 adjacent cells for a player's view. */
-export function scan(state: GameState, owner: Owner, loc: Loc): void {
-  updateViewCell(state, owner, loc);
-  for (let i = 0; i < 8; i++) {
-    const adj = loc + DIR_OFFSET[i];
-    if (adj >= 0 && adj < MAP_SIZE) {
-      // Guard against column wrapping
-      const colDiff = Math.abs(locCol(adj) - locCol(loc));
-      if (colDiff <= 1) {
-        updateViewCell(state, owner, adj);
+export function scan(state: GameState, owner: Owner, loc: Loc, extraRange: number = 0): void {
+  if (extraRange <= 0) {
+    // Standard 1-tile radius scan
+    updateViewCell(state, owner, loc);
+    for (let i = 0; i < 8; i++) {
+      const adj = loc + DIR_OFFSET[i];
+      if (adj >= 0 && adj < MAP_SIZE) {
+        const colDiff = Math.abs(locCol(adj) - locCol(loc));
+        if (colDiff <= 1) {
+          updateViewCell(state, owner, adj);
+        }
+      }
+    }
+  } else {
+    // Extended vision: scan tiles within (1 + extraRange) Chebyshev distance
+    const range = 1 + extraRange;
+    const baseRow = locRow(loc);
+    const baseCol = locCol(loc);
+    for (let dr = -range; dr <= range; dr++) {
+      for (let dc = -range; dc <= range; dc++) {
+        const r = baseRow + dr;
+        const c = baseCol + dc;
+        if (r < 0 || r >= MAP_HEIGHT || c < 0 || c >= MAP_WIDTH) continue;
+        const tileLoc = r * MAP_WIDTH + c;
+        if (tileLoc >= 0 && tileLoc < MAP_SIZE) {
+          updateViewCell(state, owner, tileLoc);
+        }
       }
     }
   }
@@ -387,11 +432,13 @@ export function moveUnit(state: GameState, unit: UnitState, newLoc: Loc): void {
     }
   }
 
-  // Update vision
+  // Update vision (with tech bonus range)
+  const levels = getPlayerTechLevels(state, unit.owner);
+  const visionBonus = techVisionBonus(levels[0], levels[2], unit.type);
   if (unit.type === UnitType.Satellite) {
     scanSatellite(state, unit.owner, newLoc);
   }
-  scan(state, unit.owner, newLoc);
+  scan(state, unit.owner, newLoc, visionBonus);
   // Also re-scan old location so it reflects the unit leaving
   scan(state, unit.owner, oldLoc);
 }
@@ -562,12 +609,16 @@ export function attackUnit(
   const attAttrs = UNIT_ATTRIBUTES[attacker.type];
   const defAttrs = UNIT_ATTRIBUTES[defender.type];
 
+  // Use tech-boosted strength for combat
+  const attStrength = getEffectiveStrength(state, attacker);
+  const defStrength = getEffectiveStrength(state, defender);
+
   // Alternating combat rounds
   while (attacker.hits > 0 && defender.hits > 0) {
     if (gameRandom(state) < 0.5) {
-      attacker.hits -= defAttrs.strength;
+      attacker.hits -= defStrength;
     } else {
-      defender.hits -= attAttrs.strength;
+      defender.hits -= attStrength;
     }
   }
 
@@ -771,6 +822,10 @@ export function repairShips(
   owner: Owner,
   movedUnitIds: Set<number>,
 ): void {
+  const levels = getPlayerTechLevels(state, owner);
+  const healthLevel = levels[1]; // Health tech level
+  const healAtSea = techShipsHealAtSea(healthLevel);
+
   for (const unit of state.units) {
     if (unit.owner !== owner) continue;
     if (movedUnitIds.has(unit.id)) continue;
@@ -784,16 +839,20 @@ export function repairShips(
       unit.type === UnitType.Construction
     ) continue;
 
-    // Must be damaged
-    if (unit.hits >= attrs.maxHits) continue;
+    // Must be damaged (use effective max HP)
+    const effectiveMax = getEffectiveMaxHp(state, unit);
+    if (unit.hits >= effectiveMax) continue;
 
-    // Must be in own city
     const cell = state.map[unit.loc];
-    if (cell.cityId === null) continue;
-    const city = state.cities[cell.cityId];
-    if (city.owner !== owner) continue;
+    const inOwnCity = cell.cityId !== null && state.cities[cell.cityId].owner === owner;
 
-    unit.hits += 1;
+    if (inOwnCity) {
+      // Heal in port: use tech city heal rate
+      unit.hits = Math.min(unit.hits + techCityHealRate(healthLevel), effectiveMax);
+    } else if (healAtSea) {
+      // Health 4: ships heal 1 HP/turn at sea
+      unit.hits = Math.min(unit.hits + 1, effectiveMax);
+    }
   }
 }
 
@@ -2031,13 +2090,13 @@ export function executeTurn(
   for (const unit of state.units) {
     unit.moved = 0;
 
-    // Refuel fighters at cities or on carriers
+    // Refuel fighters at cities or on carriers (with tech range bonus)
     if (unit.type === UnitType.Fighter && UNIT_ATTRIBUTES[unit.type].range !== INFINITY) {
       const cell = state.map[unit.loc];
       const inOwnCity = cell.cityId !== null && state.cities[cell.cityId].owner === unit.owner;
       const onCarrier = unit.shipId !== null;
       if (inOwnCity || onCarrier) {
-        unit.range = UNIT_ATTRIBUTES[unit.type].range;
+        unit.range = getEffectiveFighterRange(state, unit.owner);
       }
     }
   }

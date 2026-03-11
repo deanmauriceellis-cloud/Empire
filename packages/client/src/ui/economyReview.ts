@@ -11,9 +11,16 @@ import {
   DEPOSIT_INCOME,
   DEPOSIT_RESOURCE,
   UnitType,
+  TechType,
   locCol,
   locRow,
   getBuildingTechOutput,
+  getTechLevel,
+  TECH_THRESHOLDS,
+  MAX_TECH_LEVEL,
+  getActiveTechBonuses,
+  getNextLevelPreview,
+  pointsToNextLevel,
 } from "@empire/shared";
 import type { GameState, TurnEvent } from "@empire/shared";
 
@@ -298,19 +305,61 @@ export function createEconomyReview(): EconomyReview {
       }
     }
 
-    const rows: string[] = [];
+    // Tech track rows with level, progress bar, and next-level preview
+    const trackRows: string[] = [];
     for (let i = 0; i < 4; i++) {
       const income = techIncome[i];
-      rows.push(
-        `<div class="er-tech-row">` +
+      const level = getTechLevel(tech[i]);
+      const nextThresh = level < MAX_TECH_LEVEL ? TECH_THRESHOLDS[level] : tech[i];
+      const prevThresh = level > 0 ? TECH_THRESHOLDS[level - 1] : 0;
+      const segPoints = tech[i] - prevThresh;
+      const segTotal = nextThresh - prevThresh;
+      const pct = level >= MAX_TECH_LEVEL ? 100 : Math.min(100, Math.floor((segPoints / segTotal) * 100));
+      const toNext = pointsToNextLevel(tech[i]);
+      const preview = getNextLevelPreview(i as TechType, level);
+
+      // Level dots: filled for achieved, empty for remaining
+      const dots = Array.from({ length: MAX_TECH_LEVEL }, (_, li) =>
+        `<span class="er-tech-dot${li < level ? " filled" : ""}" style="color:${TECH_COLORS[i]}">●</span>`
+      ).join("");
+
+      trackRows.push(
+        `<div class="er-tech-track">` +
+        `<div class="er-tech-track-header">` +
         `<span class="er-tech-name" style="color:${TECH_COLORS[i]}">${TECH_NAMES[i]}</span>` +
-        `<span class="er-tech-points">${tech[i]} pts</span>` +
+        `<span class="er-tech-level">Lv ${level}</span>` +
+        `<span class="er-tech-dots">${dots}</span>` +
         `<span class="er-tech-income">${income > 0 ? `+${income}/turn` : "—"}</span>` +
+        `</div>` +
+        (level < MAX_TECH_LEVEL ? (
+          `<div class="er-tech-bar-wrap">` +
+          `<div class="er-prog-bar"><div class="er-prog-fill" style="width:${pct}%;background:${TECH_COLORS[i]}"></div></div>` +
+          `<span class="er-tech-bar-label">${tech[i]}/${nextThresh} (${toNext} to Lv${level + 1})</span>` +
+          `</div>`
+        ) : (
+          `<div class="er-tech-bar-wrap"><span class="er-tech-bar-label" style="color:${TECH_COLORS[i]}">MAX LEVEL</span></div>`
+        )) +
+        (preview ? `<div class="er-tech-preview">Next: ${preview}</div>` : "") +
         `</div>`
       );
     }
 
-    // List buildings contributing
+    // Active bonuses
+    const bonuses = getActiveTechBonuses(s, o);
+    let bonusHtml = "";
+    if (bonuses.length > 0) {
+      bonusHtml = `<div class="er-tech-bonuses"><div class="er-section-label">Active Bonuses</div>`;
+      for (const b of bonuses) {
+        const colorIdx = b.name === "Science" ? 0 : b.name === "Health" ? 1 : b.name === "Electronics" ? 2 : 3;
+        bonusHtml += `<div class="er-tech-bonus-row">` +
+          `<span style="color:${TECH_COLORS[colorIdx]}">${b.name} ${b.level}</span>` +
+          `<span class="er-tech-bonus-desc">${b.description}</span>` +
+          `</div>`;
+      }
+      bonusHtml += `</div>`;
+    }
+
+    // Research source buildings
     const techBuildings = s.buildings.filter(b =>
       b.owner === o && b.complete && BUILDING_ATTRIBUTES[b.type].techOutput !== null
     );
@@ -332,7 +381,7 @@ export function createEconomyReview(): EconomyReview {
       buildingList += `</div>`;
     }
 
-    content.innerHTML = `<div class="er-tech-grid">${rows.join("")}</div>${buildingList}`;
+    content.innerHTML = `<div class="er-tech-grid">${trackRows.join("")}</div>${bonusHtml}${buildingList}`;
   }
 
   // ─── Construction Tab ───────────────────────────────────────────────────

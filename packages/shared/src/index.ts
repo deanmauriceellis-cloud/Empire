@@ -6,6 +6,7 @@ export * from "./constants.js";
 export * from "./viewmap-chars.js";
 export * from "./units.js";
 export * from "./buildings.js";
+export * from "./tech.js";
 export * from "./types.js";
 export * from "./utils.js";
 export * from "./mapgen.js";
