@@ -1,17 +1,17 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-KINGDOM Phase 11 next** — Kingdom World Server (tick engine, AI kingdoms, monthly reset)
+**PLAN-KINGDOM Phase 11 in progress** — Kingdom World Server (tick engine, world map, action buffering done; shield, seasons, client UI remaining)
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phases 1-10 of expansion plan complete (7A units + 7B structures + 8 AI economy + 9 N-player + 10 crown city)
-- 605 tests passing (577 shared + 28 server)
+- Phases 1-10 of expansion plan complete + Phase 11 core (world server + tick engine)
+- 647 tests passing (607 shared + 40 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-KINGDOM.md** is the definitive plan (17 phases: gameplay → kingdom MMO → monetization)
 
 ## Latest commit
-session 053: Phase 10 — Crown City & Kingdom System (tributaries, crown bonuses, rebellion)
+session 054: Phase 11 — Kingdom World Server (tick engine, world map, action buffering)
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
@@ -20,6 +20,28 @@ session 053: Phase 10 — Crown City & Kingdom System (tributaries, crown bonuse
 - Economy review tabs not yet updated for structures
 - Crown city relocate action not yet implemented (UI button deferred)
 - Multiplayer server doesn't yet send kingdom data to client
+- World mode: no client UI yet (countdown timer, action indicator, world menu)
+- World mode: shield mechanic not yet implemented
+- World mode: monthly reset/season rewards not yet implemented
+- World mode: no reconnection to existing world session
+
+## Completed (session 054) — Phase 11 Core: Kingdom World Server
+- [x] 11A partial: World map generator — compose kingdom tiles into NxN grid with ocean channels
+- [x] 11B: Tick engine — configurable interval (1min/5min/15min/1hr), auto-advance turns
+- [x] 11C: Action buffering — queue actions between ticks, cancel support, 500 action limit
+- [x] 11D partial: AI takeover — disconnected humans get AI control, 5min grace period
+- [x] New file: shared/world-map.ts — WorldConfig, WorldState, generateWorldMap, kingdom claiming
+- [x] New file: server/WorldServer.ts — tick engine, action buffering, player join/leave, persistence
+- [x] Protocol: create_world, join_world, world_action, cancel_actions, leave_world (client→server)
+- [x] Protocol: world_created, world_joined, world_state, tick_result, actions_queued (server→client)
+- [x] Protocol: TickInfo (nextTickMs, tickIntervalMs, seasonRemainingS), WorldSummary
+- [x] Server: WorldServer alongside GameManager, message routing by type, /api/worlds endpoint
+- [x] Server: GameManager.handleMessage/handleDisconnect made public for central routing
+- [x] 42 new tests (30 world-map + 12 WorldServer), 647 total (607 shared + 40 server)
+- [ ] Deferred: Shield mechanic (2hr immunity after disconnect)
+- [ ] Deferred: Monthly world reset / season rewards / leaderboard
+- [ ] Deferred: Client UI (countdown timer, action indicator, world menu)
+- [ ] Deferred: Reconnection to existing world session
 
 ## Completed (session 053) — Phase 10: Crown City & Kingdom System
 - [x] 10A: Crown City assignment from starting cities, reassignment on capture

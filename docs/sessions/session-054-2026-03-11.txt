@@ -1,0 +1,73 @@
+Session 054 — 2026-03-11
+Phase 11 Core: Kingdom World Server
+
+OBJECTIVE
+Build the Kingdom World Server — tick-based turn engine, world map generation,
+action buffering, and player join/leave mechanics.
+
+COMPLETED
+1. World Map Generator (shared/world-map.ts, ~340 lines)
+   - WorldConfig: tileSize (100), channelWidth (12), initialRadius (2), tickInterval, seasonLength
+   - generateWorldMap(): creates NxN grid of kingdom tiles with ocean channels between
+   - Each kingdom tile generated independently with own terrain, cities, deposits
+   - Grid geometry: gridSizeForRadius, ringDistance, worldDimensions, kingdomWorldOffset
+   - Kingdom claiming: findAvailableKingdom (by ring preference), claimKingdom (AI→human)
+   - WorldState: gameState + worldConfig + kingdoms[] + season timestamps
+   - Fixed: configureMapDimensions restored to world size after tile generation loop
+
+2. WorldServer (server/WorldServer.ts, ~370 lines)
+   - Tick engine with configurable interval (60s/300s/900s/3600s)
+   - scheduleTick/executeTick cycle: collect actions → AI compute → executeTurn → broadcast
+   - Action buffering: pendingActions per player, 500 limit, cancel support
+   - Player join: find available AI kingdom → claim → send visible state
+   - Player disconnect: mark disconnected, 5min grace → revert to AI
+   - Season end: stop ticks, notify players, persist final state, cleanup
+   - World list: getWorldList() with human count, turn, tick info
+   - Persistence: serialize world meta + gameState to DB with "world:" prefix
+   - Graceful shutdown: stop all timers, persist all worlds
+
+3. Protocol Updates (shared/protocol.ts)
+   - Client→Server: create_world, join_world, world_action, cancel_actions, leave_world
+   - Server→Client: world_created, world_joined, world_state, tick_result, actions_queued, actions_cancelled, world_list
+   - TickInfo: turn, nextTickMs, tickIntervalMs, seasonRemainingS
+   - WorldSummary: id, humanPlayers, totalKingdoms, turn, tickIntervalMs, seasonRemainingS
+
+4. Server Integration (server/index.ts)
+   - WorldServer created alongside GameManager, sharing same DB
+   - Central WebSocket message routing by type prefix (WORLD_MSG_TYPES set)
+   - Welcome message sent once per connection (not duplicated by GameManager)
+   - /api/worlds REST endpoint
+   - Graceful shutdown includes WorldServer
+
+5. GameManager Changes (server/GameManager.ts)
+   - handleMessage: private → public (for central routing)
+   - handleDisconnect: private → public (for central routing)
+   - handleConnection: marked @deprecated, still works for backward compat
+
+6. Tests
+   - world-map.test.ts: 30 tests — grid geometry, world generation, determinism, kingdom claiming
+   - WorldServer.test.ts: 12 tests — creation, join, action buffering, tick engine, disconnect, shutdown
+   - Total: 647 tests (607 shared + 40 server), all passing
+   - Client build: clean
+
+ARCHITECTURE NOTES
+- World map = single flat MapCell[] array (same as regular game, just larger)
+- Kingdom tiles are composited at generation time, not at runtime
+- All existing game logic (executeTurn, AI, combat, buildings, tech) works unchanged on world maps
+- WorldServer is completely independent of GameManager — no shared state
+- Tick timer uses setTimeout (not setInterval) for drift correction
+- Global MAP_WIDTH/MAP_HEIGHT must be reconfigured before each tick (world dims may differ from classic games)
+
+DEFERRED (next session)
+- Shield mechanic (2hr immunity after disconnect, recharge)
+- Monthly world reset with season rewards/leaderboard
+- Client UI: world menu, countdown timer, action indicator, world join screen
+- Reconnection to existing world session (rejoin after disconnect)
+- World expansion (add rings when outer tiles requested)
+- Territory system (visual borders on minimap)
+
+TEST COUNTS
+- Shared: 607 (577 existing + 30 new world-map)
+- Server: 40 (28 existing + 12 new WorldServer)
+- E2E: 18 (unchanged)
+- Total: 647 (was 605)

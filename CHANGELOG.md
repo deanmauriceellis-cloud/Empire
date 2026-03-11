@@ -1,5 +1,23 @@
 # Empire Reborn — Changelog
 
+## v0.43.0 — Session 054 (2026-03-11)
+
+### Phase 11 Core: Kingdom World Server
+- **New file `world-map.ts`** (~340 lines): World map generator — composes kingdom tiles into NxN grid with ocean channels
+- **New file `WorldServer.ts`** (~370 lines): Tick-based world server with action buffering, AI takeover, player join/leave
+- **World map**: `WorldConfig` (tileSize, channelWidth, initialRadius, tickInterval, seasonLength), `generateWorldMap()` creates full world from kingdom tiles
+- **Kingdom claiming**: `findAvailableKingdom()` / `claimKingdom()` — human players take over AI kingdoms at preferred ring distance
+- **Tick engine**: Configurable interval (1min–1hr), collects pending actions, AI computes for disconnected/AI players, broadcasts results
+- **Action buffering**: Players queue actions between ticks (max 500), cancel support, confirmation messages
+- **AI takeover**: Disconnected humans get AI control after 5min grace period
+- **Season timer**: 30-day world lifespan with season end detection
+- **Protocol**: 5 new client messages (create/join/action/cancel/leave world), 7 new server messages (world state/tick results/queue confirmations)
+- **TickInfo**: `nextTickMs`, `tickIntervalMs`, `seasonRemainingS` sent with every world state update
+- **Server integration**: WorldServer runs alongside GameManager on same WebSocket, message routing by type prefix
+- **REST**: `/api/worlds` endpoint for world listing
+- **GameManager**: `handleMessage`/`handleDisconnect` made public for central routing in index.ts
+- **Tests**: 30 world-map + 12 WorldServer = 42 new tests; 647 total (607 shared + 40 server)
+
 ## v0.42.0 — Session 053 (2026-03-11)
 
 ### Phase 10: Crown City & Kingdom System
