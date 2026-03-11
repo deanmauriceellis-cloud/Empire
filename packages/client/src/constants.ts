@@ -17,6 +17,18 @@ export const COLORS = {
   SEA_STROKE: 0x0f2a4a,
   SEA_LIGHT: 0x2a5a8c,
 
+  // Ocean depth variants (vibrant)
+  SEA_DEEP: 0x0f2850,
+  SEA_DEEP_STROKE: 0x0a1c3a,
+  SEA_DEEP_ACCENT: 0x1e4a80,
+  SEA_COASTAL: 0x1a5580,
+  SEA_COASTAL_STROKE: 0x124068,
+  SEA_COASTAL_ACCENT: 0x3080b8,
+  SEA_SHORE: 0x2e6e96,
+  SEA_SHORE_STROKE: 0x1e5878,
+  SEA_FOAM: 0xd4f0f8,
+  SEA_FOAM_ACCENT: 0xeaf8fc,
+
   // Cities
   CITY_NEUTRAL: 0xaaaaaa,
   CITY_STROKE: 0x666666,
@@ -64,8 +76,13 @@ export const FOG_LERP_SPEED = 3.0; // alpha units per second for fog transitions
 
 // ─── Visual Polish ──────────────────────────────────────────────────────────
 
-export const WATER_ANIM_SPEED = 1.5;       // wave cycle speed
-export const WATER_ANIM_AMPLITUDE = 0.06;  // alpha oscillation range
+export const WATER_ANIM_SPEED = 2.0;        // primary wave cycle speed
+export const WATER_ANIM_SPEED2 = 1.3;      // secondary wave (slower, different axis)
+export const WATER_ANIM_SPEED3 = 3.2;      // tertiary shimmer (fast, subtle)
+export const WATER_ALPHA_RANGE = 0.15;     // alpha oscillation range (±15%)
+export const WATER_BOB_AMOUNT = 1.2;       // pixels of vertical wave bob
+export const FOAM_PULSE_SPEED = 1.8;       // foam alpha cycle speed
+export const FOAM_SCALE_AMOUNT = 0.06;     // foam scale breathing range
 export const UNIT_IDLE_BOB_SPEED = 2.0;    // bobbing frequency
 export const UNIT_IDLE_BOB_AMOUNT = 1.5;   // pixels of vertical bob
 export const UNIT_SHADOW_ALPHA = 0.25;     // shadow opacity

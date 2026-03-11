@@ -1,5 +1,6 @@
 // Empire Reborn — Tilemap Renderer
-// Renders terrain tiles with frustum culling, animated water, and smooth fog transitions.
+// Renders terrain tiles with frustum culling, multi-depth ocean, shore foam,
+// animated water, and smooth fog transitions.
 
 import { Container, Sprite, type Texture } from "pixi.js";
 import { TerrainType, Owner } from "@empire/shared";
@@ -7,17 +8,62 @@ import { cartToIso, getVisibleTileBounds } from "../iso/coords.js";
 import {
   HALF_TILE_W, HALF_TILE_H,
   FOG_UNSEEN_ALPHA, FOG_STALE_ALPHA, FOG_LERP_SPEED,
-  WATER_ANIM_SPEED, WATER_ANIM_AMPLITUDE,
+  WATER_ANIM_SPEED, WATER_ANIM_SPEED2, WATER_ANIM_SPEED3,
+  WATER_ALPHA_RANGE, WATER_BOB_AMOUNT,
+  FOAM_PULSE_SPEED, FOAM_SCALE_AMOUNT,
 } from "../constants.js";
-import type { AssetBundle, RenderableState } from "../types.js";
+import type { AssetBundle, RenderableState, RenderableTile } from "../types.js";
 import type { Camera } from "../core/camera.js";
+
+/** Count how many of the 4 cardinal neighbors are land or city tiles. */
+function countAdjacentLand(
+  tiles: RenderableTile[],
+  row: number, col: number,
+  mapW: number, mapH: number,
+): number {
+  let count = 0;
+  const neighbors: [number, number][] = [
+    [row - 1, col], [row + 1, col], [row, col - 1], [row, col + 1],
+  ];
+  for (const [r, c] of neighbors) {
+    if (r < 0 || r >= mapH || c < 0 || c >= mapW) continue;
+    const t = tiles[r * mapW + c];
+    if (t && (t.terrain === TerrainType.Land || t.terrain === TerrainType.City || t.cityOwner !== null)) {
+      count++;
+    }
+  }
+  return count;
+}
+
+/** Check if any of the 8 surrounding tiles is land/city (for foam detection). */
+function hasAdjacentLand(
+  tiles: RenderableTile[],
+  row: number, col: number,
+  mapW: number, mapH: number,
+): boolean {
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
+      if (dr === 0 && dc === 0) continue;
+      const r = row + dr, c = col + dc;
+      if (r < 0 || r >= mapH || c < 0 || c >= mapW) continue;
+      const t = tiles[r * mapW + c];
+      if (t && (t.terrain === TerrainType.Land || t.terrain === TerrainType.City || t.cityOwner !== null)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
 export class TilemapRenderer {
   private tileContainer: Container;
+  private foamContainer: Container;
   private fogContainer: Container;
   private tilePool: Sprite[] = [];
+  private foamPool: Sprite[] = [];
   private fogPool: Sprite[] = [];
   private activeTiles = 0;
+  private activeFoam = 0;
   private activeFog = 0;
   private assets: AssetBundle;
   private time = 0;
@@ -32,6 +78,10 @@ export class TilemapRenderer {
     this.tileContainer.zIndex = 0;
     worldContainer.addChild(this.tileContainer);
 
+    this.foamContainer = new Container();
+    this.foamContainer.zIndex = 1;
+    worldContainer.addChild(this.foamContainer);
+
     this.fogContainer = new Container();
     this.fogContainer.zIndex = 10;
     worldContainer.addChild(this.fogContainer);
@@ -45,6 +95,17 @@ export class TilemapRenderer {
     sprite.anchor.set(0, 0);
     this.tileContainer.addChild(sprite);
     this.tilePool.push(sprite);
+    return sprite;
+  }
+
+  private getFoamSprite(index: number): Sprite {
+    if (index < this.foamPool.length) {
+      return this.foamPool[index];
+    }
+    const sprite = new Sprite(this.assets.terrain.shoreFoam);
+    sprite.anchor.set(0, 0);
+    this.foamContainer.addChild(sprite);
+    this.foamPool.push(sprite);
     return sprite;
   }
 
@@ -65,8 +126,15 @@ export class TilemapRenderer {
       if (cityOwner === Owner.Player2) return this.assets.terrain.cityPlayer2;
       return this.assets.terrain.cityNeutral;
     }
-    if (terrain === TerrainType.Sea) return this.assets.terrain.sea;
+    if (terrain === TerrainType.Sea) return this.assets.terrain.sea; // default, overridden below
     return this.assets.terrain.land;
+  }
+
+  /** Pick water texture based on how many adjacent tiles are land. */
+  private getSeaTexture(adjLand: number): Texture {
+    if (adjLand >= 3) return this.assets.terrain.seaShore;
+    if (adjLand >= 1) return this.assets.terrain.seaCoastal;
+    return this.assets.terrain.seaDeep;
   }
 
   update(state: RenderableState, camera: Camera, viewportW: number, viewportH: number, dt: number): void {
@@ -78,10 +146,8 @@ export class TilemapRenderer {
     );
 
     this.activeTiles = 0;
+    this.activeFoam = 0;
     this.activeFog = 0;
-
-    // Water animation: subtle alpha oscillation
-    const waterPulse = 1.0 + Math.sin(this.time * WATER_ANIM_SPEED) * WATER_ANIM_AMPLITUDE;
 
     for (let row = bounds.minRow; row <= bounds.maxRow; row++) {
       for (let col = bounds.minCol; col <= bounds.maxCol; col++) {
@@ -95,15 +161,49 @@ export class TilemapRenderer {
 
         // Terrain sprite
         const sprite = this.getTileSprite(this.activeTiles++);
-        sprite.texture = this.getTerrainTexture(tile.terrain, tile.cityOwner);
         sprite.position.set(px, py);
         sprite.visible = true;
 
-        // Animate water tiles with phase offset based on position
-        if (tile.terrain === TerrainType.Sea && tile.cityOwner === null) {
-          const phase = Math.sin(this.time * WATER_ANIM_SPEED + col * 0.3 + row * 0.5) * WATER_ANIM_AMPLITUDE;
-          sprite.alpha = 1.0 + phase;
+        const isSea = tile.terrain === TerrainType.Sea && tile.cityOwner === null;
+
+        if (isSea) {
+          // Multi-depth ocean: pick texture by adjacent land count
+          const adjLand = countAdjacentLand(state.tiles, row, col, state.mapWidth, state.mapHeight);
+          sprite.texture = this.getSeaTexture(adjLand);
+
+          // Per-tile phase offset based on position (creates rolling wave pattern)
+          const tilePhase = col * 0.4 + row * 0.6;
+
+          // Three-frequency wave blend for organic motion
+          const wave1 = Math.sin(this.time * WATER_ANIM_SPEED + tilePhase);
+          const wave2 = Math.sin(this.time * WATER_ANIM_SPEED2 + col * 0.8 - row * 0.3) * 0.6;
+          const wave3 = Math.sin(this.time * WATER_ANIM_SPEED3 + row * 1.2 + col * 0.2) * 0.3;
+          const combinedWave = (wave1 + wave2 + wave3) / 1.9; // normalized -1..1
+
+          // Alpha oscillation — visible brightness ebb and flow
+          sprite.alpha = 1.0 + combinedWave * WATER_ALPHA_RANGE;
+
+          // Vertical bob — tiles physically rise and fall like waves
+          const bobY = combinedWave * WATER_BOB_AMOUNT;
+          sprite.position.set(px, py + bobY);
+
+          // Shore foam overlay on water tiles adjacent to land (8-neighbor check)
+          if (hasAdjacentLand(state.tiles, row, col, state.mapWidth, state.mapHeight)) {
+            const foam = this.getFoamSprite(this.activeFoam++);
+            foam.position.set(px, py + bobY);
+            foam.visible = true;
+
+            // Foam pulses with its own rhythm — stronger near shore, breathing in/out
+            const foamWave = Math.sin(this.time * FOAM_PULSE_SPEED + tilePhase * 1.3);
+            const foamAlpha = 0.35 + foamWave * 0.25;
+            foam.alpha = foamAlpha;
+
+            // Foam scale breathing — grows and shrinks slightly
+            const foamScale = 1.0 + foamWave * FOAM_SCALE_AMOUNT;
+            foam.scale.set(foamScale);
+          }
         } else {
+          sprite.texture = this.getTerrainTexture(tile.terrain, tile.cityOwner);
           sprite.alpha = 1;
         }
 
@@ -136,6 +236,9 @@ export class TilemapRenderer {
     // Hide unused pool sprites
     for (let i = this.activeTiles; i < this.tilePool.length; i++) {
       this.tilePool[i].visible = false;
+    }
+    for (let i = this.activeFoam; i < this.foamPool.length; i++) {
+      this.foamPool[i].visible = false;
     }
     for (let i = this.activeFog; i < this.fogPool.length; i++) {
       this.fogPool[i].visible = false;

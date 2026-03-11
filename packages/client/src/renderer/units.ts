@@ -1,6 +1,6 @@
 // Empire Reborn — Unit Renderer
 // Renders units with isometric positioning, player colors, health bars,
-// selection glow, smooth movement animation, idle bobbing, and shadows.
+// pulsing selection glow, smooth movement animation, idle bobbing, and shadows.
 
 import { Container, Sprite, Graphics, Text, TextStyle } from "pixi.js";
 import { locRow, locCol, UNIT_ATTRIBUTES, Owner } from "@empire/shared";
@@ -46,17 +46,19 @@ export class UnitRenderer {
     const container = new Container();
     container.sortableChildren = true;
 
-    // Shadow (rendered below everything)
+    // Shadow — elliptical, soft, at unit base
     const shadow = new Graphics();
-    shadow.ellipse(0, 4, 10, 4);
+    shadow.ellipse(0, 4, 12, 5);
     shadow.fill({ color: 0x000000, alpha: UNIT_SHADOW_ALPHA });
     shadow.zIndex = -1;
     container.addChild(shadow);
 
-    // Selection glow (rendered below unit)
+    // Selection glow — double ring for more visible pulse
     const selectionGlow = new Graphics();
-    selectionGlow.circle(0, 0, 14);
-    selectionGlow.fill({ color: COLORS.SELECTION, alpha: 0.4 });
+    selectionGlow.circle(0, 0, 16);
+    selectionGlow.fill({ color: COLORS.SELECTION, alpha: 0.15 });
+    selectionGlow.circle(0, 0, 12);
+    selectionGlow.fill({ color: COLORS.SELECTION, alpha: 0.25 });
     selectionGlow.visible = false;
     selectionGlow.zIndex = 0;
     container.addChild(selectionGlow);
@@ -122,19 +124,25 @@ export class UnitRenderer {
 
   private drawHealthBar(bar: Graphics, hits: number, maxHits: number): void {
     bar.clear();
-    const w = 20, h = 3;
+    const w = 22, h = 3;
     const ratio = hits / maxHits;
 
     // Background
     bar.rect(-w / 2, -18, w, h);
     bar.fill({ color: COLORS.HEALTH_BG });
+    bar.stroke({ width: 0.5, color: 0x000000, alpha: 0.5 });
 
-    // Foreground
+    // Foreground — segmented
     const color = ratio > 0.6 ? COLORS.HEALTH_HIGH
       : ratio > 0.3 ? COLORS.HEALTH_MID
       : COLORS.HEALTH_LOW;
-    bar.rect(-w / 2, -18, w * ratio, h);
-    bar.fill({ color });
+
+    // Draw individual segments for clarity
+    const segW = w / maxHits;
+    for (let i = 0; i < hits; i++) {
+      bar.rect(-w / 2 + i * segW + 0.5, -18, segW - 1, h);
+      bar.fill({ color });
+    }
   }
 
   update(units: UnitState[], selection: SelectionState, dt: number): void {
@@ -176,7 +184,7 @@ export class UnitRenderer {
       us.container.position.set(us.currentX, us.currentY + bobY);
       us.container.zIndex = us.currentY; // depth sort by base Y (not bobbed)
 
-      // Shadow stays on ground (no bob)
+      // Shadow stays on ground (no bob) — slight scale variation for depth feel
       us.shadow.position.set(0, -bobY);
 
       // Update texture (in case owner changed via capture)
@@ -198,11 +206,16 @@ export class UnitRenderer {
         us.cargoLabel.text = `${unit.cargoIds.length}/${cap}`;
       }
 
-      // Selection glow with pulse
+      // Selection glow with enhanced pulse
       const isSelected = selection.selectedUnitId === unit.id;
       us.selectionGlow.visible = isSelected;
       if (isSelected) {
-        us.selectionGlow.alpha = Math.sin(this.time * 4) * 0.3 + 0.7;
+        // Multi-frequency pulse for livelier glow
+        const pulse = Math.sin(this.time * 4) * 0.2 + Math.sin(this.time * 7) * 0.1;
+        us.selectionGlow.alpha = 0.6 + pulse;
+        // Subtle scale breathing
+        const breathe = 1.0 + Math.sin(this.time * 3) * 0.05;
+        us.selectionGlow.scale.set(breathe);
       }
     }
 

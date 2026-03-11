@@ -73,6 +73,10 @@ export interface AssetBundle {
   terrain: {
     land: Texture;
     sea: Texture;
+    seaDeep: Texture;
+    seaCoastal: Texture;
+    seaShore: Texture;
+    shoreFoam: Texture;
     cityNeutral: Texture;
     cityPlayer1: Texture;
     cityPlayer2: Texture;
