@@ -16,6 +16,7 @@ import {
   UNIT_ATTRIBUTES,
   objMoves,
   scan,
+  findUnit,
   computeAITurn,
   generateDiagnostic,
   startAILogCapture,
@@ -403,6 +404,7 @@ async function init() {
       selectedUnit: null, selectedCity: null,
       pendingActionCount: 0, events: [], isGameOver: false, winner: null,
       resources: [0, 0, 0],
+      techResearch: [0, 0, 0, 0],
     };
   }
 
@@ -433,6 +435,7 @@ async function init() {
       isGameOver: game.isGameOver,
       winner: game.winner,
       resources: state.resources[Owner.Player1],
+      techResearch: state.techResearch[Owner.Player1],
     };
   }
 
@@ -446,6 +449,7 @@ async function init() {
         selectedUnit: null, selectedCity: null,
         pendingActionCount: 0, events: [], isGameOver: false, winner: null,
         resources: [0, 0, 0],
+        techResearch: [0, 0, 0, 0],
       };
     }
 
@@ -485,6 +489,7 @@ async function init() {
       isGameOver: mp.isGameOver,
       winner: mp.winner,
       resources: [0, 0, 0], // TODO: server needs to send resource data
+      techResearch: [0, 0, 0, 0],
     };
   }
 
@@ -554,7 +559,7 @@ async function init() {
         currentHighlights = [];
         audio.playSelect();
         if (shiftKey) {
-          ui.cityPanel.open(city as any);
+          ui.cityPanel.open(city as any, mode === "singleplayer" ? game.state.buildings : []);
         }
         return;
       }
@@ -572,7 +577,7 @@ async function init() {
       currentHighlights = [];
 
       if (shiftKey) {
-        ui.cityPanel.open(city as any);
+        ui.cityPanel.open(city as any, mode === "singleplayer" ? game.state.buildings : []);
       }
       return;
     }
@@ -916,7 +921,7 @@ async function init() {
             : (mp.visibleState?.cities ?? []);
           const city = cities.find((c: any) => c.id === selection.selectedCityId);
           if (city && city.owner === playerOwner) {
-            ui.cityPanel.open(city as any);
+            ui.cityPanel.open(city as any, mode === "singleplayer" ? game.state.buildings : []);
           }
         }
         break;
@@ -1039,8 +1044,15 @@ async function init() {
           const city = cities.find((c: any) => c.id === selection.selectedCityId);
           const playerOwner = mode === "singleplayer" ? Owner.Player1 : mp.owner;
           if (city && city.owner === playerOwner) {
-            ui.cityPanel.open(city as any);
+            ui.cityPanel.open(city as any, mode === "singleplayer" ? game.state.buildings : []);
           }
+        }
+        break;
+      case "build-on-deposit":
+        if (selection.selectedUnitId !== null && mode === "singleplayer") {
+          collector.buildOnDeposit(selection.selectedUnitId);
+          ui.turnFlow.markDone(selection.selectedUnitId);
+          advanceToNextUnit();
         }
         break;
       case "next-unit":
@@ -1048,6 +1060,24 @@ async function init() {
         break;
       case "end-turn":
         handleEndTurn();
+        break;
+      default:
+        // Handle build-upgrade-N actions
+        if (action.startsWith("build-upgrade-") && selection.selectedUnitId !== null && mode === "singleplayer") {
+          const buildingType = parseInt(action.replace("build-upgrade-", ""), 10);
+          if (!isNaN(buildingType)) {
+            const unit = findUnit(game.state, selection.selectedUnitId);
+            if (unit) {
+              const cell = game.state.map[unit.loc];
+              if (cell.cityId !== null) {
+                const city = game.state.cities[cell.cityId];
+                collector.buildCityUpgrade(selection.selectedUnitId, city.id, buildingType);
+                ui.turnFlow.markDone(selection.selectedUnitId);
+                advanceToNextUnit();
+              }
+            }
+          }
+        }
         break;
     }
   }

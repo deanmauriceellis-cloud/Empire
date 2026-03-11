@@ -11,6 +11,7 @@ import {
   Direction,
   UnitType,
   UnitBehavior,
+  BuildingType,
   DIR_OFFSET,
   findUnit,
   goodLoc,
@@ -39,6 +40,12 @@ export interface ActionCollector {
 
   /** Set unit navigation target (GoTo). */
   setTarget(unitId: number, targetLoc: Loc): void;
+
+  /** Build on deposit (construction unit at deposit). */
+  buildOnDeposit(unitId: number): void;
+
+  /** Build city upgrade (construction unit at own city). */
+  buildCityUpgrade(unitId: number, cityId: number, buildingType: BuildingType): void;
 
   /** End the turn: submit to game, run AI, tick production. Returns turn result. */
   endTurn(): TurnResult;
@@ -135,6 +142,20 @@ export function createActionCollector(game: SinglePlayerGame): ActionCollector {
       const action: PlayerAction = { type: "setTarget", unitId, targetLoc };
       actions.push(action);
       applyAction(action);
+    },
+
+    buildOnDeposit(unitId: number): void {
+      const action: PlayerAction = { type: "buildOnDeposit", unitId };
+      actions.push(action);
+      const events = applyAction(action);
+      turnEvents.push(...events);
+    },
+
+    buildCityUpgrade(unitId: number, cityId: number, buildingType: BuildingType): void {
+      const action: PlayerAction = { type: "buildCityUpgrade", unitId, cityId, buildingType };
+      actions.push(action);
+      const events = applyAction(action);
+      turnEvents.push(...events);
     },
 
     endTurn(): TurnResult {

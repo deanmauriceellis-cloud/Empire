@@ -99,11 +99,12 @@ export enum UnitType {
   Carrier = 6,
   Battleship = 7,
   Satellite = 8,
+  Construction = 9,
 }
 
-export const NUM_UNIT_TYPES = 9;
+export const NUM_UNIT_TYPES = 10;
 
-export const UNIT_TYPE_CHARS = "AFPDSTCBZ";
+export const UNIT_TYPE_CHARS = "AFPDSTCBZE";
 
 // ─── Unit Behaviors ──────────────────────────────────────────────────────────
 
@@ -177,6 +178,7 @@ export const MOVE_ORDER: readonly UnitType[] = [
   UnitType.Destroyer,
   UnitType.Army,
   UnitType.Fighter,
+  UnitType.Construction,
 ] as const;
 
 // ─── Resource Types ─────────────────────────────────────────────────────────
@@ -213,6 +215,58 @@ export const DEPOSIT_INCOME = 3;
 
 /** Per-turn passive income per owned city: [ore, oil, textile] */
 export const CITY_INCOME: readonly number[] = [2, 1, 2] as const;
+
+// ─── Building Types ───────────────────────────────────────────────────────
+
+export enum BuildingType {
+  // Deposit buildings (built by construction unit on deposit tiles)
+  Mine = 0,           // on OreVein
+  OilWell = 1,        // on OilWell
+  TextileFarm = 2,    // on TextileFarm
+  // City upgrades (built by construction unit at owned city, max 4 per city)
+  University = 3,     // +science/turn
+  Hospital = 4,       // +health/turn
+  TechLab = 5,        // +electronics/turn
+  MilitaryAcademy = 6, // +war research/turn
+  Shipyard = 7,       // ship build time reduction
+  Airfield = 8,       // fighter range bonus
+}
+
+export const NUM_BUILDING_TYPES = 9;
+
+/** First 3 are deposit buildings, rest are city upgrades */
+export const DEPOSIT_BUILDING_TYPES: readonly BuildingType[] = [
+  BuildingType.Mine, BuildingType.OilWell, BuildingType.TextileFarm,
+] as const;
+
+export const CITY_UPGRADE_TYPES: readonly BuildingType[] = [
+  BuildingType.University, BuildingType.Hospital, BuildingType.TechLab,
+  BuildingType.MilitaryAcademy, BuildingType.Shipyard, BuildingType.Airfield,
+] as const;
+
+export const BUILDING_NAMES: readonly string[] = [
+  "Mine", "Oil Well", "Textile Farm",
+  "University", "Hospital", "Tech Lab",
+  "Military Academy", "Shipyard", "Airfield",
+] as const;
+
+/** Max upgrade slots per city */
+export const MAX_CITY_UPGRADES = 4;
+
+// ─── Tech Research Types ─────────────────────────────────────────────────
+
+export enum TechType {
+  Science = 0,
+  Health = 1,
+  Electronics = 2,
+  War = 3,
+}
+
+export const NUM_TECH_TYPES = 4;
+
+export const TECH_NAMES: readonly string[] = [
+  "Science", "Health", "Electronics", "War Research",
+] as const;
 
 // ─── Starting Resources ────────────────────────────────────────────────────
 

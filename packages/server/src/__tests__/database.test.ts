@@ -48,6 +48,9 @@ function createTestState(): GameState {
     resources: { [Owner.Unowned]: [0,0,0], [Owner.Player1]: [150,100,150], [Owner.Player2]: [150,100,150] },
     deposits: [],
     nextDepositId: 0,
+    buildings: [],
+    nextBuildingId: 0,
+    techResearch: { [Owner.Unowned]: [0,0,0,0], [Owner.Player1]: [0,0,0,0], [Owner.Player2]: [0,0,0,0] },
   };
 
   const [city1Id, city2Id] = mapResult.startingCities;

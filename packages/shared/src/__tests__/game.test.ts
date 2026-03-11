@@ -84,6 +84,9 @@ function createTestState(): GameState {
     resources: { [Owner.Unowned]: [0,0,0], [Owner.Player1]: [150,100,150], [Owner.Player2]: [150,100,150] },
     deposits: [],
     nextDepositId: 0,
+    buildings: [],
+    nextBuildingId: 0,
+    techResearch: { [Owner.Unowned]: [0,0,0,0], [Owner.Player1]: [0,0,0,0], [Owner.Player2]: [0,0,0,0] },
   };
 }
 
@@ -100,7 +103,8 @@ function addCity(
     owner,
     production,
     work: 0,
-    func: Array(9).fill(UnitBehavior.None),
+    func: Array(10).fill(UnitBehavior.None),
+    upgradeIds: [],
   };
   state.cities.push(city);
   state.map[loc].cityId = state.cities.length - 1;

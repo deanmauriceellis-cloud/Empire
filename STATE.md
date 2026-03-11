@@ -1,21 +1,37 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-UNIFIED Phase 3 complete** — Economy Foundation (debugged & working)
+**PLAN-UNIFIED Phase 4 complete** — Construction & Buildings
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phases 1-3 of expansion plan complete (Graphics, Unit Info, Economy)
-- 323 tests passing (295 shared + 28 server)
+- Phases 1-4 of expansion plan complete (Graphics, Unit Info, Economy, Construction & Buildings)
+- 366 tests passing (338 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-UNIFIED.md** is the definitive plan for all future implementation
 
 ## Latest commit
-`29ba321` — session 044: fix economy death spiral — passive city income + retool stall bug
+_pending_ — session 045: Phase 4 Construction & Buildings
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
 - Armies adjacent to capturable neutral cities not always attacking (pre-existing)
+
+## Completed (session 045) — Construction & Buildings
+- [x] UnitType.Construction: land, speed 1, str 0, hp 1, buildTime 10, cost [10,0,5]
+- [x] BuildingType enum: Mine, OilWell, TextileFarm, University, Hospital, TechLab, MilitaryAcademy, Shipyard, Airfield
+- [x] BuildingState: id, loc, type, owner, level (1-3), work, buildTime, complete, constructorId
+- [x] Build on deposit: construction at deposit → mine/well/farm → consumes constructor
+- [x] Build city upgrade: construction at own city → choose from 6 types → max 4 slots → consumes constructor
+- [x] Building upgrades: Lv1→Lv2→Lv3 with increasing costs/times
+- [x] Tech research: University→Science, Hospital→Health, TechLab→Electronics, Academy→War; level=points/turn
+- [x] tickBuildingConstruction() in turn flow, collectTechResearch() per turn
+- [x] Construction unit sprite (hard hat + wrench)
+- [x] Action panel: context build buttons for construction units
+- [x] City panel: upgrade slot display (4 slots, filled/empty, status)
+- [x] Unit info panel: building progress for construction units
+- [x] HUD: tech research display (S/H/E/W)
+- [x] 43 new tests, 366 total passing
 
 ## Completed (session 044) — Economy Debugging
 - [x] Passive city income: CITY_INCOME [2,1,2] per owned city per turn

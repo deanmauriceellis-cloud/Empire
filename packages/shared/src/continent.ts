@@ -132,6 +132,7 @@ function createUnitCounts(): Record<UnitType, number> {
     [UnitType.Carrier]: 0,
     [UnitType.Battleship]: 0,
     [UnitType.Satellite]: 0,
+    [UnitType.Construction]: 0,
   };
 }
 

@@ -491,6 +491,37 @@ function makeUnitTexture(renderer: Renderer, type: UnitType, owner: Owner): Text
       g.stroke({ width: 0.5, color: 0x555555 });
       break;
     }
+
+    case UnitType.Construction: {
+      // Construction unit — hard hat + wrench silhouette
+      const dark = darken(color, 0.5);
+      const light = lighten(color, 0.3);
+      // Hard hat dome
+      g.ellipse(cx, cy - 4, 6, 3);
+      g.fill({ color: 0xf0c020, alpha: 0.95 });
+      g.stroke({ width: 0.8, color: 0xb08010, alpha: 0.8 });
+      // Hat brim
+      g.rect(cx - 7, cy - 2, 14, 2);
+      g.fill({ color: 0xf0c020, alpha: 0.9 });
+      // Body/vest
+      g.rect(cx - 5, cy, 10, 7);
+      g.fill({ color, alpha: 0.9 });
+      g.stroke({ width: 0.5, color: dark, alpha: 0.6 });
+      // Safety stripes (two diagonal lines)
+      g.moveTo(cx - 4, cy + 2);
+      g.lineTo(cx + 4, cy + 5);
+      g.stroke({ width: 1.5, color: light, alpha: 0.5 });
+      g.moveTo(cx - 4, cy + 4);
+      g.lineTo(cx + 4, cy + 7);
+      g.stroke({ width: 1.5, color: light, alpha: 0.5 });
+      // Wrench (small, to the right)
+      g.moveTo(cx + 5, cy - 1);
+      g.lineTo(cx + 8, cy - 6);
+      g.stroke({ width: 1.5, color: 0x888888, alpha: 0.8 });
+      g.circle(cx + 8, cy - 7, 2);
+      g.stroke({ width: 1, color: 0x888888, alpha: 0.7 });
+      break;
+    }
   }
 
   return renderer.generateTexture(g);

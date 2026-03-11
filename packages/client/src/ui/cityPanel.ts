@@ -1,12 +1,15 @@
 // Empire Reborn — City Production Panel (Modal)
 
-import { UNIT_ATTRIBUTES, UnitType, NUM_UNIT_TYPES, UNIT_COSTS } from "@empire/shared";
-import type { CityState } from "@empire/shared";
+import {
+  UNIT_ATTRIBUTES, UnitType, NUM_UNIT_TYPES, UNIT_COSTS,
+  BUILDING_NAMES, MAX_CITY_UPGRADES,
+} from "@empire/shared";
+import type { CityState, BuildingState } from "@empire/shared";
 
 export interface CityPanel {
   readonly element: HTMLDivElement;
   /** Open the panel for a city. */
-  open(city: CityState): void;
+  open(city: CityState, buildings?: BuildingState[]): void;
   /** Close the panel. */
   close(): void;
   /** Returns the selected unit type if player chose one, or null. */
@@ -19,6 +22,7 @@ export function createCityPanel(): CityPanel {
   element.id = "city-panel";
 
   let currentCity: CityState | null = null;
+  let currentBuildings: BuildingState[] = [];
   let pendingSelection: { cityId: number; unitType: UnitType } | null = null;
   let isOpen = false;
 
@@ -59,6 +63,27 @@ export function createCityPanel(): CityPanel {
     // Penalty warning
     html += `<div class="penalty-warning" id="penalty-warn">Switching production incurs a 20% penalty on the new unit's build time.</div>`;
 
+    // City upgrade slots
+    if (city.upgradeIds.length > 0 || currentBuildings.length > 0) {
+      html += `<div class="section-label" style="margin-top:12px;color:#fa4">Upgrades (${city.upgradeIds.length}/${MAX_CITY_UPGRADES})</div>`;
+      html += `<div style="margin-top:4px">`;
+      for (const bid of city.upgradeIds) {
+        const b = currentBuildings.find((building) => building.id === bid);
+        if (b) {
+          const lvl = b.level > 1 ? ` Lv${b.level}` : "";
+          const status = b.complete
+            ? `<span style="color:#4c8">Active</span>`
+            : `<span style="color:#fa4">Building ${Math.floor((b.work / b.buildTime) * 100)}%</span>`;
+          html += `<div style="font-size:11px;color:#ccc;margin:2px 0">` +
+            `${BUILDING_NAMES[b.type]}${lvl} — ${status}</div>`;
+        }
+      }
+      for (let i = city.upgradeIds.length; i < MAX_CITY_UPGRADES; i++) {
+        html += `<div style="font-size:11px;color:#555;margin:2px 0">[ Empty slot ]</div>`;
+      }
+      html += `</div>`;
+    }
+
     element.innerHTML = html;
   }
 
@@ -96,8 +121,9 @@ export function createCityPanel(): CityPanel {
     element,
     get isOpen() { return isOpen; },
 
-    open(city: CityState): void {
+    open(city: CityState, buildings?: BuildingState[]): void {
       currentCity = city;
+      currentBuildings = buildings ?? [];
       isOpen = true;
       render(city);
       element.classList.add("visible");

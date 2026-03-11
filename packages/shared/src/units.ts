@@ -159,6 +159,21 @@ export const UNIT_ATTRIBUTES: readonly UnitAttributes[] = [
     capacity: 0,
     range: 500,
   },
+  {
+    type: UnitType.Construction,
+    char: "E",
+    name: "construction unit",
+    nickname: "engineer",
+    article: "a construction unit",
+    plural: "construction units",
+    terrain: "+",
+    buildTime: 10,
+    strength: 0,
+    maxHits: 1,
+    speed: 1,
+    capacity: 0,
+    range: INFINITY,
+  },
 ] as const;
 
 // ─── Unit Resource Costs ─────────────────────────────────────────────────────
@@ -174,6 +189,7 @@ export const UNIT_COSTS: readonly (readonly [number, number, number])[] = [
   [30, 20, 5],   // Carrier
   [40, 25, 0],   // Battleship
   [20, 5,  10],  // Satellite
+  [10, 0,  5],   // Construction
 ] as const;
 
 /** Get resource cost for a unit type */
@@ -196,10 +212,10 @@ export function canAffordUnit(resources: readonly number[], type: UnitType): boo
 export const TT_ATTACK = "T";
 
 /** What an army can attack when adjacent (O=unowned city) */
-export const ARMY_ATTACK = "O*TACFBSDP";
+export const ARMY_ATTACK = "O*TACFBSDPE";
 
 /** What a fighter can attack when adjacent */
-export const FIGHTER_ATTACK = "TCFBSDPA";
+export const FIGHTER_ATTACK = "TCFBSDPAE";
 
 /** What a ship can attack when adjacent */
 export const SHIP_ATTACK = "TCBSDP";

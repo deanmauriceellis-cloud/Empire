@@ -51,6 +51,9 @@ function createFullGameState(seed: number): GameState {
     resources: { [Owner.Unowned]: [0,0,0], [Owner.Player1]: [150,100,150], [Owner.Player2]: [150,100,150] },
     deposits: [],
     nextDepositId: 0,
+    buildings: [],
+    nextBuildingId: 0,
+    techResearch: { [Owner.Unowned]: [0,0,0,0], [Owner.Player1]: [0,0,0,0], [Owner.Player2]: [0,0,0,0] },
   };
 
   // Create starting armies at each player's starting city
@@ -277,18 +280,21 @@ describe("Integration: AI vs AI", () => {
       resources: { [Owner.Unowned]: [0,0,0], [Owner.Player1]: [150,100,150], [Owner.Player2]: [150,100,150] },
       deposits: [],
       nextDepositId: 0,
+      buildings: [],
+      nextBuildingId: 0,
+      techResearch: { [Owner.Unowned]: [0,0,0,0], [Owner.Player1]: [0,0,0,0], [Owner.Player2]: [0,0,0,0] },
     };
 
     // P1 city on top island, P2 city on bottom island
     const p1CityLoc = rowColLoc(10, 15);
     state.map[p1CityLoc].terrain = TerrainType.City;
     state.map[p1CityLoc].cityId = 0;
-    state.cities.push({ id: 1, loc: p1CityLoc, owner: Owner.Player1, production: UnitType.Army, work: 0, func: Array(9).fill(UnitBehavior.None) });
+    state.cities.push({ id: 1, loc: p1CityLoc, owner: Owner.Player1, production: UnitType.Army, work: 0, func: Array(10).fill(UnitBehavior.None), upgradeIds: [] });
 
     const p2CityLoc = rowColLoc(30, 15);
     state.map[p2CityLoc].terrain = TerrainType.City;
     state.map[p2CityLoc].cityId = 1;
-    state.cities.push({ id: 2, loc: p2CityLoc, owner: Owner.Player2, production: UnitType.Army, work: 0, func: Array(9).fill(UnitBehavior.None) });
+    state.cities.push({ id: 2, loc: p2CityLoc, owner: Owner.Player2, production: UnitType.Army, work: 0, func: Array(10).fill(UnitBehavior.None), upgradeIds: [] });
 
     // Place a P1 army on the ENEMY (bottom) island with Explore behavior
     const armyLoc = rowColLoc(28, 10);

@@ -184,6 +184,7 @@ export function placeCities(
     UnitBehavior.Explore,   // Carrier — patrol waters
     UnitBehavior.Explore,   // Battleship — patrol waters
     UnitBehavior.None,      // Satellite — gets random diagonal in createUnit
+    UnitBehavior.None,      // Construction — wait for build orders
   ];
 
   while (cities.length < numCities) {
@@ -222,6 +223,7 @@ export function placeCities(
       production: UnitType.Army,
       work: 0,
       func: [...defaultFunc],
+      upgradeIds: [],
     });
   }
 
@@ -707,6 +709,7 @@ export function placeDeposits(
         type,
         owner: Owner.Unowned,
         buildingComplete: false,
+        buildingId: null,
       };
       deposits.push(deposit);
       map[loc].depositId = deposit.id;
@@ -925,6 +928,7 @@ function generateRiverMap(config: GameConfig): MapGenerationResult {
     UnitBehavior.Explore, UnitBehavior.Explore, UnitBehavior.Explore,
     UnitBehavior.Explore, UnitBehavior.Explore, UnitBehavior.None,
     UnitBehavior.Explore, UnitBehavior.Explore, UnitBehavior.None,
+    UnitBehavior.None,
   ];
 
   function placeCity(loc: Loc, owner: Owner): number {
@@ -937,6 +941,7 @@ function generateRiverMap(config: GameConfig): MapGenerationResult {
       production: UnitType.Army,
       work: 0,
       func: [...defaultFunc],
+      upgradeIds: [],
     });
     return cityId;
   }

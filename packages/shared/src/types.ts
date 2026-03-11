@@ -1,6 +1,6 @@
 // Empire Reborn — Core Game State Interfaces
 
-import type { Owner, UnitType, UnitBehavior, TerrainType, DepositType } from "./constants.js";
+import type { Owner, UnitType, UnitBehavior, TerrainType, DepositType, BuildingType } from "./constants.js";
 
 // ─── Coordinates ─────────────────────────────────────────────────────────────
 
@@ -37,6 +37,21 @@ export interface DepositState {
   type: DepositType;
   owner: Owner;                // who controls it (Unowned until a building is placed)
   buildingComplete: boolean;   // true once a mine/well/farm is built on it
+  buildingId: number | null;   // reference to BuildingState id (null if no building)
+}
+
+// ─── Building State ─────────────────────────────────────────────────────────
+
+export interface BuildingState {
+  id: number;
+  loc: Loc;
+  type: BuildingType;
+  owner: Owner;
+  level: number;               // 1-3 (deposit buildings always 1; city upgrades upgradeable)
+  work: number;                // work accumulated toward completion
+  buildTime: number;           // total work needed
+  complete: boolean;           // true when fully built
+  constructorId: number | null; // unit ID of construction unit (null when complete)
 }
 
 // ─── City State ──────────────────────────────────────────────────────────────
@@ -47,7 +62,8 @@ export interface CityState {
   owner: Owner;
   production: UnitType;        // what the city is building
   work: number;                // work units accumulated toward current production
-  func: UnitBehavior[];        // default behavior for each unit type produced (length 9)
+  func: UnitBehavior[];        // default behavior for each unit type produced (length NUM_UNIT_TYPES)
+  upgradeIds: number[];        // building IDs for upgrade slots (max MAX_CITY_UPGRADES)
 }
 
 // ─── Unit State ──────────────────────────────────────────────────────────────
@@ -103,6 +119,13 @@ export interface GameState {
   // Map deposits (ore veins, oil wells, textile farms)
   deposits: DepositState[];
   nextDepositId: number;
+
+  // Buildings (deposit mines/wells/farms + city upgrades)
+  buildings: BuildingState[];
+  nextBuildingId: number;
+
+  // Tech research accumulation per player [science, health, electronics, war]
+  techResearch: Record<Owner, number[]>;
 }
 
 // ─── Player Actions ──────────────────────────────────────────────────────────
@@ -115,13 +138,15 @@ export type PlayerAction =
   | { type: "setTarget"; unitId: number; targetLoc: Loc }
   | { type: "embark"; unitId: number; shipId: number }
   | { type: "disembark"; unitId: number }
+  | { type: "buildOnDeposit"; unitId: number }
+  | { type: "buildCityUpgrade"; unitId: number; cityId: number; buildingType: BuildingType }
   | { type: "endTurn" }
   | { type: "resign" };
 
 // ─── Turn Result ─────────────────────────────────────────────────────────────
 
 export interface TurnEvent {
-  type: "combat" | "capture" | "production" | "death" | "discovery" | "stall" | "income";
+  type: "combat" | "capture" | "production" | "death" | "discovery" | "stall" | "income" | "building";
   loc: Loc;
   description: string;
   data?: Record<string, unknown>;

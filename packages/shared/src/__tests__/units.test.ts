@@ -5,8 +5,8 @@ import {
 } from "../index.js";
 
 describe("unit attributes", () => {
-  it("has 9 unit types", () => {
-    expect(UNIT_ATTRIBUTES).toHaveLength(9);
+  it("has 10 unit types", () => {
+    expect(UNIT_ATTRIBUTES).toHaveLength(10);
   });
 
   it("army: 5 build time, land only", () => {

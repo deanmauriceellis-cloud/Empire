@@ -3,7 +3,9 @@
 
 import {
   UNIT_ATTRIBUTES, Owner, UnitType, UnitBehavior,
-  objMoves,
+  objMoves, BuildingType, BUILDING_NAMES,
+  CITY_UPGRADE_TYPES, MAX_CITY_UPGRADES,
+  BUILDING_ATTRIBUTES, DepositType,
 } from "@empire/shared";
 import type { UnitState, GameState } from "@empire/shared";
 
@@ -96,6 +98,61 @@ export function createActionPanel(): ActionPanel {
 
         if (u.shipId !== null) {
           parts.push(btn("Disembark", "U", "disembark"));
+        }
+
+        // Construction unit context actions
+        if (u.type === UnitType.Construction) {
+          const isBuilding = gameState.buildings.some(
+            (b) => b.constructorId === u.id && !b.complete,
+          );
+          if (isBuilding) {
+            const building = gameState.buildings.find((b) => b.constructorId === u.id && !b.complete)!;
+            const pct = Math.floor((building.work / building.buildTime) * 100);
+            parts.push(`<div class="section-label">Building</div>`);
+            parts.push(`<div style="color:#4c8;font-size:11px;margin-bottom:4px">` +
+              `${BUILDING_NAMES[building.type]} — ${pct}%</div>`);
+          } else {
+            parts.push(`<div class="section-label">Build</div>`);
+            // Check if on a deposit
+            const cell = gameState.map[u.loc];
+            if (cell.depositId !== null) {
+              const dep = gameState.deposits[cell.depositId];
+              if (!dep.buildingComplete && dep.buildingId === null) {
+                const bType = dep.type as number as BuildingType;
+                parts.push(btn(`Build ${BUILDING_NAMES[bType]}`, "B", "build-on-deposit"));
+              }
+            }
+            // Check if on own city
+            if (cell.cityId !== null) {
+              const city = gameState.cities[cell.cityId];
+              if (city.owner === u.owner && city.upgradeIds.length < MAX_CITY_UPGRADES) {
+                for (const upgradeType of CITY_UPGRADE_TYPES) {
+                  const hasIt = city.upgradeIds.some((bid) => {
+                    const b = gameState.buildings.find((building) => building.id === bid);
+                    return b && b.type === upgradeType;
+                  });
+                  if (!hasIt) {
+                    parts.push(btn(
+                      `Build ${BUILDING_NAMES[upgradeType]}`,
+                      "",
+                      `build-upgrade-${upgradeType}`,
+                    ));
+                  }
+                }
+                // Show upgrade options for existing buildings
+                for (const bid of city.upgradeIds) {
+                  const b = gameState.buildings.find((building) => building.id === bid);
+                  if (b && b.complete && b.level < 3) {
+                    parts.push(btn(
+                      `Upgrade ${BUILDING_NAMES[b.type]} Lv${b.level + 1}`,
+                      "",
+                      `build-upgrade-${b.type}`,
+                    ));
+                  }
+                }
+              }
+            }
+          }
         }
 
         parts.push(`<div style="color:#555;font-size:10px;margin-top:2px">` +

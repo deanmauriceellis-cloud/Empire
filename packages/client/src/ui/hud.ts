@@ -1,6 +1,6 @@
 // Empire Reborn — HUD (Top Bar + Bottom Bar)
 
-import { UNIT_ATTRIBUTES, GAME_VERSION, UnitBehavior, BEHAVIOR_NAMES, behaviorIndex, NUM_UNIT_TYPES } from "@empire/shared";
+import { UNIT_ATTRIBUTES, GAME_VERSION, UnitBehavior, BEHAVIOR_NAMES, behaviorIndex, NUM_UNIT_TYPES, TECH_NAMES } from "@empire/shared";
 import type { UIState } from "../types.js";
 
 export interface HUD {
@@ -50,11 +50,23 @@ export function createHUD(): HUD {
         `<span class="res-txt" title="Textile">${txt}</span>` +
         `</span>`;
 
+      // Tech research display
+      const tech = state.techResearch;
+      const hasTech = tech[0] > 0 || tech[1] > 0 || tech[2] > 0 || tech[3] > 0;
+      const techHtml = hasTech
+        ? `<span class="tech-display" title="Science / Health / Electronics / War">` +
+          `<span style="color:#66aaff">S:${tech[0]}</span>` +
+          `<span style="color:#44cc88">H:${tech[1]}</span>` +
+          `<span style="color:#ffaa44">E:${tech[2]}</span>` +
+          `<span style="color:#ff6644">W:${tech[3]}</span></span>`
+        : "";
+
       topContent.innerHTML = [
         `<span><span class="stat-label">Turn</span><span class="stat">${state.turn}</span></span>`,
         `<span><span class="stat-label">Cities</span><span class="stat">${state.playerCityCount}</span></span>`,
         `<span><span class="stat-label">Units</span>${unitSummary}</span>`,
         resHtml,
+        techHtml,
         `<span style="margin-left:auto;color:#555">Empire Reborn v${GAME_VERSION}</span>`,
       ].join("");
 

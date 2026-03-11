@@ -1,0 +1,163 @@
+Session 045 — 2026-03-10
+========================
+Phase 4: Construction & Buildings
+
+OBJECTIVE
+---------
+Implement PLAN-UNIFIED Phase 4: Construction unit, building mechanics (deposit buildings
+and city upgrades), building construction lifecycle, tech research accumulation, and
+client UI for building management.
+
+CHANGES — Shared Logic
+----------------------
+
+constants.ts:
+- Added UnitType.Construction = 9
+- Updated NUM_UNIT_TYPES to 10, UNIT_TYPE_CHARS to "AFPDSTCBZE"
+- Added Construction to MOVE_ORDER
+- Added BuildingType enum (9 types: Mine, OilWell, TextileFarm, University, Hospital,
+  TechLab, MilitaryAcademy, Shipyard, Airfield)
+- Added DEPOSIT_BUILDING_TYPES, CITY_UPGRADE_TYPES, BUILDING_NAMES, MAX_CITY_UPGRADES
+- Added TechType enum (Science, Health, Electronics, War), NUM_TECH_TYPES, TECH_NAMES
+
+types.ts:
+- Added BuildingState interface (id, loc, type, owner, level, work, buildTime, complete, constructorId)
+- Added buildingId: number|null to DepositState
+- Added upgradeIds: number[] to CityState
+- Added buildings[], nextBuildingId, techResearch to GameState
+- Added PlayerAction: buildOnDeposit, buildCityUpgrade
+- Added "building" to TurnEvent types
+
+units.ts:
+- Added Construction unit to UNIT_ATTRIBUTES (char 'E', land, spd 1, str 0, hp 1, buildTime 10)
+- Added Construction cost [10, 0, 5] to UNIT_COSTS
+- Updated ARMY_ATTACK and FIGHTER_ATTACK to include 'E'
+
+buildings.ts (NEW):
+- BuildingAttributes interface and BUILDING_ATTRIBUTES array (9 entries)
+- Deposit buildings: Mine (4t, [10,0,5]), OilWell (4t, [5,10,0]), TextileFarm (4t, [5,0,10])
+- City upgrades: University (8t, [30,0,20]), Hospital (8t, [20,0,30]), TechLab (10t, [40,20,0]),
+  MilitaryAcademy (10t, [30,30,0]), Shipyard (8t, [40,20,10]), Airfield (8t, [30,20,10])
+- UPGRADE_COSTS for Lv2/Lv3 of all city upgrades
+- Helper functions: getBuildingAttributes, depositToBuildingType, isCityUpgradeType,
+  getBuildingCost, getBuildingTime, canAffordBuilding, getBuildingTechOutput,
+  cityHasUpgradeSlot, cityHasUpgradeType
+
+game.ts:
+- Added imports for buildings module
+- startBuildOnDeposit() — validate, consume resources, create BuildingState, link to deposit
+- startBuildCityUpgrade() — validate slots/type, handle new build vs upgrade, consume resources
+- tickBuildingConstruction() — advance work, complete buildings, mark deposits, consume constructors
+- collectTechResearch() — accumulate tech points from completed city upgrades
+- Updated processAction() for buildOnDeposit and buildCityUpgrade action types
+- Updated executeTurn() to call tickBuildingConstruction and collectTechResearch
+- Updated processUnitBehaviors() to skip construction units actively building
+- Updated repairShips() to skip construction units
+
+mapgen.ts:
+- Updated defaultFunc arrays to length 10 (Construction = None)
+- Added upgradeIds: [] to CityState creation
+- Added buildingId: null to DepositState creation
+
+continent.ts:
+- Added UnitType.Construction: 0 to createUnitCounts()
+
+ai-helpers.ts:
+- Extended all RATIO arrays to length 10 (Construction = 0)
+
+ai-production.ts:
+- Added Construction to skip list in needMore()
+
+index.ts:
+- Added export for buildings.ts
+
+CHANGES — Server
+----------------
+
+GameManager.ts:
+- Added buildings, nextBuildingId, techResearch to initial GameState
+
+database.test.ts:
+- Updated test GameState with new fields
+
+CHANGES — Client
+----------------
+
+placeholders.ts:
+- Added Construction unit sprite (hard hat dome, brim, safety vest with stripes, wrench)
+
+actionPanel.ts:
+- Added context-dependent build buttons for Construction units
+- Shows "Building X — N%" when actively constructing
+- Shows "Build Mine/Well/Farm" when at unclaimed deposit
+- Shows "Build University/Hospital/etc." when at own city with open slots
+- Shows "Upgrade X LvN" for existing complete buildings below Lv3
+
+actionCollector.ts:
+- Added buildOnDeposit() and buildCityUpgrade() methods
+
+main.ts:
+- Added findUnit import
+- Handle "build-on-deposit" and "build-upgrade-N" panel actions
+- Pass buildings array to cityPanel.open()
+- Added techResearch to all UIState construction sites
+
+cityPanel.ts:
+- Updated open() signature to accept buildings array
+- Added upgrade slots display showing filled/empty/in-progress
+
+unitInfoPanel.ts:
+- Added construction unit building progress section (project name, percentage, turns remaining, progress bar)
+
+hud.ts:
+- Added tech research display (S/H/E/W counters, color-coded)
+
+types.ts (client):
+- Added techResearch: number[] to UIState
+
+CHANGES — Tests
+---------------
+
+buildings.test.ts (NEW — 43 tests):
+- building attributes (7): type counts, deposit/city flags, deposit mapping, tech output, upgrade costs
+- construction unit (2): attributes, resource cost
+- build on deposit (5): success, already built, can't afford, no deposit, wrong unit type
+- build city upgrade (7): success, full slots, duplicate type (upgrade), enemy city, wrong loc, deposit type, level 3 cap
+- tickBuildingConstruction (5): work advance, completion, constructor consumed, constructor dies, constructor moves
+- collectTechResearch (4): university science, level 2 output, incomplete skip, shipyard no tech
+- processAction build actions (2): deposit via executeTurn, upgrade via executeTurn
+- full construction lifecycle (2): deposit build→complete→income, city upgrade→complete→research
+- building helpers (4): canAffordBuilding, isCityUpgradeType, cityHasUpgradeSlot, cityHasUpgradeType
+
+Updated existing tests:
+- constants.test.ts: 9→10 unit types
+- units.test.ts: 9→10 unit types
+- economy.test.ts: func Array(10), upgradeIds, buildingId, GameState fields
+- game.test.ts: GameState fields, CityState fields
+- ai.test.ts: GameState fields, CityState fields
+- integration.test.ts: GameState fields, CityState fields
+
+TEST RESULTS
+------------
+- Shared: 338 tests passing (295 old + 43 new)
+- Server: 28 tests passing
+- Total: 366 tests passing
+- Client: builds clean
+
+ARCHITECTURE NOTES
+------------------
+Building construction follows same pattern as city production:
+  1. Player issues build action → resources consumed immediately
+  2. BuildingState created with work=0, constructorId set
+  3. Each turn, tickBuildingConstruction advances work by 1
+  4. Constructor must remain at building location (verified each tick)
+  5. On completion: building.complete=true, deposit.buildingComplete=true (if deposit), constructor consumed via killUnit()
+
+Tech research is tracked but thresholds/unlocks/bonuses are Phase 6.
+AI construction management is Phase 8.
+Building capture/destruction mechanics are implied by the data model but not yet implemented.
+
+NEXT STEPS
+----------
+- Phase 5: Economy Review Screen — turn summary dialog, resource bar enhancement, tabbed interface
+- Phase 6: Tech System — tech levels, thresholds, bonuses, unit/building unlocks

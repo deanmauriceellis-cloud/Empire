@@ -5,6 +5,7 @@ export const GAME_VERSION = "0.1.0";
 export * from "./constants.js";
 export * from "./viewmap-chars.js";
 export * from "./units.js";
+export * from "./buildings.js";
 export * from "./types.js";
 export * from "./utils.js";
 export * from "./mapgen.js";

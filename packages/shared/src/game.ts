@@ -19,14 +19,29 @@ import {
   DEPOSIT_INCOME,
   NUM_RESOURCE_TYPES,
   CITY_INCOME,
+  BuildingType,
+  DepositType,
+  NUM_TECH_TYPES,
 } from "./constants.js";
 import { UNIT_ATTRIBUTES, canTraverse, UNIT_COSTS, canAffordUnit } from "./units.js";
+import {
+  BUILDING_ATTRIBUTES,
+  getBuildingCost,
+  getBuildingTime,
+  getBuildingTechOutput,
+  canAffordBuilding,
+  depositToBuildingType,
+  isCityUpgradeType,
+  cityHasUpgradeSlot,
+  cityHasUpgradeType,
+} from "./buildings.js";
 import type {
   Loc,
   MapCell,
   ViewMapCell,
   CityState,
   UnitState,
+  BuildingState,
   GameState,
   TurnEvent,
   TurnResult,
@@ -761,11 +776,12 @@ export function repairShips(
     if (movedUnitIds.has(unit.id)) continue;
 
     const attrs = UNIT_ATTRIBUTES[unit.type];
-    // Only ships (not army, not fighter, not satellite)
+    // Only ships (not army, not fighter, not satellite, not construction)
     if (
       unit.type === UnitType.Army ||
       unit.type === UnitType.Fighter ||
-      unit.type === UnitType.Satellite
+      unit.type === UnitType.Satellite ||
+      unit.type === UnitType.Construction
     ) continue;
 
     // Must be damaged
@@ -778,6 +794,213 @@ export function repairShips(
     if (city.owner !== owner) continue;
 
     unit.hits += 1;
+  }
+}
+
+// ─── Construction & Buildings ────────────────────────────────────────────────────
+
+/**
+ * Start building on a deposit. Construction unit must be at the deposit's location.
+ * Resources are consumed immediately. Returns events.
+ */
+export function startBuildOnDeposit(
+  state: GameState,
+  constructorId: number,
+): TurnEvent[] {
+  const unit = findUnit(state, constructorId);
+  if (!unit || unit.type !== UnitType.Construction) return [];
+
+  const cell = state.map[unit.loc];
+  if (cell.depositId === null) return [];
+
+  const deposit = state.deposits[cell.depositId];
+  if (deposit.buildingComplete || deposit.buildingId !== null) return [];
+
+  const buildingType = depositToBuildingType(deposit.type);
+  const attrs = BUILDING_ATTRIBUTES[buildingType];
+  const cost = attrs.cost;
+  const res = state.resources[unit.owner];
+
+  if (!canAffordBuilding(res, buildingType, 1)) return [];
+
+  // Consume resources
+  for (let i = 0; i < NUM_RESOURCE_TYPES; i++) {
+    res[i] -= cost[i];
+  }
+
+  // Create building
+  const building: BuildingState = {
+    id: state.nextBuildingId++,
+    loc: unit.loc,
+    type: buildingType,
+    owner: unit.owner,
+    level: 1,
+    work: 0,
+    buildTime: attrs.buildTime,
+    complete: false,
+    constructorId: unit.id,
+  };
+  state.buildings.push(building);
+  deposit.buildingId = building.id;
+  deposit.owner = unit.owner;
+
+  return [{
+    type: "building",
+    loc: unit.loc,
+    description: `Construction started: ${attrs.name}`,
+    data: { buildingId: building.id, buildingType, constructorId: unit.id },
+  }];
+}
+
+/**
+ * Start building a city upgrade. Construction unit must be at the city's location.
+ * Resources are consumed immediately. Returns events.
+ */
+export function startBuildCityUpgrade(
+  state: GameState,
+  constructorId: number,
+  cityId: number,
+  buildingType: BuildingType,
+): TurnEvent[] {
+  const unit = findUnit(state, constructorId);
+  if (!unit || unit.type !== UnitType.Construction) return [];
+
+  const city = state.cities.find((c) => c.id === cityId);
+  if (!city || city.owner !== unit.owner || city.loc !== unit.loc) return [];
+
+  if (!isCityUpgradeType(buildingType)) return [];
+
+  // Check for existing building of same type — upgrade it
+  const existingBId = city.upgradeIds.find((bid) => {
+    const b = state.buildings.find((building) => building.id === bid);
+    return b && b.type === buildingType && b.complete && b.level < 3;
+  });
+
+  if (existingBId !== undefined) {
+    // Upgrade existing building
+    const existing = state.buildings.find((b) => b.id === existingBId)!;
+    const newLevel = existing.level + 1;
+    const cost = getBuildingCost(buildingType, newLevel);
+    const res = state.resources[unit.owner];
+
+    if (!canAffordBuilding(res, buildingType, newLevel)) return [];
+
+    for (let i = 0; i < NUM_RESOURCE_TYPES; i++) {
+      res[i] -= cost[i];
+    }
+
+    existing.work = 0;
+    existing.buildTime = getBuildingTime(buildingType, newLevel);
+    existing.complete = false;
+    existing.constructorId = unit.id;
+    existing.level = newLevel;
+
+    return [{
+      type: "building",
+      loc: unit.loc,
+      description: `Upgrade started: ${BUILDING_ATTRIBUTES[buildingType].name} Lv${newLevel}`,
+      data: { buildingId: existing.id, buildingType, level: newLevel, constructorId: unit.id },
+    }];
+  }
+
+  // New building — check for slot
+  if (!cityHasUpgradeSlot(city.upgradeIds)) return [];
+  if (cityHasUpgradeType(city.upgradeIds, state.buildings, buildingType)) return [];
+
+  const cost = getBuildingCost(buildingType, 1);
+  const res = state.resources[unit.owner];
+  if (!canAffordBuilding(res, buildingType, 1)) return [];
+
+  for (let i = 0; i < NUM_RESOURCE_TYPES; i++) {
+    res[i] -= cost[i];
+  }
+
+  const building: BuildingState = {
+    id: state.nextBuildingId++,
+    loc: city.loc,
+    type: buildingType,
+    owner: unit.owner,
+    level: 1,
+    work: 0,
+    buildTime: BUILDING_ATTRIBUTES[buildingType].buildTime,
+    complete: false,
+    constructorId: unit.id,
+  };
+  state.buildings.push(building);
+  city.upgradeIds.push(building.id);
+
+  return [{
+    type: "building",
+    loc: unit.loc,
+    description: `Construction started: ${BUILDING_ATTRIBUTES[buildingType].name}`,
+    data: { buildingId: building.id, buildingType, constructorId: unit.id },
+  }];
+}
+
+/**
+ * Tick building construction for all buildings.
+ * Advances work by 1 for each building with an active constructor.
+ * On completion: deposit buildings mark buildingComplete=true, constructor is consumed.
+ */
+export function tickBuildingConstruction(state: GameState): TurnEvent[] {
+  const events: TurnEvent[] = [];
+
+  for (const building of state.buildings) {
+    if (building.complete) continue;
+    if (building.constructorId === null) continue;
+
+    // Verify constructor still alive and at building location
+    const constructor = findUnit(state, building.constructorId);
+    if (!constructor || constructor.loc !== building.loc) {
+      building.constructorId = null;
+      continue;
+    }
+
+    building.work += 1;
+
+    if (building.work >= building.buildTime) {
+      building.complete = true;
+      building.constructorId = null;
+
+      // Mark deposit as complete if this is a deposit building
+      const attrs = BUILDING_ATTRIBUTES[building.type];
+      if (attrs.isDepositBuilding) {
+        const cell = state.map[building.loc];
+        if (cell.depositId !== null) {
+          state.deposits[cell.depositId].buildingComplete = true;
+        }
+      }
+
+      events.push({
+        type: "building",
+        loc: building.loc,
+        description: `${attrs.name}${building.level > 1 ? ` Lv${building.level}` : ""} completed`,
+        data: { buildingId: building.id, buildingType: building.type, owner: building.owner },
+      });
+
+      // Consume (destroy) the construction unit
+      events.push(...killUnit(state, constructor.id));
+    }
+  }
+
+  return events;
+}
+
+/**
+ * Collect tech research from completed city upgrade buildings.
+ * Each building with techOutput generates points per turn based on level.
+ */
+export function collectTechResearch(state: GameState, owner: Owner): void {
+  const tech = state.techResearch[owner];
+
+  for (const building of state.buildings) {
+    if (building.owner !== owner) continue;
+    if (!building.complete) continue;
+
+    const attrs = BUILDING_ATTRIBUTES[building.type];
+    if (attrs.techOutput === null) continue;
+
+    tech[attrs.techOutput] += getBuildingTechOutput(building.type, building.level);
   }
 }
 
@@ -913,6 +1136,22 @@ export function processAction(
       const unit = findUnit(state, action.unitId);
       if (!unit || unit.owner !== owner) break;
       disembarkUnit(state, unit.id);
+      break;
+    }
+
+    case "buildOnDeposit": {
+      const unit = findUnit(state, action.unitId);
+      if (!unit || unit.owner !== owner) break;
+      if (unit.type !== UnitType.Construction) break;
+      events.push(...startBuildOnDeposit(state, action.unitId));
+      break;
+    }
+
+    case "buildCityUpgrade": {
+      const unit = findUnit(state, action.unitId);
+      if (!unit || unit.owner !== owner) break;
+      if (unit.type !== UnitType.Construction) break;
+      events.push(...startBuildCityUpgrade(state, action.unitId, action.cityId, action.buildingType));
       break;
     }
 
@@ -1654,6 +1893,13 @@ export function processUnitBehaviors(
     if (movedUnits.has(unit.id)) continue;
     if (unit.type === UnitType.Satellite) continue;
     if (findUnit(state, unit.id) === undefined) continue;
+    // Skip construction units that are actively building
+    if (unit.type === UnitType.Construction) {
+      const isBuilding = state.buildings.some(
+        (b) => b.constructorId === unit.id && !b.complete,
+      );
+      if (isBuilding) continue;
+    }
 
     switch (unit.func) {
       case UnitBehavior.Sentry:
@@ -1769,6 +2015,13 @@ export function executeTurn(
   // Tick city production (resources consumed when production starts)
   events.push(...tickCityProduction(state, Owner.Player1));
   events.push(...tickCityProduction(state, Owner.Player2));
+
+  // Tick building construction (advance work, complete buildings, consume constructors)
+  events.push(...tickBuildingConstruction(state));
+
+  // Collect tech research from completed city upgrades
+  collectTechResearch(state, Owner.Player1);
+  collectTechResearch(state, Owner.Player2);
 
   // Repair ships in port
   repairShips(state, Owner.Player1, movedUnits1);

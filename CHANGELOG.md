@@ -1,5 +1,25 @@
 # Empire Reborn — Changelog
 
+## v0.34.0 — Session 045 (2026-03-10)
+
+### Phase 4: Construction & Buildings
+- **Construction unit** (UnitType.Construction) — land, speed 1, 0 combat, 1 HP, buildTime 10, cost [10,0,5]
+- **BuildingType enum** — 9 types: 3 deposit buildings (Mine, OilWell, TextileFarm), 6 city upgrades (University, Hospital, TechLab, MilitaryAcademy, Shipyard, Airfield)
+- **BuildingState** — tracks id, loc, type, owner, level (1-3), work, buildTime, complete, constructorId
+- **Build on deposit** — construction unit at deposit tile starts building; resources consumed immediately; building work ticks each turn; construction unit consumed on completion; deposit marked buildingComplete for income
+- **Build city upgrade** — construction unit at own city chooses upgrade type; max 4 slots per city; resources consumed on start; constructor consumed on completion
+- **Building upgrades** — construction unit at city with complete building can upgrade Lv1→Lv2→Lv3 with increasing costs
+- **Tech research accumulation** — completed University/Hospital/TechLab/MilitaryAcademy generate research points per turn (level = points/turn)
+- **TechType enum** — Science, Health, Electronics, War; tracked per player in GameState.techResearch
+- **Construction unit sprite** — hard hat + wrench + safety vest procedural graphic
+- **Action panel** — context-dependent build buttons for construction units (build on deposit, build city upgrade, upgrade existing)
+- **City panel** — shows upgrade slots (filled/empty) with build status and level
+- **Unit info panel** — construction unit building progress with percentage and turns remaining
+- **HUD** — tech research display (S/H/E/W counters)
+- **43 new tests** — building attributes, construction mechanics, upgrade lifecycle, tech research, process actions
+- AI skips Construction unit in production ratio tables (AI construction management is Phase 8)
+- 366 total tests passing (338 shared + 28 server)
+
 ## v0.33.0 — Session 044 (2026-03-10)
 
 ### Economy Fixes

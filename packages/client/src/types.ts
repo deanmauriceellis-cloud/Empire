@@ -62,6 +62,7 @@ export interface UIState {
   isGameOver: boolean;
   winner: Owner | null;
   resources: number[];  // player's [ore, oil, textile]
+  techResearch: number[];  // player's [science, health, electronics, war]
 }
 
 // ─── Tile Highlights ────────────────────────────────────────────────────

@@ -45,15 +45,15 @@ describe("directions", () => {
 });
 
 describe("unit types", () => {
-  it("has 9 unit types", () => {
-    expect(NUM_UNIT_TYPES).toBe(9);
-    expect(UNIT_TYPE_CHARS).toBe("AFPDSTCBZ");
+  it("has 10 unit types", () => {
+    expect(NUM_UNIT_TYPES).toBe(10);
+    expect(UNIT_TYPE_CHARS).toBe("AFPDSTCBZE");
   });
 
-  it("MOVE_ORDER contains all 9 types", () => {
-    expect(MOVE_ORDER).toHaveLength(9);
+  it("MOVE_ORDER contains all 10 types", () => {
+    expect(MOVE_ORDER).toHaveLength(10);
     const sorted = [...MOVE_ORDER].sort();
-    expect(sorted).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(sorted).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
 });
 

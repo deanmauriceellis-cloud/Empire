@@ -62,6 +62,13 @@ export function createSinglePlayerGame(configOverrides?: Partial<GameConfig>): S
     },
     deposits: mapResult.deposits,
     nextDepositId: mapResult.deposits.length,
+    buildings: [],
+    nextBuildingId: 0,
+    techResearch: {
+      [Owner.Unowned]: [0, 0, 0, 0],
+      [Owner.Player1]: [0, 0, 0, 0],
+      [Owner.Player2]: [0, 0, 0, 0],
+    },
   };
 
   // Assign starting cities

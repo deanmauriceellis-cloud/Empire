@@ -6,6 +6,7 @@ import {
   BEHAVIOR_NAMES, behaviorIndex, INFINITY,
   locRow, locCol,
   UNIT_COSTS, DEPOSIT_NAMES, DepositType,
+  BUILDING_NAMES,
 } from "@empire/shared";
 import type { UnitState, CityState, GameState } from "@empire/shared";
 
@@ -122,6 +123,29 @@ export function createUnitInfoPanel(): UnitInfoPanel {
         parts.push(`<span class="info-label">Orders</span>`);
         parts.push(`<span class="info-value" style="color:${behaviorColor};text-transform:capitalize">${behaviorName}</span>`);
         parts.push(`</div>`);
+
+        // Construction unit building status
+        if (u.type === UnitType.Construction) {
+          const building = gameState.buildings.find(
+            (b) => b.constructorId === u.id && !b.complete,
+          );
+          if (building) {
+            const pct = Math.floor((building.work / building.buildTime) * 100);
+            const turnsLeft = building.buildTime - building.work;
+            parts.push(`<div class="info-section">`);
+            parts.push(`<div class="info-label" style="color:var(--color-orange)">Building</div>`);
+            parts.push(`<div class="info-row">`);
+            parts.push(`<span class="info-label">Project</span>`);
+            parts.push(`<span class="info-value">${BUILDING_NAMES[building.type]}${building.level > 1 ? ` Lv${building.level}` : ""}</span>`);
+            parts.push(`</div>`);
+            parts.push(`<div class="info-row">`);
+            parts.push(`<span class="info-label">Progress</span>`);
+            parts.push(`<span class="info-value">${pct}% (${turnsLeft} turns)</span>`);
+            parts.push(`</div>`);
+            parts.push(`<div class="progress-bar" style="height:4px;margin:4px 0"><div class="fill" style="width:${pct}%;background:var(--color-orange)"></div></div>`);
+            parts.push(`</div>`);
+          }
+        }
 
         // GoTo destination + ETA
         if (u.func === UnitBehavior.GoTo && u.targetLoc !== null) {
