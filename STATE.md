@@ -1,23 +1,37 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-KINGDOM Phase 10 next** — Crown City & Kingdom Map (100x100 kingdom tiles, tributaries)
+**PLAN-KINGDOM Phase 11 next** — Kingdom World Server (tick engine, AI kingdoms, monthly reset)
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phases 1-9 of expansion plan complete (7A units + 7B structures + 8 AI economy + 9 N-player)
-- 572 tests passing (544 shared + 28 server)
+- Phases 1-10 of expansion plan complete (7A units + 7B structures + 8 AI economy + 9 N-player + 10 crown city)
+- 605 tests passing (577 shared + 28 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-KINGDOM.md** is the definitive plan (17 phases: gameplay → kingdom MMO → monetization)
 
 ## Latest commit
-session 052: Phase 9 — N-Player Foundation (PlayerId, N-player engine, AI multi-enemy, kingdom plan)
+session 053: Phase 10 — Crown City & Kingdom System (tributaries, crown bonuses, rebellion)
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
 - Armies adjacent to capturable neutral cities not always attacking (pre-existing)
 - Structure sprites not yet rendered on tilemap (visual polish deferred)
 - Economy review tabs not yet updated for structures
+- Crown city relocate action not yet implemented (UI button deferred)
+- Multiplayer server doesn't yet send kingdom data to client
+
+## Completed (session 053) — Phase 10: Crown City & Kingdom System
+- [x] 10A: Crown City assignment from starting cities, reassignment on capture
+- [x] 10B: Crown Bonuses — +50% production, +3 defense, +2 heal, 4-tile vision, 25% capture chance
+- [x] 10C: Crown Capture → tributaries (30% income), rebellion (military > overlord), cascade freeing
+- [x] 10E: KingdomState interface (crownCityId, tributeTarget, tributaries, tributeRate) on GameState
+- [x] 10F: Crown City UI — info panel label/bonuses, minimap gold diamonds, economy review Kingdom tab
+- [x] New file: kingdom.ts — crown management, tributary system, tribute income, rebellion
+- [x] Game engine: crown defense/garrison in combat, production bonus, heal bonus, vision, tribute in turn flow
+- [x] 33 new tests, 605 total (577 shared + 28 server)
+- [ ] Deferred: Territory system (100x100 kingdom tiles — Phase 11+ with world server)
+- [ ] Deferred: Crown relocate action, crown sprite on tilemap
 
 ## Completed (session 052) — Phase 9: N-Player Foundation
 - [x] 9A: PlayerId type (0=Unowned, 1+=players), Owner enum @deprecated
@@ -309,8 +323,8 @@ R1 and R5 can run in parallel (no dependencies). R2 and R3 depend on R1. R6 depe
 2. ~~**Phase 7A**: New Units & Bombard~~ ✓ (session 049) | ~~**Phase 7B**: Defensive Structures~~ ✓ (session 050)
 3. ~~**Phase 8**: AI Economy & Strategy~~ ✓ (session 051)
 4. ~~**Phase 9**: N-Player Foundation~~ ✓ (session 052)
-5. **Phase 10**: Crown City & Kingdom Map — 100x100 tiles, tributaries, territory (1-2 sessions, NEXT)
-6. **Phase 11**: Kingdom World Server — tick engine, AI kingdoms, monthly reset (1-2 sessions)
+5. ~~**Phase 10**: Crown City & Kingdom System~~ ✓ (session 053)
+6. **Phase 11**: Kingdom World Server — tick engine, AI kingdoms, monthly reset (1-2 sessions, NEXT)
 7. **Phase 12**: Dynamic Map & Player Join — ring placement, world expansion (1-2 sessions)
 8. **Phase 13**: Accounts & Persistence — auth, player DB, kingdom lifecycle (1-2 sessions)
 9. **Phase 14**: Delta Sync & Scaling — efficient updates for 50+ players (1-2 sessions)

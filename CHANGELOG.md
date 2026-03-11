@@ -1,5 +1,18 @@
 # Empire Reborn — Changelog
 
+## v0.42.0 — Session 053 (2026-03-11)
+
+### Phase 10: Crown City & Kingdom System
+- **New file `kingdom.ts`** (~400 lines): Crown city management, tributary vassalage, rebellion, tribute income
+- **KingdomState**: `crownCityId`, `tributeTarget`, `tributaries[]`, `tributeRate` per player in `GameState.kingdoms`
+- **Crown bonuses**: +50% production speed, +3 defense, +2 heal/turn, 4-tile permanent vision, 25% capture chance (vs 50%)
+- **Tributary system**: Crown capture → vassalage (30% income tribute), overlord fall → cascade free tributaries
+- **Rebellion**: Vassals with more total units than overlord auto-revolt each turn
+- **Tribute income**: Collected after normal resource income, deducted from vassal, added to overlord
+- **Game engine**: Crown defense in combat, garrison penalty on attackers, production bonus, heal bonus, vision scan
+- **Client**: Crown city icon (♕) + bonuses in unit info panel, gold diamond on minimap, new "Kingdom" tab in economy review
+- **33 new tests**, 605 total (577 shared + 28 server)
+
 ## v0.41.0 — Session 052 (2026-03-11)
 
 ### Phase 9: N-Player Foundation

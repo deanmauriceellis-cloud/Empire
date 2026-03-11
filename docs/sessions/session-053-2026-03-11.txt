@@ -1,0 +1,76 @@
+Session 053 — 2026-03-11
+Phase 10: Crown City & Kingdom System
+
+OBJECTIVE:
+Implement Phase 10 of PLAN-KINGDOM: Crown cities, tributary vassalage,
+crown bonuses, and kingdom management UI.
+
+CHANGES:
+
+1. New file: shared/src/kingdom.ts (~400 lines)
+   - createKingdomState(), initKingdoms() — initialize kingdoms from starting cities
+   - Crown queries: getCrownCityId, isCrownCity, isOwnCrownCity, getCrownCityLoc
+   - Crown bonuses: getCrownDefenseBonus (+3), getCrownHealBonus (+2),
+     getCrownGarrisonBonus (reduces capture to 25%), hasCrownProductionBonus
+   - Tributary system: makeTributary, freeTributary, freeAllTributaries
+   - Rebellion: canRebel (military > overlord), processRebellions (auto-revolt)
+   - Tribute: collectTributeIncome (30% of turn income from vassals)
+   - Crown capture: handleCrownCapture (vassalage + cascade free tributaries)
+   - reassignCrown: picks best remaining city (most upgrades)
+   - scanCrownVision: 4-tile permanent vision from crown city
+
+2. types.ts
+   - KingdomState interface: playerId, crownCityId, tributeTarget, tributaries,
+     tributeRate
+   - GameState.kingdoms: Record<number, KingdomState>
+   - TurnEvent.type: added "crown" and "tribute" event types
+
+3. constants.ts
+   - TRIBUTE_RATE = 0.3 (30% income)
+   - CROWN_PRODUCTION_BONUS = 0.5 (+50% speed)
+   - CROWN_DEFENSE_BONUS = 3 (strength for defenders)
+   - CROWN_HEAL_BONUS = 2 (HP/turn extra)
+   - CROWN_VISION_RADIUS = 4 (permanent vision)
+   - CROWN_GARRISON_BONUS = 5 (capture chance penalty)
+   - CROWN_RELOCATE_COOLDOWN = 50 (turns)
+
+4. game.ts — engine integration
+   - attackCity: crown garrison reduces capture chance (50% → 25% for crown cities),
+     triggers handleCrownCapture on crown capture creating vassalage
+   - attackUnit: crown defense bonus (+3 strength for defenders in crown city)
+   - tickCityProduction: crown city gets +1 bonus work tick every 2nd turn
+   - repairShips: crown heal bonus (+2 HP/turn extra in crown city)
+   - executeTurn: tribute collection after income, crown vision scan,
+     rebellion processing per turn
+
+5. singleplayer.ts + GameManager.ts
+   - Initialize kingdoms from starting cities after city assignment
+   - Added kingdoms: {} to GameState initialization
+
+6. Client updates
+   - unitInfoPanel.ts: Crown city icon (♕), "Crown City" label, gold bonus summary
+   - minimap.ts: Gold diamond markers (3x3) on crown city locations
+   - economyReview.ts: New "Kingdom" tab (tab 7) showing crown city info,
+     tributary status, vassals list
+   - bridge.ts: crownCityLocs Set on RenderableState for rendering
+   - types.ts: crownCityLocs on RenderableState
+   - multiplayer.ts: empty crownCityLocs set (TODO: server kingdom data)
+
+7. New test file: kingdom.test.ts (33 tests)
+   - Kingdom initialization (2 tests)
+   - Crown city queries (4 tests)
+   - Crown city bonuses (5 tests)
+   - Tributary system (4 tests)
+   - Rebellion (4 tests)
+   - Tribute income (3 tests)
+   - Crown capture (6 tests)
+   - Crown vision (1 test)
+   - Crown production bonus integration (1 test)
+   - executeTurn integration (2 tests + tribute + rebellion)
+
+8. Updated test files (10 files)
+   - Added kingdoms: {} to all GameState test helpers
+
+TESTS: 605 passing (577 shared + 28 server)
+CLIENT: builds clean
+FILES: 24 modified, 2 new
