@@ -4,6 +4,7 @@
 import type { Owner, UnitType, UnitBehavior } from "./constants.js";
 import type { Loc, ViewMapCell, UnitState, TurnEvent, GameConfig } from "./types.js";
 import type { WorldConfig, KingdomTilePos } from "./world-map.js";
+import type { FilteredDelta } from "./delta.js";
 
 // ─── Game Phases ────────────────────────────────────────────────────────────
 
@@ -58,6 +59,7 @@ export type ServerMessage =
   | { type: "world_joined"; worldId: string; owner: Owner; kingdom: KingdomTilePos }
   | { type: "world_state"; worldId: string; state: VisibleGameState; tickInfo: TickInfo }
   | { type: "tick_result"; worldId: string; turn: number; events: TurnEvent[]; tickInfo: TickInfo }
+  | { type: "tick_delta"; worldId: string; delta: FilteredDelta; tickInfo: TickInfo }
   | { type: "actions_queued"; worldId: string; count: number }
   | { type: "actions_cancelled"; worldId: string }
   | { type: "world_list"; worlds: WorldSummary[] }

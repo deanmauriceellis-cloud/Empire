@@ -64,6 +64,9 @@ const AUTH_REQUIRED_TYPES = new Set([
   "join_world", "reconnect_world",
 ]);
 
+// Start world server heartbeat
+worldServer.startHeartbeat();
+
 wss.on("connection", (ws) => {
   wsAuth.set(ws, null);
 
@@ -126,6 +129,10 @@ wss.on("connection", (ws) => {
     } catch {
       ws.send(JSON.stringify({ type: "error", message: "Invalid message format" }));
     }
+  });
+
+  ws.on("pong", () => {
+    worldServer.handlePong(ws);
   });
 
   ws.on("close", () => {

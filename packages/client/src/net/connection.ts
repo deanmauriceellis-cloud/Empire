@@ -73,9 +73,17 @@ export function createConnection(url: string, events: ConnectionEvents): Connect
       reconnectDelay = INITIAL_DELAY_MS;
     };
 
-    ws.onmessage = (event) => {
+    ws.binaryType = "arraybuffer";
+    ws.onmessage = async (event) => {
       try {
-        const msg = JSON.parse(event.data as string) as ServerMessage;
+        let json: string;
+        if (event.data instanceof ArrayBuffer) {
+          // Binary message — gzip compressed, decompress via DecompressionStream
+          json = await decompressGzip(event.data);
+        } else {
+          json = event.data as string;
+        }
+        const msg = JSON.parse(json) as ServerMessage;
         events.onMessage(msg);
       } catch {
         console.warn("Failed to parse server message:", event.data);
@@ -122,6 +130,23 @@ export function createConnection(url: string, events: ConnectionEvents): Connect
       setState("disconnected");
     },
   };
+}
+
+/** Decompress gzip data using the browser's DecompressionStream API. */
+async function decompressGzip(data: ArrayBuffer): Promise<string> {
+  const ds = new DecompressionStream("gzip");
+  const writer = ds.writable.getWriter();
+  writer.write(new Uint8Array(data));
+  writer.close();
+  const reader = ds.readable.getReader();
+  const chunks: Uint8Array[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+  const decoder = new TextDecoder();
+  return chunks.map(c => decoder.decode(c, { stream: true })).join("") + decoder.decode();
 }
 
 /** Build the WebSocket URL from the current page location or a custom host. */

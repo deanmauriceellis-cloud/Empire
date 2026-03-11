@@ -24,4 +24,5 @@ export * from "./kingdom.js";
 export * from "./singleplayer.js";
 export * from "./world-map.js";
 export * from "./protocol.js";
+export * from "./delta.js";
 export * from "./diagnostic.js";

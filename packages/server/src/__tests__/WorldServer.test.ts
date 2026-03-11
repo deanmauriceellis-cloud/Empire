@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { gunzipSync } from "node:zlib";
 import { WorldServer } from "../WorldServer.js";
 
 // Mock WebSocket
@@ -8,17 +9,37 @@ function createMockWs(): any {
     send: vi.fn(),
     on: vi.fn(),
     close: vi.fn(),
+    ping: vi.fn(),
+    terminate: vi.fn(),
   };
   return ws;
 }
 
+/** Parse a sent message, handling both JSON strings and gzip-compressed buffers. */
+function decodeSent(ws: any, index: number): any {
+  const data = ws.send.mock.calls[index][0];
+  if (typeof data === "string") {
+    return JSON.parse(data);
+  }
+  // Binary (gzip-compressed) — decompress first
+  if (Buffer.isBuffer(data)) {
+    return JSON.parse(gunzipSync(data).toString());
+  }
+  throw new Error(`Unexpected data type: ${typeof data}`);
+}
+
 function parseSent(ws: any, index = 0): any {
-  return JSON.parse(ws.send.mock.calls[index][0]);
+  return decodeSent(ws, index);
 }
 
 function lastSent(ws: any): any {
   const calls = ws.send.mock.calls;
-  return JSON.parse(calls[calls.length - 1][0]);
+  return decodeSent(ws, calls.length - 1);
+}
+
+/** Get all decoded messages sent to a WebSocket mock. */
+function allSent(ws: any): any[] {
+  return ws.send.mock.calls.map((_: any, i: number) => decodeSent(ws, i));
 }
 
 describe("WorldServer", () => {
@@ -203,7 +224,7 @@ describe("WorldServer", () => {
   });
 
   describe("tick engine", () => {
-    it("executes tick on timer", () => {
+    it("executes tick on timer and sends tick_delta", () => {
       const wsCreator = createMockWs();
       server.handleMessage(wsCreator, {
         type: "create_world",
@@ -221,12 +242,15 @@ describe("WorldServer", () => {
       // Advance time past tick interval
       vi.advanceTimersByTime(smallWorldConfig.tickIntervalMs + 100);
 
-      // Player should have received tick_result and world_state
-      const allMessages = wsPlayer.send.mock.calls.map((c: any) => JSON.parse(c[0]));
-      const tickResult = allMessages.find((m: any) => m.type === "tick_result");
-      expect(tickResult).toBeDefined();
-      expect(tickResult.turn).toBe(1);
-      expect(tickResult.tickInfo.turn).toBe(1);
+      // Player should have received tick_delta (not tick_result + world_state)
+      const allMessages = allSent(wsPlayer);
+      const tickDelta = allMessages.find((m: any) => m.type === "tick_delta");
+      expect(tickDelta).toBeDefined();
+      expect(tickDelta.delta.tick).toBe(1);
+      expect(tickDelta.tickInfo.turn).toBe(1);
+      // Should NOT send full world_state after tick (only on join/reconnect)
+      const postTickWorldStates = allMessages.filter((m: any, i: number) => m.type === "world_state" && i > 1);
+      expect(postTickWorldStates.length).toBe(0);
     });
 
     it("advances turn number on each tick", () => {
@@ -249,12 +273,12 @@ describe("WorldServer", () => {
       vi.advanceTimersByTime(smallWorldConfig.tickIntervalMs + 100);
       vi.advanceTimersByTime(smallWorldConfig.tickIntervalMs + 100);
 
-      const allMessages = wsPlayer.send.mock.calls.map((c: any) => JSON.parse(c[0]));
-      const tickResults = allMessages.filter((m: any) => m.type === "tick_result");
-      expect(tickResults.length).toBe(3);
-      expect(tickResults[0].turn).toBe(1);
-      expect(tickResults[1].turn).toBe(2);
-      expect(tickResults[2].turn).toBe(3);
+      const allMessages = allSent(wsPlayer);
+      const tickDeltas = allMessages.filter((m: any) => m.type === "tick_delta");
+      expect(tickDeltas.length).toBe(3);
+      expect(tickDeltas[0].delta.tick).toBe(1);
+      expect(tickDeltas[1].delta.tick).toBe(2);
+      expect(tickDeltas[2].delta.tick).toBe(3);
     });
   });
 
@@ -610,6 +634,163 @@ describe("WorldServer", () => {
       expect(stateMsg.tickInfo.tickIntervalMs).toBe(5000);
       expect(typeof stateMsg.tickInfo.nextTickMs).toBe("number");
       expect(typeof stateMsg.tickInfo.seasonRemainingS).toBe("number");
+    });
+  });
+
+  describe("delta sync", () => {
+    it("tick_delta contains filtered delta with viewMap changes", () => {
+      const wsCreator = createMockWs();
+      server.handleMessage(wsCreator, {
+        type: "create_world",
+        config: smallWorldConfig,
+      } as any);
+      const worldId = parseSent(wsCreator, 0).worldId;
+
+      const wsPlayer = createMockWs();
+      server.handleMessage(wsPlayer, {
+        type: "join_world",
+        worldId,
+        playerName: "Delta",
+      } as any);
+
+      // Advance to trigger a tick
+      vi.advanceTimersByTime(smallWorldConfig.tickIntervalMs + 100);
+
+      const allMessages = allSent(wsPlayer);
+      const tickDelta = allMessages.find((m: any) => m.type === "tick_delta");
+      expect(tickDelta).toBeDefined();
+      expect(tickDelta.delta).toBeDefined();
+      expect(tickDelta.delta.tick).toBe(1);
+      expect(Array.isArray(tickDelta.delta.unitMoves)).toBe(true);
+      expect(Array.isArray(tickDelta.delta.unitCreated)).toBe(true);
+      expect(Array.isArray(tickDelta.delta.unitDestroyed)).toBe(true);
+      expect(Array.isArray(tickDelta.delta.viewMapChanges)).toBe(true);
+      expect(tickDelta.tickInfo).toBeDefined();
+      expect(tickDelta.tickInfo.turn).toBe(1);
+    });
+
+    it("delta contains resource changes for the player", () => {
+      const wsCreator = createMockWs();
+      server.handleMessage(wsCreator, {
+        type: "create_world",
+        config: smallWorldConfig,
+      } as any);
+      const worldId = parseSent(wsCreator, 0).worldId;
+
+      const wsPlayer = createMockWs();
+      server.handleMessage(wsPlayer, {
+        type: "join_world",
+        worldId,
+        playerName: "Resources",
+      } as any);
+      const owner = parseSent(wsPlayer, 0).owner;
+
+      vi.advanceTimersByTime(smallWorldConfig.tickIntervalMs + 100);
+
+      const allMessages = allSent(wsPlayer);
+      const tickDelta = allMessages.find((m: any) => m.type === "tick_delta");
+      // Resource changes should only contain own player's data
+      if (tickDelta.delta.resourceChanges.length > 0) {
+        for (const rc of tickDelta.delta.resourceChanges) {
+          expect(rc.playerId).toBe(owner);
+        }
+      }
+    });
+
+    it("does NOT send world_state after tick (only on join/reconnect)", () => {
+      const wsCreator = createMockWs();
+      server.handleMessage(wsCreator, {
+        type: "create_world",
+        config: smallWorldConfig,
+      } as any);
+      const worldId = parseSent(wsCreator, 0).worldId;
+
+      const wsPlayer = createMockWs();
+      server.handleMessage(wsPlayer, {
+        type: "join_world",
+        worldId,
+        playerName: "NoFullState",
+      } as any);
+
+      // Count world_state messages before tick
+      const preTickMessages = allSent(wsPlayer);
+      const preWorldStates = preTickMessages.filter((m: any) => m.type === "world_state").length;
+
+      // Trigger ticks
+      vi.advanceTimersByTime(smallWorldConfig.tickIntervalMs + 100);
+      vi.advanceTimersByTime(smallWorldConfig.tickIntervalMs + 100);
+
+      const allMessages = allSent(wsPlayer);
+      const postWorldStates = allMessages.filter((m: any) => m.type === "world_state").length;
+
+      // No new world_state after ticks — only the initial one on join
+      expect(postWorldStates).toBe(preWorldStates);
+    });
+
+    it("reconnection sends full world_state (not just deltas)", () => {
+      const wsCreator = createMockWs();
+      server.handleMessage(wsCreator, {
+        type: "create_world",
+        config: smallWorldConfig,
+      } as any);
+      const worldId = parseSent(wsCreator, 0).worldId;
+
+      const wsPlayer = createMockWs();
+      server.handleMessage(wsPlayer, {
+        type: "join_world",
+        worldId,
+        playerName: "Reconnector",
+      } as any);
+      const owner = parseSent(wsPlayer, 0).owner;
+
+      // Run some ticks
+      vi.advanceTimersByTime(smallWorldConfig.tickIntervalMs + 100);
+      vi.advanceTimersByTime(smallWorldConfig.tickIntervalMs + 100);
+
+      // Disconnect
+      server.handleDisconnect(wsPlayer);
+
+      // Reconnect
+      const wsPlayer2 = createMockWs();
+      server.handleMessage(wsPlayer2, {
+        type: "reconnect_world",
+        worldId,
+        playerId: owner,
+      } as any);
+
+      const allMessages = allSent(wsPlayer2);
+      const worldState = allMessages.find((m: any) => m.type === "world_state");
+      expect(worldState).toBeDefined();
+      expect(worldState.state).toBeDefined();
+      expect(worldState.state.turn).toBe(2); // after 2 ticks
+      expect(Array.isArray(worldState.state.viewMap)).toBe(true);
+    });
+
+    it("stores recent deltas in ring buffer", () => {
+      const wsCreator = createMockWs();
+      server.handleMessage(wsCreator, {
+        type: "create_world",
+        config: smallWorldConfig,
+      } as any);
+      const worldId = parseSent(wsCreator, 0).worldId;
+
+      const wsPlayer = createMockWs();
+      server.handleMessage(wsPlayer, {
+        type: "join_world",
+        worldId,
+        playerName: "Buffer",
+      } as any);
+
+      // Run 3 ticks
+      vi.advanceTimersByTime(smallWorldConfig.tickIntervalMs + 100);
+      vi.advanceTimersByTime(smallWorldConfig.tickIntervalMs + 100);
+      vi.advanceTimersByTime(smallWorldConfig.tickIntervalMs + 100);
+
+      // Access internal state to verify ring buffer
+      const aw = (server as any).worlds.get(worldId);
+      expect(aw.recentDeltas.length).toBe(3);
+      expect(aw.recentDeltas[0].tick).toBe(1);
+      expect(aw.recentDeltas[2].tick).toBe(3);
     });
   });
 

@@ -278,6 +278,33 @@ async function init() {
       emitParticlesForEvents(events);
     },
 
+    onTickDelta(delta, tickInfoMsg) {
+      worldTickInfo = tickInfoMsg;
+      worldTickCountdown = tickInfoMsg.nextTickMs;
+      worldLastFrameTime = performance.now();
+      if (mode !== "world") return;
+      // Delta already applied to visibleState in worldClient handler.
+      // Process events from the delta.
+      ui.eventLog.addEvents(delta.events);
+      ui.warStats.addEvents(delta.tick - 1, delta.events);
+      emitParticlesForEvents(delta.events);
+      // Refresh turn flow on new tick
+      const state = wc.visibleState;
+      if (state && gameStarted) {
+        audio.playTurnStart();
+        ui.turnFlow.startTurn(stateForTurnFlow(state) as any);
+        ui.turnFlow.nextUnit(stateForTurnFlow(state) as any, camera);
+        if (ui.turnFlow.currentUnitId !== null) {
+          selection.selectedUnitId = ui.turnFlow.currentUnitId;
+          selection.selectedCityId = null;
+        } else {
+          selection.selectedUnitId = null;
+          selection.selectedCityId = null;
+        }
+        refreshHighlights();
+      }
+    },
+
     onActionsQueued(count) {
       // UI updates via worldTickInfo.actionsQueued
     },

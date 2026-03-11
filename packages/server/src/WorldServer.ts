@@ -1,8 +1,11 @@
 // Empire Reborn — World Server (Tick-Based Kingdom Mode)
 // Manages persistent worlds with tick-based turns, AI kingdoms, and player join/leave.
+// Phase 14: Delta sync — sends per-tick deltas instead of full state, with gzip compression
+// for reconnection and WebSocket heartbeat for connection management.
 
 import { WebSocket } from "ws";
 import { randomUUID } from "node:crypto";
+import { gzipSync } from "node:zlib";
 import {
   type GameState,
   type PlayerAction,
@@ -17,6 +20,14 @@ import {
   SHIELD_MAX_MS,
   SHIELD_INITIAL_MS,
   SHIELD_CHARGE_RATIO,
+  snapshotPreTurn,
+  computeDelta,
+  filterDeltaWithState,
+  computeViewMapDelta,
+  snapshotViewMap,
+  type PreTurnSnapshot,
+  type TurnDelta,
+  type FilteredDelta,
 } from "@empire/shared";
 import type {
   ClientMessage,
@@ -62,6 +73,10 @@ interface ActiveWorld {
   disconnectTimers: Map<number, ReturnType<typeof setTimeout>>;
   /** Track when each human player connected (for shield charge calculation). */
   playerConnectedAt: Map<number, number>;
+  /** Cached viewMap snapshots for connected players (for computing viewMap deltas). */
+  viewMapSnapshots: Map<number, ViewMapCell[]>;
+  /** Recent TurnDeltas for reconnecting clients (ring buffer). */
+  recentDeltas: TurnDelta[];
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -70,6 +85,9 @@ const DISCONNECT_GRACE_MS = 5 * 60 * 1000; // 5 minutes before AI takeover marke
 const MAX_ACTIONS_PER_TICK = 500;
 const RATE_LIMIT_WINDOW_MS = 1000;
 const RATE_LIMIT_MAX_MSGS = 30;
+const HEARTBEAT_INTERVAL_MS = 30_000; // 30s ping/pong
+const HEARTBEAT_TIMEOUT_MS = 10_000;  // 10s to respond before disconnect
+const MAX_RECENT_DELTAS = 10;         // ring buffer size for reconnection
 
 // ─── World Server ──────────────────────────────────────────────────────────
 
@@ -78,9 +96,44 @@ export class WorldServer {
   private playerConnections = new Map<WebSocket, PlayerConnection>();
   private db: GameDatabase | null;
   private rateLimits = new Map<WebSocket, { count: number; resetAt: number }>();
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private pongReceived = new Map<WebSocket, boolean>();
 
   constructor(db?: GameDatabase) {
     this.db = db ?? null;
+  }
+
+  // ─── Heartbeat ────────────────────────────────────────────────────────
+
+  /** Start periodic heartbeat pings for all connected players. */
+  startHeartbeat(): void {
+    if (this.heartbeatTimer) return;
+    this.heartbeatTimer = setInterval(() => {
+      for (const [ws] of this.playerConnections) {
+        if (ws.readyState !== WebSocket.OPEN) continue;
+        // If we sent a ping last cycle and didn't get a pong, disconnect
+        if (this.pongReceived.has(ws) && !this.pongReceived.get(ws)) {
+          console.log("[World] Heartbeat timeout, terminating connection");
+          ws.terminate();
+          continue;
+        }
+        this.pongReceived.set(ws, false);
+        ws.ping();
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+  }
+
+  /** Call this when a pong is received from a client. */
+  handlePong(ws: WebSocket): void {
+    this.pongReceived.set(ws, true);
+  }
+
+  /** Stop heartbeat timer. */
+  stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
   }
 
   // ─── Message Routing ───────────────────────────────────────────────────
@@ -140,6 +193,8 @@ export class WorldServer {
       nextTickAt: Date.now() + config.tickIntervalMs,
       disconnectTimers: new Map(),
       playerConnectedAt: new Map(),
+      viewMapSnapshots: new Map(),
+      recentDeltas: [],
     };
 
     // Register all AI players (no WebSocket connection)
@@ -379,6 +434,19 @@ export class WorldServer {
     // Ensure global dimensions match this world
     configureMapDimensions(state.config.mapWidth, state.config.mapHeight);
 
+    // Snapshot state before turn (for delta computation)
+    const preSnapshot = snapshotPreTurn(state);
+
+    // Snapshot viewMaps for connected players (for viewMap deltas)
+    const preViewMaps = new Map<number, ViewMapCell[]>();
+    for (const [playerId, ws] of activeWorld.players) {
+      if (!ws) continue;
+      const vm = state.viewMaps[playerId];
+      if (vm) {
+        preViewMaps.set(playerId, snapshotViewMap(vm));
+      }
+    }
+
     // Build action map for all players
     const allActions = new Map<number, PlayerAction[]>();
 
@@ -405,6 +473,15 @@ export class WorldServer {
 
     const t2 = performance.now();
 
+    // Compute full delta
+    const delta = computeDelta(preSnapshot, state, result.events);
+
+    // Store delta in ring buffer for reconnection
+    activeWorld.recentDeltas.push(delta);
+    if (activeWorld.recentDeltas.length > MAX_RECENT_DELTAS) {
+      activeWorld.recentDeltas.shift();
+    }
+
     // Clear pending actions
     activeWorld.pendingActions.clear();
 
@@ -414,33 +491,40 @@ export class WorldServer {
 
     // Log timing
     const humanCount = [...activeWorld.players.entries()].filter(([, ws]) => ws !== null).length;
+    const t3 = performance.now();
     console.log(
-      `[World] ${activeWorld.id} tick ${state.turn}: AI=${(t1 - t0).toFixed(0)}ms exec=${(t2 - t1).toFixed(0)}ms | ${humanCount} humans, ${state.players.filter(p => p.status === "active").length} active kingdoms`,
+      `[World] ${activeWorld.id} tick ${state.turn}: AI=${(t1 - t0).toFixed(0)}ms exec=${(t2 - t1).toFixed(0)}ms delta=${(t3 - t2).toFixed(0)}ms | ${humanCount} humans, ${state.players.filter(p => p.status === "active").length} active kingdoms`,
     );
 
-    // Broadcast results to connected players
+    // Broadcast deltas to connected players (instead of full state)
     for (const [playerId, ws] of activeWorld.players) {
       if (!ws) continue;
 
       // Per-player tick info (includes shield and action count)
       const tickInfo = this.getTickInfo(activeWorld, playerId);
 
-      // Filter events visible to this player
-      const visibleEvents = result.events.filter(ev => {
-        const vm = state.viewMaps[playerId];
-        return vm && vm[ev.loc]?.seen >= 0;
-      });
+      // Filter delta for this player's visibility
+      const filteredDelta = filterDeltaWithState(delta, playerId, state);
 
+      // Compute viewMap delta for this player
+      const preVm = preViewMaps.get(playerId);
+      const currentVm = state.viewMaps[playerId];
+      if (preVm && currentVm) {
+        filteredDelta.viewMapChanges = computeViewMapDelta(preVm, currentVm);
+      }
+
+      // Send delta update (replaces tick_result + world_state)
       this.send(ws, {
-        type: "tick_result",
+        type: "tick_delta",
         worldId: activeWorld.id,
-        turn: result.turn,
-        events: visibleEvents,
+        delta: filteredDelta,
         tickInfo,
       });
 
-      // Send updated visible state
-      this.sendVisibleState(activeWorld, playerId);
+      // Update cached viewMap snapshot for next tick
+      if (currentVm) {
+        activeWorld.viewMapSnapshots.set(playerId, snapshotViewMap(currentVm));
+      }
     }
 
     // Persist world state
@@ -610,6 +694,7 @@ export class WorldServer {
     }
 
     this.playerConnections.delete(ws);
+    this.pongReceived.delete(ws);
   }
 
   // ─── Season End ────────────────────────────────────────────────────────
@@ -704,7 +789,14 @@ export class WorldServer {
 
   private send(ws: WebSocket, msg: ServerMessage): void {
     if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(msg));
+      const json = JSON.stringify(msg);
+      // Compress large messages (> 50KB) with gzip
+      if (json.length > 50_000) {
+        const compressed = gzipSync(json);
+        ws.send(compressed, { binary: true });
+      } else {
+        ws.send(json);
+      }
     }
   }
 
@@ -721,6 +813,8 @@ export class WorldServer {
 
   /** Graceful shutdown — stop all ticks, persist all worlds. */
   shutdown(): void {
+    this.stopHeartbeat();
+    this.pongReceived.clear();
     for (const aw of this.worlds.values()) {
       if (aw.tickTimer) {
         clearTimeout(aw.tickTimer);

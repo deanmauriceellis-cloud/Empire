@@ -9,6 +9,7 @@ import {
   DIR_OFFSET,
   TerrainType,
   configureMapDimensions,
+  applyDeltaToVisibleState,
   type Loc,
   type TurnEvent,
   type VisibleGameState,
@@ -18,6 +19,7 @@ import {
   type TickInfo,
   type WorldSummary,
   type WorldConfig,
+  type FilteredDelta,
 } from "@empire/shared";
 import type { KingdomTilePos } from "@empire/shared";
 import type { Connection } from "./connection.js";
@@ -30,6 +32,7 @@ export interface WorldClientEvents {
   onWorldJoined: (worldId: string, owner: Owner, kingdom: KingdomTilePos) => void;
   onWorldState: (state: VisibleGameState, tickInfo: TickInfo) => void;
   onTickResult: (turn: number, events: TurnEvent[], tickInfo: TickInfo) => void;
+  onTickDelta: (delta: FilteredDelta, tickInfo: TickInfo) => void;
   onActionsQueued: (count: number) => void;
   onActionsCancelled: () => void;
   onWorldList: (worlds: WorldSummary[]) => void;
@@ -210,6 +213,24 @@ export function createWorldClient(
           tickInfo = msg.tickInfo;
           actionsQueued = msg.tickInfo.actionsQueued ?? 0;
           events.onTickResult(msg.turn, msg.events, msg.tickInfo);
+          break;
+
+        case "tick_delta":
+          tickInfo = msg.tickInfo;
+          actionsQueued = msg.tickInfo.actionsQueued ?? 0;
+          turnEvents = msg.delta.events;
+          // Apply delta to cached visible state
+          if (visibleState && owner !== null) {
+            applyDeltaToVisibleState(
+              msg.delta,
+              visibleState.cities,
+              visibleState.units,
+              visibleState.viewMap,
+              owner as number,
+            );
+            visibleState.turn = msg.delta.tick;
+          }
+          events.onTickDelta(msg.delta, msg.tickInfo);
           break;
 
         case "actions_queued":
