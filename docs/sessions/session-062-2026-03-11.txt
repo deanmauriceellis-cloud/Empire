@@ -1,0 +1,43 @@
+Session 062 — 2026-03-11
+========================
+
+Phase: 17 (Balance, Tuning & Launch) — continued
+
+Focus: Playtesting and UI improvements based on live testing feedback.
+
+Changes:
+- Fixed singleplayer numPlayers: was 6 (1 human + 5 AI), now 2 (1 human + 1 AI)
+  - 6-player mode caused 4 players to resign immediately (mapgen couldn't place 6 distant cities)
+  - Default of 6 was from session 052 N-player work, inappropriate for singleplayer
+- Economy Review: converted from mandatory blocking modal to toggle button
+  - Added "Economy" button to HUD top bar (next to War Stats)
+  - Click toggles open/close without blocking game flow
+  - Enter key now immediately executes turn (no economy review gate)
+  - Confirm button hidden in toggle mode, shown in promise mode (backward compat)
+  - Auto-closes if Enter pressed while open
+- Debug defaults: Auto-Play (playerAI) and Diag Log now default to ON
+  - AI logging enabled immediately on panel creation
+- Camera: disabled auto-focus on next unit when Auto-Play is enabled
+  - Allows user to watch a specific area while AI plays through turns
+
+Investigations:
+- Diagnosed click input issue: was stale module state from hot-reload, not a code bug
+- Analyzed army WaitForTransport behavior: correct for small island starts
+  - Army explores small island in ~5 turns, exhausts objectives, transitions to WaitForTransport
+  - Production correctly detects island escape scenario and builds transport
+- Analyzed "armies not taking empty city" report: was user error
+  - With Auto-Play OFF, P1 armies are human-controlled — AI behaviors move them but don't issue attack actions
+  - Enabling Auto-Play (playerAI flag) lets AI control P1 including city captures
+- Fog of war: confirmed standard model — enemy units only visible within active vision range
+  - Previously explored tiles show terrain but not current enemy positions
+
+Test status: 827 tests passing (729 shared + 98 server)
+- Vitest onTaskUpdate timeout on shared tests (infrastructure, not test failure)
+
+Files modified:
+- packages/client/src/main.ts (numPlayers fix, economy button wiring, camera fix, end-turn cleanup)
+- packages/client/src/ui/economyReview.ts (button, toggle method)
+- packages/client/src/ui/hud.ts (setEconomyButton)
+- packages/client/src/ui/UIManager.ts (wire economy button)
+- packages/client/src/ui/debugPanel.ts (default flags)
+- packages/client/src/ui/styles.ts (economy button CSS)

@@ -1,5 +1,14 @@
 # Empire Reborn — Changelog
 
+## v0.51.0 — Session 062 (2026-03-11)
+
+### Phase 17: Balance, Tuning & Launch (continued)
+- **Singleplayer fix** — numPlayers reduced from 6 to 2 (1 human + 1 AI); 6-player mode caused 4 instant resignations
+- **Economy Review button** — added toggle button to HUD top bar; no longer blocks turn execution on Enter
+- **Debug defaults** — Auto-Play and Diag Log default to ON for easier testing
+- **Camera stability** — disabled auto-focus on next unit when Auto-Play is enabled; user can watch a specific area
+- **827 tests passing** (729 shared + 98 server)
+
 ## v0.50.0 — Session 061 (2026-03-11)
 
 ### Phase 17: Balance, Tuning & Launch (in progress)

@@ -11,11 +11,10 @@
 - **PLAN-KINGDOM.md** is the definitive plan (17 phases: gameplay → kingdom MMO → monetization)
 
 ## Latest commit
-session 061: Phase 17 — Balance, Tuning & Launch (balance test suite)
+session 062: UI improvements — economy button, auto-play defaults, camera fix
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
-- Armies adjacent to capturable neutral cities not always attacking (pre-existing)
 - Structure sprites not yet rendered on tilemap (visual polish deferred)
 - Economy review tabs not yet updated for structures
 - Crown city relocate action not yet implemented (UI button deferred)
@@ -23,20 +22,18 @@ session 061: Phase 17 — Balance, Tuning & Launch (balance test suite)
 - World mode: monthly reset/season rewards not yet implemented
 - Spawn protection enforcement not yet in executeTurn (needs world context in game engine)
 
-## In Progress (session 061) — Phase 17: Balance, Tuning & Launch
-- [x] 17A-D: Comprehensive balance & stress test suite (23 tests)
-  - Resource flow validation (starting resources, deposits)
-  - Tech pacing verification (thresholds, research mechanics)
-  - Advanced unit availability (tech-gated production)
-  - Multi-player balance (6-player stability, competitive balance, economy scaling)
-  - Crown & tributary mechanics (bonuses, tribute income)
-  - AI competence (economy building, army presence, multi-threat adaptation)
-  - Performance benchmarks (avg <200ms/turn 2P, <500ms/turn 6P, no spike >2s)
-  - Stress tests (200-turn 2P, 100-turn 6P, multiple seeds)
-  - Game integrity (winner validation, asset ownership, unit bounds, determinism)
-- [x] New file: packages/shared/src/__tests__/balance.test.ts (~390 lines)
+## Completed (session 062) — Phase 17: Balance, Tuning & Launch (continued)
+- [x] Fix singleplayer numPlayers: 6 → 2 (1 human + 1 AI)
+- [x] Economy Review: toggle button in HUD top bar, no longer blocks Enter
+- [x] Debug defaults: Auto-Play and Diag Log default to ON
+- [x] Camera: no auto-focus when Auto-Play enabled (watch specific areas)
 - [x] 827 tests passing (729 shared + 98 server), client builds clean
 - [ ] 17E: Launch checklist items remaining
+
+## Completed (session 061) — Phase 17: Balance, Tuning & Launch
+- [x] 17A-D: Comprehensive balance & stress test suite (23 tests)
+- [x] New file: packages/shared/src/__tests__/balance.test.ts (~390 lines)
+- [x] 827 tests passing (729 shared + 98 server), client builds clean
 
 ## Completed (session 060) — Phase 16: Movement Trails & Spectacle
 - [x] 16A: Movement trails — fighter contrails (white fading smoke), ship wakes (V-shaped water spray), army dust puffs (brown particles), no trail for Special Forces
