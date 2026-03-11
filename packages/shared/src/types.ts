@@ -66,6 +66,7 @@ export interface GameConfig {
   smoothPasses: number;        // number of height map smoothing passes
   minCityDist: number;         // minimum distance between cities
   seed: number;                // RNG seed for map generation
+  mapType?: string;            // map generation type: "standard" (default) or "river"
 }
 
 // ─── Game State ──────────────────────────────────────────────────────────────

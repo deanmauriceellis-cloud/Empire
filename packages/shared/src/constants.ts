@@ -202,6 +202,7 @@ export interface TerrainPreset {
   waterRatio: number;
   smoothPasses: number;
   description: string;
+  mapType?: string;           // "river" for River War, undefined for standard height-map generation
 }
 
 export const TERRAIN_PRESETS: readonly TerrainPreset[] = [
@@ -209,4 +210,5 @@ export const TERRAIN_PRESETS: readonly TerrainPreset[] = [
   { name: "Pangaea",     waterRatio: 45, smoothPasses: 8, description: "One huge continent, coastal seas" },
   { name: "Archipelago", waterRatio: 80, smoothPasses: 2, description: "Many small scattered islands" },
   { name: "Islands",     waterRatio: 75, smoothPasses: 3, description: "Medium islands, open water" },
+  { name: "River War",   waterRatio: 30, smoothPasses: 5, description: "Two lands split by a great river", mapType: "river" },
 ] as const;

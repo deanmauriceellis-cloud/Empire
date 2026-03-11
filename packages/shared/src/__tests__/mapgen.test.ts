@@ -18,6 +18,7 @@ import {
   DEFAULT_WATER_RATIO,
   TerrainType,
   Owner,
+  configureMapDimensions,
 } from "../constants.js";
 import { dist } from "../utils.js";
 import type { GameConfig } from "../types.js";
@@ -398,5 +399,126 @@ describe("generateMap", () => {
       const result = generateMap({ ...DEFAULT_CONFIG, waterRatio: ratio });
       expect(result.cities.length).toBe(NUM_CITY);
     }
+  });
+});
+
+// ─── River War Map Tests ──────────────────────────────────────────────────────
+
+describe("generateMap (river)", () => {
+  const RIVER_CONFIG: GameConfig = {
+    ...DEFAULT_CONFIG,
+    mapType: "river",
+  };
+
+  it("generates a map with correct dimensions", () => {
+    const result = generateMap(RIVER_CONFIG);
+    expect(result.map.length).toBe(MAP_SIZE);
+  });
+
+  it("has a river of water running vertically through the center", () => {
+    const result = generateMap(RIVER_CONFIG);
+    const centerCol = Math.floor(MAP_WIDTH / 2);
+    let waterInCenter = 0;
+    for (let row = 2; row < MAP_HEIGHT - 2; row++) {
+      if (result.map[row * MAP_WIDTH + centerCol].terrain === TerrainType.Sea) {
+        waterInCenter++;
+      }
+    }
+    // Most of the center column should be water (the river)
+    expect(waterInCenter).toBeGreaterThan(MAP_HEIGHT * 0.7);
+  });
+
+  it("has land on both sides of the river", () => {
+    const result = generateMap(RIVER_CONFIG);
+    let westLand = 0;
+    let eastLand = 0;
+    const center = Math.floor(MAP_WIDTH / 2);
+    for (let i = 0; i < result.map.length; i++) {
+      const col = i % MAP_WIDTH;
+      const t = result.map[i].terrain;
+      if (t !== TerrainType.Sea) {
+        if (col < center - 15) westLand++;
+        if (col > center + 15) eastLand++;
+      }
+    }
+    expect(westLand).toBeGreaterThan(0);
+    expect(eastLand).toBeGreaterThan(0);
+    // Both sides should be roughly equal (within 30%)
+    const ratio = Math.min(westLand, eastLand) / Math.max(westLand, eastLand);
+    expect(ratio).toBeGreaterThan(0.7);
+  });
+
+  it("places cities on both sides", () => {
+    const result = generateMap(RIVER_CONFIG);
+    const center = Math.floor(MAP_WIDTH / 2);
+    const westCities = result.cities.filter(c => c.loc % MAP_WIDTH < center);
+    const eastCities = result.cities.filter(c => c.loc % MAP_WIDTH >= center);
+    expect(westCities.length).toBeGreaterThan(2);
+    expect(eastCities.length).toBeGreaterThan(2);
+  });
+
+  it("has valid starting cities on opposite sides", () => {
+    const result = generateMap(RIVER_CONFIG);
+    const [c1, c2] = result.startingCities;
+    expect(c1).not.toBe(c2);
+    const col1 = result.cities[c1].loc % MAP_WIDTH;
+    const col2 = result.cities[c2].loc % MAP_WIDTH;
+    const center = Math.floor(MAP_WIDTH / 2);
+    // Starting cities should be on opposite sides
+    expect((col1 < center && col2 > center) || (col1 > center && col2 < center)).toBe(true);
+  });
+
+  it("has tributaries (water extending into landmasses)", () => {
+    const result = generateMap(RIVER_CONFIG);
+    const center = Math.floor(MAP_WIDTH / 2);
+    // Check for water tiles well into each landmass (tributaries)
+    let westWater = 0;
+    let eastWater = 0;
+    for (let i = 0; i < result.map.length; i++) {
+      const col = i % MAP_WIDTH;
+      if (result.map[i].terrain === TerrainType.Sea) {
+        if (col < center - 20) westWater++;
+        if (col > center + 20) eastWater++;
+      }
+    }
+    // Both sides should have some water (tributaries)
+    expect(westWater).toBeGreaterThan(10);
+    expect(eastWater).toBeGreaterThan(10);
+  });
+
+  it("cityId references are consistent", () => {
+    const result = generateMap(RIVER_CONFIG);
+    for (const city of result.cities) {
+      expect(result.map[city.loc].cityId).toBe(city.id);
+    }
+    for (let i = 0; i < result.map.length; i++) {
+      if (result.map[i].cityId !== null) {
+        expect(result.map[i].terrain).toBe(TerrainType.City);
+      }
+    }
+  });
+
+  it("works across multiple seeds", () => {
+    for (const seed of [1, 42, 999, 12345]) {
+      const result = generateMap({ ...RIVER_CONFIG, seed });
+      expect(result.cities.length).toBeGreaterThan(5);
+      expect(result.startingCities[0]).not.toBe(result.startingCities[1]);
+    }
+  });
+
+  it("works with different map sizes", () => {
+    for (const [w, h] of [[60, 40], [100, 60], [150, 90]]) {
+      configureMapDimensions(w, h);
+      const result = generateMap({
+        ...RIVER_CONFIG,
+        mapWidth: w,
+        mapHeight: h,
+        numCities: NUM_CITY,
+      });
+      expect(result.map.length).toBe(w * h);
+      expect(result.cities.length).toBeGreaterThan(3);
+    }
+    // Restore defaults
+    configureMapDimensions(DEFAULT_CONFIG.mapWidth, DEFAULT_CONFIG.mapHeight);
   });
 });

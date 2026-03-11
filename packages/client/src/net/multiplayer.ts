@@ -64,7 +64,7 @@ export interface MultiplayerGame {
   readonly turnEvents: ReadonlyArray<TurnEvent>;
 
   /** Create a new multiplayer game on the server. */
-  createGame(options?: { mapSize: { width: number; height: number }; terrain: { waterRatio: number; smoothPasses: number } }): void;
+  createGame(options?: { mapSize: { width: number; height: number }; terrain: { waterRatio: number; smoothPasses: number; mapType?: string } }): void;
   /** Join an existing game by ID. */
   joinGame(gameId: string): void;
   /** Send a move action to the server. */
@@ -113,17 +113,18 @@ export function createMultiplayerGame(
     get winner() { return winner; },
     get turnEvents() { return turnEvents; },
 
-    createGame(options?: { mapSize: { width: number; height: number }; terrain: { waterRatio: number; smoothPasses: number } }): void {
+    createGame(options?: { mapSize: { width: number; height: number }; terrain: { waterRatio: number; smoothPasses: number; mapType?: string } }): void {
       if (options) {
-        conn.send({
-          type: "create_game",
-          config: {
+        const config: Record<string, unknown> = {
             mapWidth: options.mapSize.width,
             mapHeight: options.mapSize.height,
             waterRatio: options.terrain.waterRatio,
             smoothPasses: options.terrain.smoothPasses,
-          },
-        });
+        };
+        if (options.terrain.mapType) {
+          config.mapType = options.terrain.mapType;
+        }
+        conn.send({ type: "create_game", config });
       } else {
         conn.send({ type: "create_game" });
       }

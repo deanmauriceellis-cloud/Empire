@@ -278,6 +278,9 @@ async function init() {
       configOverrides.mapHeight = options.mapSize.height;
       configOverrides.waterRatio = options.terrain.waterRatio;
       configOverrides.smoothPasses = options.terrain.smoothPasses;
+      if (options.terrain.mapType) {
+        configOverrides.mapType = options.terrain.mapType;
+      }
     }
     game = createSinglePlayerGame(configOverrides);
     collector = createActionCollector(game);
@@ -525,10 +528,11 @@ async function init() {
 
     // Debug: log what's at the clicked tile
     const allAtLoc = units.filter((u) => u.loc === loc);
+    console.log(`[Click] screen=(${screenX},${screenY}) tile=(${tile.row},${tile.col}) loc=${loc} unitsHere=${allAtLoc.length} playerOwner=${playerOwner}`);
     if (allAtLoc.length > 0) {
-      console.log(`[Click] tile=${loc} found ${allAtLoc.length} unit(s):`,
+      console.log(`[Click]   units:`,
         allAtLoc.map(u => `#${u.id} ${UNIT_ATTRIBUTES[u.type].name} owner=${u.owner} shipId=${u.shipId}`));
-      console.log(`[Click] playerOwner=${playerOwner} matched=${playerUnit ? `#${playerUnit.id}` : "none"}`);
+      console.log(`[Click]   matched=${playerUnit ? `#${playerUnit.id}` : "none"}`);
     }
 
     const cities = mode === "singleplayer"

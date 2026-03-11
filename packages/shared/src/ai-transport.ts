@@ -239,53 +239,82 @@ export function aiTransportMove(
             }
           }
         } else {
-          // Empty with no targets — explore, or return to pickup zone
-          const exploreTarget = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
-          if (exploreTarget !== null && !recentLocs.has(exploreTarget)) {
-            aiVLog(`    Transport #${unit.id}: empty, exploring toward ${exploreTarget}`);
-            actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
-            recentLocs.add(currentLoc);
-            currentLoc = exploreTarget;
-          } else {
-            // No unexplored water — try to return toward waiting armies
+          // Empty with no targets — on river maps, prioritize returning to own shoreline
+          // where armies congregate; on standard maps, explore first.
+          const isRiver = state.config.mapType === "river";
+          let moved = false;
+
+          // River maps: return to own shore/port first (armies cluster at river bank)
+          if (isRiver) {
             const returnTarget = findMoveToward(getLoadMap(), currentLoc, ttLoadMoveInfo());
             if (returnTarget !== null && !recentLocs.has(returnTarget)) {
-              aiVLog(`    Transport #${unit.id}: empty, returning toward waiting armies at ${returnTarget}`);
+              aiVLog(`    Transport #${unit.id}: empty, heading to own shoreline for pickup at ${returnTarget}`);
               actions.push({ type: "move", unitId: unit.id, loc: returnTarget });
               recentLocs.add(currentLoc);
               currentLoc = returnTarget;
-            } else {
-              // No armies either — navigate toward own coastal cities (army production).
-              // Can't use waterMoveInfo("O") because cities are on land and water BFS can't reach them.
-              // Instead, mark water tiles adjacent to own cities as targets.
+              moved = true;
+            }
+            if (!moved) {
               const homeTarget = findMoveToward(getPortMap(), currentLoc, waterMoveInfo("H", new Map([["H", 1]])));
               if (homeTarget !== null && !recentLocs.has(homeTarget)) {
                 aiVLog(`    Transport #${unit.id}: empty, returning to own port at ${homeTarget}`);
                 actions.push({ type: "move", unitId: unit.id, loc: homeTarget });
                 recentLocs.add(currentLoc);
                 currentLoc = homeTarget;
-              } else {
-                // Last resort: move to ANY adjacent water tile to break deadlock
-                // (transport may be in an enclosed sea or all BFS objectives blocked by recentLocs)
-                const adjCells = getAdjacentLocs(currentLoc);
-                let escaped = false;
-                for (const adj of adjCells) {
-                  if (recentLocs.has(adj)) continue;
-                  const c = viewMap[adj].contents;
-                  if (c === VM_WATER || c === VM_UNEXPLORED) {
-                    aiVLog(`    Transport #${unit.id}: empty, escaping deadlock toward ${adj}`);
-                    actions.push({ type: "move", unitId: unit.id, loc: adj });
-                    recentLocs.add(currentLoc);
-                    currentLoc = adj;
-                    escaped = true;
-                    break;
-                  }
-                }
-                if (!escaped) {
-                  aiVLog(`    Transport #${unit.id}: empty, truly stuck (enclosed water or lake)`);
-                  break;
-                }
+                moved = true;
               }
+            }
+          }
+
+          // Standard path: explore, then return to armies, then port, then escape
+          if (!moved) {
+            const exploreTarget = findMoveToward(viewMap, currentLoc, ttExploreMoveInfo());
+            if (exploreTarget !== null && !recentLocs.has(exploreTarget)) {
+              aiVLog(`    Transport #${unit.id}: empty, exploring toward ${exploreTarget}`);
+              actions.push({ type: "move", unitId: unit.id, loc: exploreTarget });
+              recentLocs.add(currentLoc);
+              currentLoc = exploreTarget;
+              moved = true;
+            }
+          }
+          if (!moved) {
+            const returnTarget = findMoveToward(getLoadMap(), currentLoc, ttLoadMoveInfo());
+            if (returnTarget !== null && !recentLocs.has(returnTarget)) {
+              aiVLog(`    Transport #${unit.id}: empty, returning toward waiting armies at ${returnTarget}`);
+              actions.push({ type: "move", unitId: unit.id, loc: returnTarget });
+              recentLocs.add(currentLoc);
+              currentLoc = returnTarget;
+              moved = true;
+            }
+          }
+          if (!moved) {
+            const homeTarget = findMoveToward(getPortMap(), currentLoc, waterMoveInfo("H", new Map([["H", 1]])));
+            if (homeTarget !== null && !recentLocs.has(homeTarget)) {
+              aiVLog(`    Transport #${unit.id}: empty, returning to own port at ${homeTarget}`);
+              actions.push({ type: "move", unitId: unit.id, loc: homeTarget });
+              recentLocs.add(currentLoc);
+              currentLoc = homeTarget;
+              moved = true;
+            }
+          }
+          if (!moved) {
+            // Last resort: move to ANY adjacent water tile to break deadlock
+            const adjCells = getAdjacentLocs(currentLoc);
+            for (const adj of adjCells) {
+              if (recentLocs.has(adj)) continue;
+              const c = viewMap[adj].contents;
+              if (c === VM_WATER || c === VM_UNEXPLORED) {
+                aiVLog(`    Transport #${unit.id}: empty, escaping deadlock toward ${adj}`);
+                actions.push({ type: "move", unitId: unit.id, loc: adj });
+                recentLocs.add(currentLoc);
+                currentLoc = adj;
+                moved = true;
+                break;
+              }
+            }
+            if (!moved) {
+              aiVLog(`    Transport #${unit.id}: empty, truly stuck (enclosed water or lake)`);
+              break;
             }
           }
         }
@@ -557,15 +586,23 @@ export function createUnloadViewMap(
     // (scanContinent hardcodes O=P1, X=P2, which is wrong for P2's viewMap
     //  where O=own city and X=enemy city regardless of player)
     let targetCities = 0;
+    let shorelineCities = 0; // enemy/unowned cities adjacent to water (reachable by transport)
     let hasOwnCity = false;
     let unexplored = 0;
     let hasWaitingArmies = false;
     for (const cLoc of continent) {
       evaluated.add(cLoc);
       const c = viewMap[cLoc].contents;
-      if (c === VM_ENEMY_CITY) targetCities++;
-      else if (c === VM_UNOWNED_CITY) targetCities++;
-      else if (c === VM_OWN_CITY) hasOwnCity = true;
+      if (c === VM_ENEMY_CITY || c === VM_UNOWNED_CITY) {
+        targetCities++;
+        // Check if this city is on the shoreline (adjacent to water = transport-accessible)
+        for (const adj of getAdjacentLocs(cLoc)) {
+          if (viewMap[adj].contents === VM_WATER) {
+            shorelineCities++;
+            break;
+          }
+        }
+      } else if (c === VM_OWN_CITY) hasOwnCity = true;
       else if (c === VM_UNEXPLORED) unexplored++;
     }
 
@@ -580,9 +617,22 @@ export function createUnloadViewMap(
       }
     }
 
+    const isRiverMap = state.config.mapType === "river";
+    const isIsland = continent.size <= 20; // small landmass in the river
+
     // Calculate continent value (0-9) based on cities AND unexplored territory
     // Completely unknown areas are high-priority targets — discovering new continents is critical
     let value = Math.min(targetCities, 6); // cities: up to 6
+
+    // River map bonuses:
+    // - Shoreline enemy/unowned cities are highest priority — transports can unload right next to them
+    //   (e.g. cities at tributary endpoints, cities on river islands)
+    // - Small islands with cities are strategic chokepoints worth seizing early
+    if (isRiverMap) {
+      if (shorelineCities > 0) value += 2;  // shoreline cities are prime transport targets
+      if (isIsland && targetCities > 0) value += 2; // island cities = strategic river control
+    }
+
     const unexploredRatio = continent.size > 0 ? unexplored / continent.size : 0;
     if (unexploredRatio > 0.7) value += 4;       // mostly unknown — very high priority
     else if (unexploredRatio > 0.3) value += 2;  // partially explored
@@ -603,7 +653,7 @@ export function createUnloadViewMap(
     const effectiveValue = value > 0 ? value : (unexplored > 0 && !hasOwnCity ? 1 : 0);
     if (effectiveValue === 0) continue;
 
-    aiLog(`      unloadMap: continent ${continent.size} tiles, value=${effectiveValue}, targets=${targetCities}, unexplored=${unexplored}, own=${hasOwnCity}, waiting=${hasWaitingArmies}`);
+    aiLog(`      unloadMap: continent ${continent.size} tiles, value=${effectiveValue}, targets=${targetCities}, shoreline=${shorelineCities}, unexplored=${unexplored}, own=${hasOwnCity}, waiting=${hasWaitingArmies}${isIsland ? ", ISLAND" : ""}`);
     // Mark coastal water cells adjacent to this continent
     for (const cLoc of continent) {
       const adjacent = getAdjacentLocs(cLoc);
