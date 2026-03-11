@@ -52,8 +52,10 @@ export function needMore(prodCounts: number[], ratio: number[], onLake: boolean)
     if (ratio[i] === 0) continue;
     // Inland/lake cities can't build ships — only armies and fighters
     if (onLake && i !== UnitType.Army && i !== UnitType.Fighter) continue;
-    // Never build carriers, satellites, or construction units (AI construction is Phase 8)
+    // Never build carriers, satellites, construction, or Phase 7 units (AI economy is Phase 8)
     if (i === UnitType.Carrier || i === UnitType.Satellite || i === UnitType.Construction) continue;
+    if (i === UnitType.Artillery || i === UnitType.SpecialForces || i === UnitType.AWACS ||
+        i === UnitType.MissileCruiser || i === UnitType.EngineerBoat) continue;
 
     const targetFraction = ratio[i] / totalRatio;
     const actualFraction = prodCounts[i] / totalProd;

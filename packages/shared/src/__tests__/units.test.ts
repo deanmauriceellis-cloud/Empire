@@ -5,8 +5,8 @@ import {
 } from "../index.js";
 
 describe("unit attributes", () => {
-  it("has 10 unit types", () => {
-    expect(UNIT_ATTRIBUTES).toHaveLength(10);
+  it("has 15 unit types", () => {
+    expect(UNIT_ATTRIBUTES).toHaveLength(15);
   });
 
   it("army: 5 build time, land only", () => {
@@ -84,7 +84,7 @@ describe("canTraverse", () => {
   });
 
   it("all units can be in cities", () => {
-    for (let t = UnitType.Army; t <= UnitType.Satellite; t++) {
+    for (let t = UnitType.Army; t <= UnitType.EngineerBoat; t++) {
       expect(canTraverse(t, TerrainType.City)).toBe(true);
     }
   });

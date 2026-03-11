@@ -163,8 +163,8 @@ export function createUnit(
 ): UnitState {
   const attrs = UNIT_ATTRIBUTES[type];
   const effectiveMaxHp = getEffectiveMaxHp(state, { type, owner });
-  const effectiveRange = type === UnitType.Fighter
-    ? getEffectiveFighterRange(state, owner)
+  const effectiveRange = type === UnitType.Fighter || type === UnitType.AWACS
+    ? (type === UnitType.Fighter ? getEffectiveFighterRange(state, owner) : attrs.range)
     : type === UnitType.Satellite
       ? getEffectiveSatelliteRange(state, owner)
       : attrs.range;
@@ -189,7 +189,7 @@ export function createUnit(
   }
 
   state.units.push(unit);
-  scan(state, owner, loc);
+  scan(state, owner, loc, attrs.visionRadius);
   return unit;
 }
 
@@ -295,6 +295,14 @@ export function updateViewCell(state: GameState, owner: Owner, loc: Loc): void {
   // Check for units at this location
   const topUnit = findTopUnitAtLoc(state, loc);
   if (topUnit) {
+    // Invisible enemy units (Special Forces) only appear as terrain unless
+    // the scanning player has a unit adjacent to them
+    if (topUnit.owner !== owner && UNIT_ATTRIBUTES[topUnit.type].invisible) {
+      if (!hasAdjacentOwnUnit(state, owner, loc)) {
+        vm[loc].contents = cell.terrain;
+        return;
+      }
+    }
     const ch = UNIT_ATTRIBUTES[topUnit.type].char;
     // Own units uppercase, enemy units lowercase
     vm[loc].contents = topUnit.owner === owner ? ch : ch.toLowerCase();
@@ -308,6 +316,19 @@ export function updateViewCell(state: GameState, owner: Owner, loc: Loc): void {
 /** Find the "top" visible unit at a location (non-embarked). */
 function findTopUnitAtLoc(state: GameState, loc: Loc): UnitState | undefined {
   return state.units.find((u) => u.loc === loc && u.shipId === null);
+}
+
+/** Check if the given owner has a non-embarked unit adjacent to loc. */
+function hasAdjacentOwnUnit(state: GameState, owner: Owner, loc: Loc): boolean {
+  for (let i = 0; i < 8; i++) {
+    const adj = loc + DIR_OFFSET[i];
+    if (adj < 0 || adj >= MAP_SIZE) continue;
+    if (Math.abs(locCol(adj) - locCol(loc)) > 1) continue;
+    if (state.units.some((u) => u.loc === adj && u.owner === owner && u.shipId === null)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** Scan a location + 8 adjacent cells for a player's view. */
@@ -432,9 +453,10 @@ export function moveUnit(state: GameState, unit: UnitState, newLoc: Loc): void {
     }
   }
 
-  // Update vision (with tech bonus range)
+  // Update vision (with tech bonus range + unit-specific vision radius)
   const levels = getPlayerTechLevels(state, unit.owner);
-  const visionBonus = techVisionBonus(levels[0], levels[2], unit.type);
+  const visionBonus = techVisionBonus(levels[0], levels[2], unit.type) +
+    UNIT_ATTRIBUTES[unit.type].visionRadius;
   if (unit.type === UnitType.Satellite) {
     scanSatellite(state, unit.owner, newLoc);
   }
@@ -665,6 +687,80 @@ export function attackUnit(
   }
 
   return events;
+}
+
+/**
+ * Bombard: ranged attack dealing damage without return fire.
+ * Attacker stays in place. Each bombard shot costs 1 move.
+ * Chebyshev distance must be > 1 and <= attackRange.
+ */
+export function bombardUnit(
+  state: GameState,
+  attacker: UnitState,
+  defender: UnitState,
+): TurnEvent[] {
+  const events: TurnEvent[] = [];
+  const attAttrs = UNIT_ATTRIBUTES[attacker.type];
+  const defAttrs = UNIT_ATTRIBUTES[defender.type];
+
+  const attStrength = getEffectiveStrength(state, attacker);
+  defender.hits -= attStrength;
+
+  if (defender.hits <= 0) {
+    events.push({
+      type: "combat",
+      loc: defender.loc,
+      description: `${attAttrs.article} bombarded and destroyed ${defAttrs.article}`,
+      data: {
+        winnerId: attacker.id,
+        loserId: defender.id,
+        winnerType: attacker.type,
+        loserType: defender.type,
+        bombard: true,
+      },
+    });
+    events.push(...killUnit(state, defender.id));
+  } else {
+    events.push({
+      type: "combat",
+      loc: defender.loc,
+      description: `${attAttrs.article} bombarded ${defAttrs.article} (${defender.hits} HP left)`,
+      data: {
+        attackerId: attacker.id,
+        defenderId: defender.id,
+        attackerType: attacker.type,
+        defenderType: defender.type,
+        bombard: true,
+        remainingHp: defender.hits,
+      },
+    });
+  }
+
+  // Bombard costs 1 move point
+  attacker.moved += 1;
+  return events;
+}
+
+/** Chebyshev distance between two locations. */
+export function chebyshevDist(state: GameState, locA: Loc, locB: Loc): number {
+  const rowA = locRow(locA);
+  const colA = locCol(locA);
+  const rowB = locRow(locB);
+  const colB = locCol(locB);
+  return Math.max(Math.abs(rowA - rowB), Math.abs(colA - colB));
+}
+
+/** Check if a unit can bombard a target location. */
+export function canBombard(
+  state: GameState,
+  unit: UnitState,
+  targetLoc: Loc,
+): boolean {
+  const attrs = UNIT_ATTRIBUTES[unit.type];
+  if (attrs.attackRange <= 0) return false;
+  if (unit.moved >= objMoves(unit)) return false;
+  const d = chebyshevDist(state, unit.loc, targetLoc);
+  return d > 1 && d <= attrs.attackRange;
 }
 
 /** Kill excess cargo if a ship's capacity dropped below its cargo count. */
@@ -1134,6 +1230,10 @@ export function processAction(
     case "attack": {
       const unit = findUnit(state, action.unitId);
       if (!unit || unit.owner !== owner) break;
+      // Ranged-only units (Artillery) cannot melee — must use bombard action
+      if (UNIT_ATTRIBUTES[unit.type].attackRange > 0 && unit.type === UnitType.Artillery) break;
+      // Non-combat units (AWACS, EngineerBoat, Construction, Satellite) cannot attack
+      if (UNIT_ATTRIBUTES[unit.type].strength === 0) break;
 
       // Check if target is a city
       const cell = state.map[action.targetLoc];
@@ -1214,6 +1314,21 @@ export function processAction(
       break;
     }
 
+    case "bombard": {
+      const unit = findUnit(state, action.unitId);
+      if (!unit || unit.owner !== owner) break;
+      if (!canBombard(state, unit, action.targetLoc)) break;
+
+      // Find enemy unit at target (topmost non-embarked unit)
+      const target = state.units.find(
+        (u) => u.loc === action.targetLoc && u.owner !== owner && u.shipId === null,
+      );
+      if (target) {
+        events.push(...bombardUnit(state, unit, target));
+      }
+      break;
+    }
+
     case "resign": {
       // Mark the other player as winner
       const winner = owner === Owner.Player1 ? Owner.Player2 : Owner.Player1;
@@ -1280,7 +1395,7 @@ function fighterFuelCheck(
   owner: Owner,
   events: TurnEvent[],
 ): "ok" | "return" | "stranded" {
-  if (unit.type !== UnitType.Fighter) return "ok";
+  if (unit.type !== UnitType.Fighter && unit.type !== UnitType.AWACS) return "ok";
 
   // Kill fighter if fuel is exhausted
   if (unit.range <= 0) {
@@ -2090,13 +2205,16 @@ export function executeTurn(
   for (const unit of state.units) {
     unit.moved = 0;
 
-    // Refuel fighters at cities or on carriers (with tech range bonus)
-    if (unit.type === UnitType.Fighter && UNIT_ATTRIBUTES[unit.type].range !== INFINITY) {
+    // Refuel fighters and AWACS at cities or on carriers
+    if ((unit.type === UnitType.Fighter || unit.type === UnitType.AWACS) &&
+        UNIT_ATTRIBUTES[unit.type].range !== INFINITY) {
       const cell = state.map[unit.loc];
       const inOwnCity = cell.cityId !== null && state.cities[cell.cityId].owner === unit.owner;
       const onCarrier = unit.shipId !== null;
       if (inOwnCity || onCarrier) {
-        unit.range = getEffectiveFighterRange(state, unit.owner);
+        unit.range = unit.type === UnitType.Fighter
+          ? getEffectiveFighterRange(state, unit.owner)
+          : UNIT_ATTRIBUTES[unit.type].range;
       }
     }
   }

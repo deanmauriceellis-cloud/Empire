@@ -522,6 +522,118 @@ function makeUnitTexture(renderer: Renderer, type: UnitType, owner: Owner): Text
       g.stroke({ width: 1, color: 0x888888, alpha: 0.7 });
       break;
     }
+
+    case UnitType.Artillery: {
+      // Artillery — cannon barrel on wheeled carriage
+      const dark = darken(color, 0.5);
+      // Carriage base
+      g.rect(cx - 6, cy + 2, 12, 4);
+      g.fill({ color: dark, alpha: 0.9 });
+      // Wheels
+      g.circle(cx - 5, cy + 6, 2.5);
+      g.fill({ color: 0x555555, alpha: 0.9 });
+      g.circle(cx + 5, cy + 6, 2.5);
+      g.fill({ color: 0x555555, alpha: 0.9 });
+      // Barrel (angled up-right)
+      g.moveTo(cx - 2, cy + 1);
+      g.lineTo(cx + 8, cy - 7);
+      g.stroke({ width: 3, color, alpha: 0.95 });
+      g.stroke({ width: 1.5, color: 0x666666, alpha: 0.6 });
+      // Muzzle flash/cap
+      g.circle(cx + 8, cy - 7, 2);
+      g.fill({ color: 0x333333, alpha: 0.8 });
+      break;
+    }
+
+    case UnitType.SpecialForces: {
+      // Special Forces — masked figure with dagger
+      const dark = darken(color, 0.5);
+      // Head (balaclava)
+      g.circle(cx, cy - 5, 4);
+      g.fill({ color: 0x222222, alpha: 0.95 });
+      // Eye slit
+      g.rect(cx - 3, cy - 6, 6, 1.5);
+      g.fill({ color: 0xccddcc, alpha: 0.7 });
+      // Body
+      g.poly([cx - 5, cy - 1, cx + 5, cy - 1, cx + 4, cy + 7, cx - 4, cy + 7]);
+      g.fill({ color, alpha: 0.9 });
+      g.stroke({ width: 0.5, color: dark, alpha: 0.6 });
+      // Dagger (right hand)
+      g.moveTo(cx + 5, cy);
+      g.lineTo(cx + 9, cy - 5);
+      g.stroke({ width: 1.5, color: 0xcccccc, alpha: 0.9 });
+      break;
+    }
+
+    case UnitType.AWACS: {
+      // AWACS — aircraft with radar dome
+      const dark = darken(color, 0.4);
+      // Fuselage
+      g.ellipse(cx, cy, 10, 3);
+      g.fill({ color, alpha: 0.9 });
+      g.stroke({ width: 0.5, color: dark, alpha: 0.6 });
+      // Wings
+      g.poly([cx - 4, cy, cx - 10, cy + 5, cx - 10, cy + 3]);
+      g.fill({ color: dark, alpha: 0.8 });
+      g.poly([cx + 4, cy, cx + 10, cy + 5, cx + 10, cy + 3]);
+      g.fill({ color: dark, alpha: 0.8 });
+      // Radar dome (top)
+      g.ellipse(cx, cy - 5, 6, 2);
+      g.fill({ color: 0xdddddd, alpha: 0.9 });
+      g.stroke({ width: 0.8, color: 0x999999, alpha: 0.7 });
+      // Dome support pillar
+      g.rect(cx - 1, cy - 3, 2, 2);
+      g.fill({ color: 0xaaaaaa, alpha: 0.8 });
+      break;
+    }
+
+    case UnitType.MissileCruiser: {
+      // Missile Cruiser — sleek warship with missile launchers
+      const dark = darken(color, 0.5);
+      const light = lighten(color, 0.3);
+      // Hull
+      g.poly([cx - 10, cy + 2, cx - 8, cy + 5, cx + 8, cy + 5, cx + 12, cy + 2]);
+      g.fill({ color, alpha: 0.9 });
+      g.stroke({ width: 0.5, color: dark, alpha: 0.7 });
+      // Superstructure
+      g.rect(cx - 4, cy - 3, 8, 5);
+      g.fill({ color: light, alpha: 0.85 });
+      g.stroke({ width: 0.5, color: dark, alpha: 0.5 });
+      // Missile tubes (vertical lines on deck)
+      for (const dx of [-6, -4, 5, 7]) {
+        g.rect(cx + dx, cy - 1, 1.5, 3);
+        g.fill({ color: 0x666666, alpha: 0.8 });
+      }
+      // Radar mast
+      g.moveTo(cx, cy - 3);
+      g.lineTo(cx, cy - 7);
+      g.stroke({ width: 1, color: 0x888888, alpha: 0.8 });
+      g.circle(cx, cy - 8, 1.5);
+      g.fill({ color: 0xaaaaaa, alpha: 0.7 });
+      break;
+    }
+
+    case UnitType.EngineerBoat: {
+      // Engineer Boat — small work vessel with crane
+      const dark = darken(color, 0.5);
+      // Hull
+      g.poly([cx - 8, cy + 2, cx - 6, cy + 5, cx + 6, cy + 5, cx + 8, cy + 2]);
+      g.fill({ color, alpha: 0.9 });
+      g.stroke({ width: 0.5, color: dark, alpha: 0.7 });
+      // Cabin
+      g.rect(cx - 3, cy - 2, 6, 4);
+      g.fill({ color: 0xf0c020, alpha: 0.9 });
+      g.stroke({ width: 0.5, color: 0xb08010, alpha: 0.7 });
+      // Crane arm
+      g.moveTo(cx + 3, cy - 2);
+      g.lineTo(cx + 8, cy - 8);
+      g.stroke({ width: 1.5, color: 0x888888, alpha: 0.8 });
+      // Crane cable
+      g.moveTo(cx + 8, cy - 8);
+      g.lineTo(cx + 8, cy - 3);
+      g.stroke({ width: 0.8, color: 0x666666, alpha: 0.6 });
+      break;
+    }
   }
 
   return renderer.generateTexture(g);
@@ -595,7 +707,7 @@ export function generateAssets(renderer: Renderer): AssetBundle {
 
   // Generate unit textures for both players
   for (const owner of [Owner.Player1, Owner.Player2]) {
-    for (let t = UnitType.Army; t <= UnitType.Satellite; t++) {
+    for (let t = UnitType.Army; t <= UnitType.EngineerBoat; t++) {
       const key = `unit_${t}_${owner}`;
       units.set(key, makeUnitTexture(renderer, t, owner));
     }

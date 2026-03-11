@@ -116,11 +116,35 @@ export function createUnitInfoPanel(): UnitInfoPanel {
         parts.push(`<span class="info-value">${effStrength}${effStrength > attrs.strength ? ` <span style="color:var(--color-green)">(+${effStrength - attrs.strength})</span>` : ""}</span>`);
         parts.push(`</div>`);
 
-        // Range (fighters/satellites only)
+        // Range (fighters/satellites/AWACS)
         if (attrs.range < INFINITY) {
           parts.push(`<div class="info-row">`);
           parts.push(`<span class="info-label">Range</span>`);
           parts.push(`<span class="info-value">${u.range} / ${effRange}${effRange > attrs.range ? ` <span style="color:var(--color-green)">(+${effRange - attrs.range})</span>` : ""}</span>`);
+          parts.push(`</div>`);
+        }
+
+        // Bombard range (artillery/missile cruiser)
+        if (attrs.attackRange > 0) {
+          parts.push(`<div class="info-row">`);
+          parts.push(`<span class="info-label">Bombard</span>`);
+          parts.push(`<span class="info-value" style="color:var(--color-orange)">${attrs.attackRange} tiles</span>`);
+          parts.push(`</div>`);
+        }
+
+        // Visibility (special forces)
+        if (attrs.invisible) {
+          parts.push(`<div class="info-row">`);
+          parts.push(`<span class="info-label">Stealth</span>`);
+          parts.push(`<span class="info-value" style="color:var(--color-green)">Invisible</span>`);
+          parts.push(`</div>`);
+        }
+
+        // Vision radius (AWACS)
+        if (attrs.visionRadius > 0) {
+          parts.push(`<div class="info-row">`);
+          parts.push(`<span class="info-label">Vision</span>`);
+          parts.push(`<span class="info-value" style="color:var(--color-green)">${attrs.visionRadius + 1} tile radius</span>`);
           parts.push(`</div>`);
         }
 

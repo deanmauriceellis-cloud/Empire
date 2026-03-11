@@ -140,6 +140,7 @@ export type PlayerAction =
   | { type: "disembark"; unitId: number }
   | { type: "buildOnDeposit"; unitId: number }
   | { type: "buildCityUpgrade"; unitId: number; cityId: number; buildingType: BuildingType }
+  | { type: "bombard"; unitId: number; targetLoc: Loc }
   | { type: "endTurn" }
   | { type: "resign" };
 

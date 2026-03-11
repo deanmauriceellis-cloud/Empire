@@ -8,8 +8,8 @@ import type { CityState, BuildingState } from "@empire/shared";
 
 export interface CityPanel {
   readonly element: HTMLDivElement;
-  /** Open the panel for a city. */
-  open(city: CityState, buildings?: BuildingState[]): void;
+  /** Open the panel for a city. lockedTypes = unit types the player can't build yet. */
+  open(city: CityState, buildings?: BuildingState[], lockedTypes?: Set<number>): void;
   /** Close the panel. */
   close(): void;
   /** Returns the selected unit type if player chose one, or null. */
@@ -23,6 +23,7 @@ export function createCityPanel(): CityPanel {
 
   let currentCity: CityState | null = null;
   let currentBuildings: BuildingState[] = [];
+  let currentLockedTypes: Set<number> = new Set();
   let pendingSelection: { cityId: number; unitType: UnitType } | null = null;
   let isOpen = false;
 
@@ -44,15 +45,17 @@ export function createCityPanel(): CityPanel {
 
     for (let i = 0; i < NUM_UNIT_TYPES; i++) {
       const attrs = UNIT_ATTRIBUTES[i];
+      const locked = currentLockedTypes.has(i);
       const active = city.production === i ? " active" : "";
+      const disabledClass = locked ? " locked" : "";
       const cost = UNIT_COSTS[i];
       const costStr = [
         cost[0] > 0 ? `${cost[0]}o` : "",
         cost[1] > 0 ? `${cost[1]}f` : "",
         cost[2] > 0 ? `${cost[2]}t` : "",
       ].filter(Boolean).join("/");
-      html += `<button class="prod-btn${active}" data-unit-type="${i}">` +
-        `<span class="prod-name">${attrs.char} ${attrs.name}</span>` +
+      html += `<button class="prod-btn${active}${disabledClass}" data-unit-type="${i}"${locked ? " disabled" : ""}>` +
+        `<span class="prod-name">${attrs.char} ${attrs.name}${locked ? " [LOCKED]" : ""}</span>` +
         `<span class="prod-stat">${attrs.buildTime}t | ${costStr} | ` +
         `${attrs.strength}atk | ${attrs.maxHits}hp</span>` +
         `</button>`;
@@ -121,9 +124,10 @@ export function createCityPanel(): CityPanel {
     element,
     get isOpen() { return isOpen; },
 
-    open(city: CityState, buildings?: BuildingState[]): void {
+    open(city: CityState, buildings?: BuildingState[], lockedTypes?: Set<number>): void {
       currentCity = city;
       currentBuildings = buildings ?? [];
+      currentLockedTypes = lockedTypes ?? new Set();
       isOpen = true;
       render(city);
       element.classList.add("visible");

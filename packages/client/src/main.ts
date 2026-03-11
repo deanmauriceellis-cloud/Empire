@@ -24,6 +24,7 @@ import {
   CITY_INCOME,
   DEPOSIT_INCOME,
   DEPOSIT_RESOURCE,
+  canProduceUnit,
 } from "@empire/shared";
 import type { SinglePlayerGame, TurnEvent, VisibleGameState, GameConfig } from "@empire/shared";
 import type { GameSetupOptions } from "./ui/menuScreens.js";
@@ -96,6 +97,18 @@ async function init() {
   let gameStarted = false;
   let currentHighlights: TileHighlight[] = [];
   let lastEventCount = 0;
+
+  /** Get unit types the player can't produce due to tech requirements. */
+  function getLockedUnitTypes(): Set<number> {
+    if (mode !== "singleplayer") return new Set();
+    const locked = new Set<number>();
+    for (let i = 0; i < NUM_UNIT_TYPES; i++) {
+      if (!canProduceUnit(game.state, Owner.Player1, i as UnitType)) {
+        locked.add(i);
+      }
+    }
+    return locked;
+  }
 
   // ─── Multiplayer Connection ─────────────────────────────────────────────
   let connState: ConnectionState = "disconnected";
@@ -573,7 +586,7 @@ async function init() {
         currentHighlights = [];
         audio.playSelect();
         if (shiftKey) {
-          ui.cityPanel.open(city as any, mode === "singleplayer" ? game.state.buildings : []);
+          ui.cityPanel.open(city as any, mode === "singleplayer" ? game.state.buildings : [], getLockedUnitTypes());
         }
         return;
       }
@@ -591,7 +604,7 @@ async function init() {
       currentHighlights = [];
 
       if (shiftKey) {
-        ui.cityPanel.open(city as any, mode === "singleplayer" ? game.state.buildings : []);
+        ui.cityPanel.open(city as any, mode === "singleplayer" ? game.state.buildings : [], getLockedUnitTypes());
       }
       return;
     }
@@ -940,7 +953,7 @@ async function init() {
             : (mp.visibleState?.cities ?? []);
           const city = cities.find((c: any) => c.id === selection.selectedCityId);
           if (city && city.owner === playerOwner) {
-            ui.cityPanel.open(city as any, mode === "singleplayer" ? game.state.buildings : []);
+            ui.cityPanel.open(city as any, mode === "singleplayer" ? game.state.buildings : [], getLockedUnitTypes());
           }
         }
         break;
@@ -1063,7 +1076,7 @@ async function init() {
           const city = cities.find((c: any) => c.id === selection.selectedCityId);
           const playerOwner = mode === "singleplayer" ? Owner.Player1 : mp.owner;
           if (city && city.owner === playerOwner) {
-            ui.cityPanel.open(city as any, mode === "singleplayer" ? game.state.buildings : []);
+            ui.cityPanel.open(city as any, mode === "singleplayer" ? game.state.buildings : [], getLockedUnitTypes());
           }
         }
         break;

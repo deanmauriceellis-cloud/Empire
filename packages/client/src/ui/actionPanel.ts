@@ -92,8 +92,16 @@ export function createActionPanel(): ActionPanel {
         parts.push(btn("Aggressive", "A", "aggressive", !canMove, u.func === UnitBehavior.Aggressive));
         parts.push(btn("Cautious", "D", "cautious", !canMove, u.func === UnitBehavior.Cautious));
 
-        if (u.type === UnitType.Army) {
+        if (u.type === UnitType.Army || u.type === UnitType.SpecialForces) {
           parts.push(btn("Wait for Transport", "T", "wait-transport", !canMove, u.func === UnitBehavior.WaitForTransport));
+        }
+
+        // Bombard info for ranged units
+        const attackRange = UNIT_ATTRIBUTES[u.type].attackRange;
+        if (attackRange > 0) {
+          parts.push(`<div class="section-label">Bombard</div>`);
+          parts.push(`<div style="color:#f84;font-size:11px;margin-bottom:4px">` +
+            `Range: ${attackRange} tiles (click target to fire)</div>`);
         }
 
         if (u.shipId !== null) {

@@ -115,8 +115,9 @@ function assignIdleBehaviors(
       // and ships are too valuable sitting in port when they could be patrolling
       const isShip = unit.type === UnitType.Patrol || unit.type === UnitType.Destroyer
         || unit.type === UnitType.Submarine || unit.type === UnitType.Carrier
-        || unit.type === UnitType.Battleship;
-      if (unit.type === UnitType.Fighter || isShip) {
+        || unit.type === UnitType.Battleship || unit.type === UnitType.MissileCruiser
+        || unit.type === UnitType.EngineerBoat;
+      if (unit.type === UnitType.Fighter || unit.type === UnitType.AWACS || isShip) {
         actions.push({ type: "setBehavior", unitId: unit.id, behavior: UnitBehavior.Explore });
       } else {
         const currentSentries = sentryCounts.get(unit.loc) ?? 0;

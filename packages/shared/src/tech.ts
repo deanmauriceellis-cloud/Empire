@@ -52,7 +52,8 @@ export function techVisionBonus(sciLevel: number, elecLevel: number, unitType: U
   if (elecLevel >= 1) {
     if (unitType === UnitType.Patrol || unitType === UnitType.Destroyer ||
         unitType === UnitType.Submarine || unitType === UnitType.Transport ||
-        unitType === UnitType.Carrier || unitType === UnitType.Battleship) {
+        unitType === UnitType.Carrier || unitType === UnitType.Battleship ||
+        unitType === UnitType.MissileCruiser || unitType === UnitType.EngineerBoat) {
       bonus += 1;
     }
   }
@@ -64,9 +65,10 @@ export function techMaxHpBonus(healthLevel: number, unitType: UnitType): number 
   let bonus = 0;
   // Health 2: Army max HP +1 (1→2)
   if (healthLevel >= 2 && unitType === UnitType.Army) bonus += 1;
-  // Health 3: All land units +1 max HP (Army, Construction)
+  // Health 3: All land units +1 max HP (Army, Construction, Artillery, SpecialForces)
   if (healthLevel >= 3) {
-    if (unitType === UnitType.Army || unitType === UnitType.Construction) bonus += 1;
+    if (unitType === UnitType.Army || unitType === UnitType.Construction ||
+        unitType === UnitType.Artillery || unitType === UnitType.SpecialForces) bonus += 1;
   }
   // Health 5: All units +1 max HP
   if (healthLevel >= 5) bonus += 1;
@@ -82,7 +84,8 @@ export function techStrengthBonus(warLevel: number, unitType: UnitType): number 
   if (warLevel >= 2) {
     if (unitType === UnitType.Patrol || unitType === UnitType.Destroyer ||
         unitType === UnitType.Submarine || unitType === UnitType.Transport ||
-        unitType === UnitType.Carrier || unitType === UnitType.Battleship) {
+        unitType === UnitType.Carrier || unitType === UnitType.Battleship ||
+        unitType === UnitType.MissileCruiser || unitType === UnitType.EngineerBoat) {
       bonus += 1;
     }
   }
@@ -134,12 +137,14 @@ export interface TechRequirement {
 
 /** Unit tech requirements (only for units that require tech). */
 export const UNIT_TECH_REQUIREMENTS: Partial<Record<UnitType, TechRequirement[]>> = {
-  // Artillery: War 2 — not yet in game, placeholder for Phase 7
-  // Special Forces: War 3 — not yet in game
-  // AWACS: Electronics 2 — not yet in game
-  // Engineer Boat: Science 2 — not yet in game
-  // Missile Cruiser: War 4 + Electronics 3 — not yet in game
-  // Existing units: always available (no entry needed)
+  [UnitType.Artillery]: [{ track: TechType.War, level: 2 }],
+  [UnitType.SpecialForces]: [{ track: TechType.War, level: 3 }],
+  [UnitType.AWACS]: [{ track: TechType.Electronics, level: 2 }],
+  [UnitType.EngineerBoat]: [{ track: TechType.Science, level: 2 }],
+  [UnitType.MissileCruiser]: [
+    { track: TechType.War, level: 4 },
+    { track: TechType.Electronics, level: 3 },
+  ],
 };
 
 /** Check if a player has the tech to produce a given unit type. */

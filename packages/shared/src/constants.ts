@@ -100,11 +100,16 @@ export enum UnitType {
   Battleship = 7,
   Satellite = 8,
   Construction = 9,
+  Artillery = 10,
+  SpecialForces = 11,
+  AWACS = 12,
+  MissileCruiser = 13,
+  EngineerBoat = 14,
 }
 
-export const NUM_UNIT_TYPES = 10;
+export const NUM_UNIT_TYPES = 15;
 
-export const UNIT_TYPE_CHARS = "AFPDSTCBZE";
+export const UNIT_TYPE_CHARS = "AFPDSTCBZERXWMG";
 
 // ─── Unit Behaviors ──────────────────────────────────────────────────────────
 
@@ -170,13 +175,18 @@ export const DEFAULT_MIN_CITY_DIST = 2;
 /** Order in which pieces should be moved (AI uses this). */
 export const MOVE_ORDER: readonly UnitType[] = [
   UnitType.Satellite,
+  UnitType.AWACS,
   UnitType.Transport,
   UnitType.Carrier,
+  UnitType.MissileCruiser,
   UnitType.Battleship,
   UnitType.Patrol,
   UnitType.Submarine,
   UnitType.Destroyer,
+  UnitType.EngineerBoat,
+  UnitType.Artillery,
   UnitType.Army,
+  UnitType.SpecialForces,
   UnitType.Fighter,
   UnitType.Construction,
 ] as const;

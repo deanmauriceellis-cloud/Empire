@@ -13,9 +13,11 @@ import {
   UnitBehavior,
   BuildingType,
   DIR_OFFSET,
+  UNIT_ATTRIBUTES,
   findUnit,
   goodLoc,
   objMoves,
+  canBombard,
   processAction,
   scan,
 } from "@empire/shared";
@@ -46,6 +48,9 @@ export interface ActionCollector {
 
   /** Build city upgrade (construction unit at own city). */
   buildCityUpgrade(unitId: number, cityId: number, buildingType: BuildingType): void;
+
+  /** Bombard a target location with a ranged unit. Returns true if valid. */
+  bombardTarget(unitId: number, targetLoc: Loc): boolean;
 
   /** End the turn: submit to game, run AI, tick production. Returns turn result. */
   endTurn(): TurnResult;
@@ -84,10 +89,15 @@ export function createActionCollector(game: SinglePlayerGame): ActionCollector {
       const targetLoc = unit.loc + DIR_OFFSET[direction];
 
       // Check if there's an enemy at targetLoc — if so, attack instead
+      // (but ranged-only units like artillery can't melee)
       const enemyAtTarget = game.state.units.find(
         (u) => u.loc === targetLoc && u.owner !== Owner.Player1 && u.shipId === null,
       );
       if (enemyAtTarget) {
+        // Non-combat units (str 0) and ranged-only units can't melee
+        const attrs = UNIT_ATTRIBUTES[unit.type];
+        if (attrs.strength === 0) return false;
+        if (attrs.attackRange > 0 && unit.type === UnitType.Artillery) return false;
         return this.attackTarget(unitId, targetLoc);
       }
 
@@ -156,6 +166,19 @@ export function createActionCollector(game: SinglePlayerGame): ActionCollector {
       actions.push(action);
       const events = applyAction(action);
       turnEvents.push(...events);
+    },
+
+    bombardTarget(unitId: number, targetLoc: Loc): boolean {
+      const unit = findUnit(game.state, unitId);
+      if (!unit || unit.owner !== Owner.Player1) return false;
+      if (!canBombard(game.state, unit, targetLoc)) return false;
+
+      const action: PlayerAction = { type: "bombard", unitId, targetLoc };
+      actions.push(action);
+      const events = applyAction(action);
+      turnEvents.push(...events);
+      movedUnitIds.add(unitId);
+      return true;
     },
 
     endTurn(): TurnResult {
