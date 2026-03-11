@@ -21,6 +21,9 @@ import {
   generateDiagnostic,
   startAILogCapture,
   stopAILogCapture,
+  CITY_INCOME,
+  DEPOSIT_INCOME,
+  DEPOSIT_RESOURCE,
 } from "@empire/shared";
 import type { SinglePlayerGame, TurnEvent, VisibleGameState, GameConfig } from "@empire/shared";
 import type { GameSetupOptions } from "./ui/menuScreens.js";
@@ -403,7 +406,7 @@ async function init() {
       unitCountsByType: new Array(NUM_UNIT_TYPES).fill(0),
       selectedUnit: null, selectedCity: null,
       pendingActionCount: 0, events: [], isGameOver: false, winner: null,
-      resources: [0, 0, 0],
+      resources: [0, 0, 0], resourceIncome: [0, 0, 0],
       techResearch: [0, 0, 0, 0],
     };
   }
@@ -421,10 +424,20 @@ async function init() {
     const unitCountsByType = new Array(NUM_UNIT_TYPES).fill(0);
     for (const u of playerUnits) unitCountsByType[u.type]++;
 
+    // Compute per-turn resource income
+    const playerCities = state.cities.filter((c) => c.owner === Owner.Player1);
+    const income = [0, 0, 0];
+    for (let i = 0; i < 3; i++) income[i] += playerCities.length * CITY_INCOME[i];
+    for (const dep of state.deposits) {
+      if (dep.owner === Owner.Player1 && dep.buildingComplete) {
+        income[DEPOSIT_RESOURCE[dep.type]] += DEPOSIT_INCOME;
+      }
+    }
+
     return {
       turn: state.turn,
       owner: Owner.Player1,
-      playerCityCount: state.cities.filter((c) => c.owner === Owner.Player1).length,
+      playerCityCount: playerCities.length,
       playerUnitCount: playerUnits.length,
       enemyCityCount: state.cities.filter((c) => c.owner === Owner.Player2).length,
       unitCountsByType,
@@ -435,6 +448,7 @@ async function init() {
       isGameOver: game.isGameOver,
       winner: game.winner,
       resources: state.resources[Owner.Player1],
+      resourceIncome: income,
       techResearch: state.techResearch[Owner.Player1],
     };
   }
@@ -448,7 +462,7 @@ async function init() {
         unitCountsByType: new Array(NUM_UNIT_TYPES).fill(0),
         selectedUnit: null, selectedCity: null,
         pendingActionCount: 0, events: [], isGameOver: false, winner: null,
-        resources: [0, 0, 0],
+        resources: [0, 0, 0], resourceIncome: [0, 0, 0],
         techResearch: [0, 0, 0, 0],
       };
     }
@@ -488,7 +502,7 @@ async function init() {
       events: [...mp.turnEvents],
       isGameOver: mp.isGameOver,
       winner: mp.winner,
-      resources: [0, 0, 0], // TODO: server needs to send resource data
+      resources: [0, 0, 0], resourceIncome: [0, 0, 0], // TODO: server needs to send resource data
       techResearch: [0, 0, 0, 0],
     };
   }
@@ -748,11 +762,14 @@ async function init() {
 
   // ─── End Turn ─────────────────────────────────────────────────────────
 
-  function handleEndTurn(): void {
-    audio.playTurnEnd();
+  async function handleEndTurn(): Promise<void> {
     if (mode === "singleplayer") {
+      // Show economy review screen first, then execute turn on confirm
+      await ui.economyReview.open(game.state, Owner.Player1, [...collector.turnEvents]);
+      audio.playTurnEnd();
       handleSinglePlayerEndTurn();
     } else if (mode === "multiplayer") {
+      audio.playTurnEnd();
       mp.endTurn();
       // Server will send state_update when both players have ended
     }
@@ -836,6 +853,7 @@ async function init() {
 
   function handleKeyPress(key: string): void {
     if (key === "escape") {
+      if (ui.economyReview.isOpen) return; // Economy review handles its own Escape
       if (ui.cityPanel.isOpen) {
         ui.cityPanel.close();
       } else {
@@ -847,6 +865,7 @@ async function init() {
     }
 
     if (ui.cityPanel.isOpen) return;
+    if (ui.economyReview.isOpen) return;
 
     const playerOwner = mode === "singleplayer" ? Owner.Player1 : mp.owner;
 
@@ -1165,7 +1184,7 @@ async function init() {
     }
 
     // ─── Process input events ───────────────────────────────────────────
-    if (!ui.cityPanel.isOpen && !ui.menus.isVisible) {
+    if (!ui.cityPanel.isOpen && !ui.menus.isVisible && !ui.economyReview.isOpen) {
       const keys = input.consumeKeyPresses();
       for (const key of keys) {
         handleKeyPress(key);
@@ -1208,6 +1227,7 @@ async function init() {
           if (key === "escape") ui.cityPanel.close();
         }
       }
+      // Economy review handles its own keydown via document listener (capture phase)
       input.consumeClicks();
       input.consumeRightClicks();
     }

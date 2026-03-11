@@ -12,6 +12,7 @@ import { createMenuScreens, type MenuScreens } from "./menuScreens.js";
 import { createDebugPanel, type DebugPanel } from "./debugPanel.js";
 import { createWarStats, type WarStats } from "./warStats.js";
 import { createUnitInfoPanel, type UnitInfoPanel } from "./unitInfoPanel.js";
+import { createEconomyReview, type EconomyReview } from "./economyReview.js";
 import type { Camera } from "../core/camera.js";
 
 export interface UIManager {
@@ -25,6 +26,7 @@ export interface UIManager {
   readonly debug: DebugPanel;
   readonly warStats: WarStats;
   readonly unitInfo: UnitInfoPanel;
+  readonly economyReview: EconomyReview;
 }
 
 export function createUIManager(camera: Camera): UIManager {
@@ -46,6 +48,7 @@ export function createUIManager(camera: Camera): UIManager {
   const debug = createDebugPanel();
   const warStats = createWarStats(camera);
   const unitInfo = createUnitInfoPanel();
+  const economyReview = createEconomyReview();
 
   // Wire war stats button into HUD top bar
   hud.setWarStatsButton(warStats.button);
@@ -65,6 +68,7 @@ export function createUIManager(camera: Camera): UIManager {
   root.appendChild(eventLog.element);
   root.appendChild(cityPanel.element);
   root.appendChild(warStats.element);
+  root.appendChild(economyReview.element);
   root.appendChild(menus.element);
 
   return {
@@ -78,5 +82,6 @@ export function createUIManager(camera: Camera): UIManager {
     debug,
     warStats,
     unitInfo,
+    economyReview,
   };
 }

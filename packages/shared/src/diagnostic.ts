@@ -5,8 +5,15 @@ import {
   MAP_WIDTH, MAP_HEIGHT, MAP_SIZE,
   Owner, UnitType, UnitBehavior, TerrainType,
   UNIT_TYPE_CHARS,
+  RESOURCE_NAMES,
+  TECH_NAMES,
+  CITY_INCOME,
+  DEPOSIT_INCOME,
+  DEPOSIT_RESOURCE,
+  DEPOSIT_NAMES,
 } from "./constants.js";
 import { UNIT_ATTRIBUTES } from "./units.js";
+import { BUILDING_ATTRIBUTES, getBuildingTechOutput } from "./buildings.js";
 import { locRow, locCol } from "./utils.js";
 import type { GameState, TurnEvent, Loc, ViewMapCell } from "./types.js";
 
@@ -190,6 +197,94 @@ export function generateDiagnostic(
 
     if (owner === Owner.Player1) {
       lines.push(`  Unowned cities remaining: ${unownedCities}`);
+    }
+  }
+
+  // ── Economy ──
+  lines.push(`\n── Economy ──`);
+  for (const owner of [Owner.Player1, Owner.Player2]) {
+    const tag = ownerStr(owner);
+    const res = state.resources[owner];
+    const tech = state.techResearch[owner];
+    const playerCities = state.cities.filter(c => c.owner === owner);
+    const cityCount = playerCities.length;
+
+    // Resource stockpile and income
+    const cityIncome = [cityCount * CITY_INCOME[0], cityCount * CITY_INCOME[1], cityCount * CITY_INCOME[2]];
+    const depIncome = [0, 0, 0];
+    for (const dep of state.deposits) {
+      if (dep.owner === owner && dep.buildingComplete) {
+        depIncome[DEPOSIT_RESOURCE[dep.type]] += DEPOSIT_INCOME;
+      }
+    }
+    const totalIncome = [cityIncome[0] + depIncome[0], cityIncome[1] + depIncome[1], cityIncome[2] + depIncome[2]];
+
+    lines.push(`  ${tag} Resources: ${RESOURCE_NAMES.map((n, i) => `${n}=${res[i]}(+${totalIncome[i]}/t)`).join(" ")}`);
+    lines.push(`  ${tag} Tech: ${TECH_NAMES.map((n, i) => `${n}=${tech[i]}`).join(" ")}`);
+
+    // Stalled/retooling cities
+    const stalledCities = playerCities.filter(c => c.work === 0);
+    const retoolingCities = playerCities.filter(c => c.work < 0);
+    if (stalledCities.length > 0) {
+      lines.push(`  ${tag} ⚠ ${stalledCities.length} stalled cities: ${stalledCities.map(c => `#${c.id}`).join(", ")}`);
+    }
+    if (retoolingCities.length > 0) {
+      lines.push(`  ${tag} ⚠ ${retoolingCities.length} retooling cities: ${retoolingCities.map(c => `#${c.id}(${Math.abs(c.work)}t left)`).join(", ")}`);
+    }
+  }
+
+  // ── Deposits ──
+  const ownedDeposits = state.deposits.filter(d => d.owner !== Owner.Unowned);
+  const unbuiltDeposits = state.deposits.filter(d => d.owner === Owner.Unowned);
+  if (state.deposits.length > 0) {
+    lines.push(`\n── Deposits (${state.deposits.length} total, ${ownedDeposits.length} owned, ${unbuiltDeposits.length} unclaimed) ──`);
+    for (const dep of state.deposits) {
+      const status = dep.buildingComplete ? "active" : dep.owner !== Owner.Unowned ? "building" : "unclaimed";
+      lines.push(`  #${dep.id} ${DEPOSIT_NAMES[dep.type]} ${locStr(dep.loc)} owner=${ownerStr(dep.owner)} status=${status}`);
+    }
+  }
+
+  // ── Buildings ──
+  const allBuildings = state.buildings;
+  if (allBuildings.length > 0) {
+    const complete = allBuildings.filter(b => b.complete);
+    const inProgress = allBuildings.filter(b => !b.complete);
+    lines.push(`\n── Buildings (${allBuildings.length} total, ${complete.length} complete, ${inProgress.length} in-progress) ──`);
+
+    if (inProgress.length > 0) {
+      lines.push(`  In-progress:`);
+      for (const b of inProgress) {
+        const attrs = BUILDING_ATTRIBUTES[b.type];
+        const pct = Math.round((b.work / b.buildTime) * 100);
+        lines.push(`    #${b.id} ${attrs.name} Lv${b.level} ${locStr(b.loc)} owner=${ownerStr(b.owner)} ${b.work}/${b.buildTime}(${pct}%) constructor=#${b.constructorId}`);
+      }
+    }
+
+    if (complete.length > 0) {
+      lines.push(`  Complete:`);
+      for (const b of complete) {
+        const attrs = BUILDING_ATTRIBUTES[b.type];
+        let output = "";
+        if (attrs.techOutput !== null) {
+          output = ` → +${getBuildingTechOutput(b.type, b.level)} ${TECH_NAMES[attrs.techOutput]}/turn`;
+        } else if (attrs.isDepositBuilding) {
+          output = ` → +${DEPOSIT_INCOME} ${RESOURCE_NAMES[b.type]}/turn`;
+        }
+        lines.push(`    #${b.id} ${attrs.name} Lv${b.level} ${locStr(b.loc)} owner=${ownerStr(b.owner)}${output}`);
+      }
+    }
+
+    // City upgrade summary
+    const citiesWithUpgrades = state.cities.filter(c => c.upgradeIds.length > 0);
+    if (citiesWithUpgrades.length > 0) {
+      lines.push(`  City upgrades:`);
+      for (const city of citiesWithUpgrades) {
+        const upgrades = city.upgradeIds.map(bid => {
+          const b = state.buildings.find(bld => bld.id === bid);
+          return b ? `${BUILDING_ATTRIBUTES[b.type].name}Lv${b.level}${b.complete ? "" : "*"}` : "?";
+        });
+        lines.push(`    City #${city.id} ${locStr(city.loc)} [${city.upgradeIds.length}/4]: ${upgrades.join(", ")}`);
+      }
     }
   }
 

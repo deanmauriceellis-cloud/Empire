@@ -42,12 +42,14 @@ export function createHUD(): HUD {
         ? unitParts.join("")
         : `<span class="stat">0</span>`;
 
-      // Resource display
+      // Resource display with income
       const [ore, oil, txt] = state.resources;
+      const [oreInc, oilInc, txtInc] = state.resourceIncome;
+      const fmtInc = (v: number) => v > 0 ? `<span class="res-income">+${v}</span>` : "";
       const resHtml = `<span class="resources">` +
-        `<span class="res-ore" title="Ore">${ore}</span>` +
-        `<span class="res-oil" title="Oil">${oil}</span>` +
-        `<span class="res-txt" title="Textile">${txt}</span>` +
+        `<span class="res-ore" title="Ore">${ore}${fmtInc(oreInc)}</span>` +
+        `<span class="res-oil" title="Oil">${oil}${fmtInc(oilInc)}</span>` +
+        `<span class="res-txt" title="Textile">${txt}${fmtInc(txtInc)}</span>` +
         `</span>`;
 
       // Tech research display

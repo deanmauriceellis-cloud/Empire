@@ -106,6 +106,12 @@ const CSS = `
   color: var(--color-accent-light);
 }
 
+#hud-top .res-income {
+  color: var(--color-green);
+  font-size: 10px;
+  margin-left: 2px;
+}
+
 /* ─── Bottom Bar ────────────────────────────────────────────────────────── */
 
 #hud-bottom {
@@ -1056,6 +1062,374 @@ const CSS = `
 
 .debug-toggle.on .debug-state {
   color: var(--color-green-bright);
+}
+
+/* ─── Economy Review Screen ───────────────────────────────────────────── */
+
+#economy-review {
+  pointer-events: auto;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--color-bg-modal);
+  border: 1px solid var(--color-accent-hex);
+  padding: 16px;
+  min-width: 560px;
+  max-width: 680px;
+  max-height: 80vh;
+  display: none;
+  flex-direction: column;
+  z-index: 55;
+}
+
+#economy-review.visible {
+  display: flex;
+}
+
+#economy-review .er-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+#economy-review .er-header h2 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--color-accent);
+  font-family: var(--ui-font);
+}
+
+#economy-review .er-turn-label {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  margin-left: auto;
+  margin-right: 24px;
+}
+
+#economy-review .close-btn {
+  pointer-events: auto;
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  font-family: var(--ui-font);
+}
+
+#economy-review .close-btn:hover {
+  color: var(--color-text-bright);
+}
+
+/* Tabs */
+
+.er-tabs {
+  display: flex;
+  gap: 3px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.er-tab-btn {
+  pointer-events: auto;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  padding: 4px 10px;
+  cursor: pointer;
+  font-family: var(--ui-font);
+  font-size: 11px;
+  transition: all 0.1s;
+}
+
+.er-tab-btn:hover {
+  background: rgba(var(--color-accent-rgb), 0.15);
+  color: var(--color-text);
+}
+
+.er-tab-btn.active {
+  background: rgba(var(--color-accent-rgb), 0.2);
+  border-color: var(--color-accent-hex);
+  color: var(--color-accent-light);
+}
+
+/* Content */
+
+.er-content {
+  overflow-y: auto;
+  max-height: 50vh;
+  min-height: 120px;
+  padding: 4px 0;
+}
+
+.er-empty {
+  color: var(--color-text-dim);
+  text-align: center;
+  padding: 24px 0;
+  font-size: 13px;
+}
+
+.er-section-label {
+  color: var(--color-text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+  margin-top: 2px;
+}
+
+.er-loc {
+  color: var(--color-accent);
+  font-size: 10px;
+}
+
+/* Confirm button */
+
+.er-confirm-btn {
+  pointer-events: auto;
+  background: rgba(var(--color-orange-rgb), 0.2);
+  border: 1px solid #553;
+  color: var(--color-orange);
+  padding: 8px 16px;
+  margin-top: 10px;
+  cursor: pointer;
+  font-family: var(--ui-font);
+  font-size: 13px;
+  text-align: center;
+  transition: background 0.15s;
+  width: 100%;
+}
+
+.er-confirm-btn:hover {
+  background: rgba(var(--color-orange-rgb), 0.4);
+  border-color: var(--color-orange);
+  color: var(--color-text-bright);
+}
+
+/* Events tab */
+
+.er-event-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.er-event-row.ev-combat { color: var(--color-red-dim); }
+.er-event-row.ev-capture { color: var(--color-orange); }
+.er-event-row.ev-production { color: var(--color-green); }
+.er-event-row.ev-death { color: var(--color-text-muted); }
+.er-event-row.ev-other { color: var(--color-text); }
+
+.er-ev-icon { flex: 0 0 20px; text-align: center; font-size: 13px; }
+.er-ev-desc { flex: 1; }
+.er-ev-loc { flex: 0 0 auto; color: var(--color-accent); font-size: 10px; }
+
+/* Resources tab */
+
+.er-res-grid {
+  display: grid;
+  grid-template-columns: 80px repeat(4, 1fr);
+  gap: 2px 8px;
+  font-size: 12px;
+}
+
+.er-res-header {
+  display: contents;
+}
+
+.er-res-header > span {
+  color: var(--color-text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.er-res-row {
+  display: contents;
+}
+
+.er-res-name {
+  font-weight: bold;
+  padding: 4px 0;
+}
+
+.er-res-val {
+  padding: 4px 0;
+  text-align: right;
+  color: var(--color-text);
+}
+
+.er-res-total {
+  font-weight: bold;
+}
+
+.er-res-note {
+  color: var(--color-text-dim);
+  font-size: 10px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+  line-height: 1.6;
+}
+
+/* Cities tab */
+
+.er-city-row {
+  padding: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.er-city-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.er-city-name {
+  color: var(--color-orange);
+  font-weight: bold;
+  font-size: 12px;
+}
+
+.er-city-loc {
+  color: var(--color-accent);
+  font-size: 10px;
+}
+
+.er-city-prod {
+  font-size: 12px;
+  color: var(--color-text);
+}
+
+.er-city-upgrades {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+/* Progress bar (shared) */
+
+.er-prog-bar {
+  height: 4px;
+  background: #222;
+  border: 1px solid var(--color-border);
+  margin-top: 3px;
+}
+
+.er-prog-fill {
+  height: 100%;
+  background: var(--color-accent-hex);
+  transition: width 0.2s;
+}
+
+/* Tech tab */
+
+.er-tech-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.er-tech-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px;
+  background: rgba(255,255,255,0.02);
+  font-size: 12px;
+}
+
+.er-tech-name {
+  font-weight: bold;
+  flex: 0 0 120px;
+}
+
+.er-tech-points {
+  flex: 0 0 60px;
+  text-align: right;
+  color: var(--color-text);
+}
+
+.er-tech-income {
+  flex: 1;
+  text-align: right;
+  color: var(--color-green);
+  font-size: 11px;
+}
+
+.er-tech-sources {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+.er-tech-source-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  font-size: 11px;
+  color: var(--color-text);
+}
+
+.er-tech-source-row > span:first-child {
+  flex: 1;
+}
+
+/* Construction tab */
+
+.er-build-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+.er-build-name {
+  flex: 1;
+  color: var(--color-text);
+}
+
+.er-build-status {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+/* Buildings tab */
+
+.er-bldg-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.er-bldg-name {
+  flex: 0 0 130px;
+  color: var(--color-text);
+}
+
+.er-bldg-level {
+  flex: 0 0 30px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.er-bldg-output {
+  flex: 1;
+  font-size: 11px;
 }
 
 /* ─── Scrollbar ─────────────────────────────────────────────────────────── */
