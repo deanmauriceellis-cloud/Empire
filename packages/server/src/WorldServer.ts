@@ -1,0 +1,575 @@
+// Empire Reborn — World Server (Tick-Based Kingdom Mode)
+// Manages persistent worlds with tick-based turns, AI kingdoms, and player join/leave.
+
+import { WebSocket } from "ws";
+import { randomUUID } from "node:crypto";
+import {
+  type GameState,
+  type PlayerAction,
+  type TurnResult,
+  type UnitState,
+  type ViewMapCell,
+  configureMapDimensions,
+  executeTurn,
+  computeAITurn,
+  scan,
+} from "@empire/shared";
+import type {
+  ClientMessage,
+  ServerMessage,
+  VisibleGameState,
+  VisibleCity,
+  TickInfo,
+  WorldSummary,
+} from "@empire/shared";
+import {
+  type WorldConfig,
+  type WorldState,
+  type KingdomTile,
+  DEFAULT_WORLD_CONFIG,
+  generateWorldMap,
+  findAvailableKingdom,
+  claimKingdom,
+} from "@empire/shared";
+import type { GameDatabase } from "./database.js";
+
+// ─── Types ─────────────────────────────────────────────────────────────────
+
+interface PlayerConnection {
+  ws: WebSocket;
+  owner: number; // PlayerId
+  worldId: string;
+}
+
+interface ActiveWorld {
+  id: string;
+  world: WorldState;
+  /** Connected players: PlayerId → WebSocket (null = disconnected). */
+  players: Map<number, WebSocket | null>;
+  /** Pending actions queued between ticks. */
+  pendingActions: Map<number, PlayerAction[]>;
+  /** Tick timer handle. */
+  tickTimer: ReturnType<typeof setTimeout> | null;
+  /** Timestamp of next tick. */
+  nextTickAt: number;
+  /** Disconnect grace timers. */
+  disconnectTimers: Map<number, ReturnType<typeof setTimeout>>;
+}
+
+// ─── Constants ─────────────────────────────────────────────────────────────
+
+const DISCONNECT_GRACE_MS = 5 * 60 * 1000; // 5 minutes before AI takeover marked
+const MAX_ACTIONS_PER_TICK = 500;
+const RATE_LIMIT_WINDOW_MS = 1000;
+const RATE_LIMIT_MAX_MSGS = 30;
+
+// ─── World Server ──────────────────────────────────────────────────────────
+
+export class WorldServer {
+  private worlds = new Map<string, ActiveWorld>();
+  private playerConnections = new Map<WebSocket, PlayerConnection>();
+  private db: GameDatabase | null;
+  private rateLimits = new Map<WebSocket, { count: number; resetAt: number }>();
+
+  constructor(db?: GameDatabase) {
+    this.db = db ?? null;
+  }
+
+  // ─── Message Routing ───────────────────────────────────────────────────
+
+  handleMessage(ws: WebSocket, msg: ClientMessage): boolean {
+    switch (msg.type) {
+      case "create_world":
+        this.handleCreateWorld(ws, msg.config);
+        return true;
+      case "join_world":
+        this.handleJoinWorld(ws, msg.worldId, msg.preferredRing, msg.playerName);
+        return true;
+      case "world_action":
+        this.handleWorldAction(ws, msg.worldId, msg.action);
+        return true;
+      case "cancel_actions":
+        this.handleCancelActions(ws, msg.worldId);
+        return true;
+      case "leave_world":
+        this.handleLeaveWorld(ws, msg.worldId);
+        return true;
+      default:
+        return false; // not a world message
+    }
+  }
+
+  // ─── World Creation ────────────────────────────────────────────────────
+
+  handleCreateWorld(ws: WebSocket, configOverrides?: Partial<WorldConfig>): void {
+    const worldId = randomUUID().slice(0, 8);
+    const config: WorldConfig = {
+      ...DEFAULT_WORLD_CONFIG,
+      seed: Math.floor(Math.random() * 2 ** 32),
+      ...configOverrides,
+    };
+
+    console.log(`[World] Creating world ${worldId} (radius=${config.initialRadius}, tick=${config.tickIntervalMs}ms)`);
+    const t0 = performance.now();
+
+    const world = generateWorldMap(config);
+
+    const t1 = performance.now();
+    console.log(`[World] World ${worldId} generated in ${(t1 - t0).toFixed(0)}ms — ${world.kingdoms.length} kingdoms, ${world.gameState.cities.length} cities`);
+
+    const activeWorld: ActiveWorld = {
+      id: worldId,
+      world,
+      players: new Map(),
+      pendingActions: new Map(),
+      tickTimer: null,
+      nextTickAt: Date.now() + config.tickIntervalMs,
+      disconnectTimers: new Map(),
+    };
+
+    // Register all AI players (no WebSocket connection)
+    for (const player of world.gameState.players) {
+      activeWorld.players.set(player.id, null);
+    }
+
+    this.worlds.set(worldId, activeWorld);
+
+    // Start tick timer
+    this.scheduleTick(activeWorld);
+
+    this.send(ws, { type: "world_created", worldId });
+  }
+
+  // ─── Player Join ───────────────────────────────────────────────────────
+
+  handleJoinWorld(
+    ws: WebSocket,
+    worldId: string,
+    preferredRing?: number,
+    playerName?: string,
+  ): void {
+    const activeWorld = this.worlds.get(worldId);
+    if (!activeWorld) {
+      this.send(ws, { type: "error", message: "World not found" });
+      return;
+    }
+
+    // Check if this WebSocket is already connected to a world
+    const existing = this.playerConnections.get(ws);
+    if (existing) {
+      this.send(ws, { type: "error", message: "Already connected to a world" });
+      return;
+    }
+
+    // Find an available AI kingdom for this player
+    const tile = findAvailableKingdom(activeWorld.world, preferredRing ?? 1);
+    if (!tile) {
+      this.send(ws, { type: "error", message: "No kingdoms available — world is full" });
+      return;
+    }
+
+    // Claim the kingdom (converts AI → human)
+    const playerId = claimKingdom(
+      activeWorld.world,
+      tile,
+      playerName || `Player ${tile.owner}`,
+    );
+
+    // Register connection
+    activeWorld.players.set(playerId, ws);
+    this.playerConnections.set(ws, { ws, owner: playerId, worldId });
+
+    // Clear any disconnect timer
+    const timer = activeWorld.disconnectTimers.get(playerId);
+    if (timer) {
+      clearTimeout(timer);
+      activeWorld.disconnectTimers.delete(playerId);
+    }
+
+    console.log(`[World] Player ${playerId} joined world ${worldId} at ring ${tile.ring} (${tile.pos.row},${tile.pos.col})`);
+
+    // Send join confirmation
+    this.send(ws, {
+      type: "world_joined",
+      worldId,
+      owner: playerId as any,
+      kingdom: tile.pos,
+    });
+
+    // Send current visible state
+    this.sendVisibleState(activeWorld, playerId);
+  }
+
+  // ─── Action Buffering ──────────────────────────────────────────────────
+
+  handleWorldAction(ws: WebSocket, worldId: string, action: any): void {
+    const conn = this.playerConnections.get(ws);
+    if (!conn || conn.worldId !== worldId) {
+      this.send(ws, { type: "error", message: "Not connected to this world" });
+      return;
+    }
+
+    const activeWorld = this.worlds.get(worldId);
+    if (!activeWorld) return;
+
+    // Get or create action buffer
+    let actions = activeWorld.pendingActions.get(conn.owner);
+    if (!actions) {
+      actions = [];
+      activeWorld.pendingActions.set(conn.owner, actions);
+    }
+
+    if (actions.length >= MAX_ACTIONS_PER_TICK) {
+      this.send(ws, { type: "error", message: "Action limit reached for this tick" });
+      return;
+    }
+
+    // Convert ClientAction to PlayerAction
+    actions.push(action as PlayerAction);
+
+    this.send(ws, {
+      type: "actions_queued",
+      worldId,
+      count: actions.length,
+    });
+  }
+
+  handleCancelActions(ws: WebSocket, worldId: string): void {
+    const conn = this.playerConnections.get(ws);
+    if (!conn || conn.worldId !== worldId) return;
+
+    const activeWorld = this.worlds.get(worldId);
+    if (!activeWorld) return;
+
+    activeWorld.pendingActions.delete(conn.owner);
+    this.send(ws, { type: "actions_cancelled", worldId });
+  }
+
+  // ─── Tick Engine ───────────────────────────────────────────────────────
+
+  private scheduleTick(activeWorld: ActiveWorld): void {
+    if (activeWorld.tickTimer) {
+      clearTimeout(activeWorld.tickTimer);
+    }
+
+    const delay = Math.max(0, activeWorld.nextTickAt - Date.now());
+    activeWorld.tickTimer = setTimeout(() => {
+      this.executeTick(activeWorld);
+    }, delay);
+  }
+
+  private executeTick(activeWorld: ActiveWorld): void {
+    const state = activeWorld.world.gameState;
+    const t0 = performance.now();
+
+    // Ensure global dimensions match this world
+    configureMapDimensions(state.config.mapWidth, state.config.mapHeight);
+
+    // Build action map for all players
+    const allActions = new Map<number, PlayerAction[]>();
+
+    for (const player of state.players) {
+      if (player.status !== "active") continue;
+
+      const ws = activeWorld.players.get(player.id);
+      const pendingActions = activeWorld.pendingActions.get(player.id);
+
+      if (ws && !player.isAI && pendingActions && pendingActions.length > 0) {
+        // Human player with queued actions
+        allActions.set(player.id, pendingActions);
+      } else {
+        // AI player OR disconnected human OR human with no actions → AI computes
+        const aiActions = computeAITurn(state, player.id);
+        allActions.set(player.id, aiActions);
+      }
+    }
+
+    const t1 = performance.now();
+
+    // Execute the turn
+    const result = executeTurn(state, allActions);
+
+    const t2 = performance.now();
+
+    // Clear pending actions
+    activeWorld.pendingActions.clear();
+
+    // Schedule next tick
+    activeWorld.nextTickAt = Date.now() + activeWorld.world.worldConfig.tickIntervalMs;
+    this.scheduleTick(activeWorld);
+
+    // Build tick info
+    const tickInfo = this.getTickInfo(activeWorld);
+
+    // Log timing
+    const humanCount = [...activeWorld.players.entries()].filter(([, ws]) => ws !== null).length;
+    console.log(
+      `[World] ${activeWorld.id} tick ${state.turn}: AI=${(t1 - t0).toFixed(0)}ms exec=${(t2 - t1).toFixed(0)}ms | ${humanCount} humans, ${state.players.filter(p => p.status === "active").length} active kingdoms`,
+    );
+
+    // Broadcast results to connected players
+    for (const [playerId, ws] of activeWorld.players) {
+      if (!ws) continue;
+
+      // Filter events visible to this player
+      const visibleEvents = result.events.filter(ev => {
+        const vm = state.viewMaps[playerId];
+        return vm && vm[ev.loc]?.seen >= 0;
+      });
+
+      this.send(ws, {
+        type: "tick_result",
+        worldId: activeWorld.id,
+        turn: result.turn,
+        events: visibleEvents,
+        tickInfo,
+      });
+
+      // Send updated visible state
+      this.sendVisibleState(activeWorld, playerId);
+    }
+
+    // Persist world state
+    this.persistWorld(activeWorld);
+
+    // Check season expiry
+    if (Date.now() >= activeWorld.world.seasonEndsAt) {
+      this.endSeason(activeWorld);
+    }
+  }
+
+  private getTickInfo(activeWorld: ActiveWorld): TickInfo {
+    const now = Date.now();
+    return {
+      turn: activeWorld.world.gameState.turn,
+      nextTickMs: Math.max(0, activeWorld.nextTickAt - now),
+      tickIntervalMs: activeWorld.world.worldConfig.tickIntervalMs,
+      seasonRemainingS: Math.max(0, Math.floor((activeWorld.world.seasonEndsAt - now) / 1000)),
+    };
+  }
+
+  // ─── Visible State ─────────────────────────────────────────────────────
+
+  private sendVisibleState(activeWorld: ActiveWorld, playerId: number): void {
+    const ws = activeWorld.players.get(playerId);
+    if (!ws) return;
+
+    const state = activeWorld.world.gameState;
+    const visibleState = this.getVisibleState(state, playerId);
+    const tickInfo = this.getTickInfo(activeWorld);
+
+    this.send(ws, {
+      type: "world_state",
+      worldId: activeWorld.id,
+      state: visibleState,
+      tickInfo,
+    });
+  }
+
+  private getVisibleState(state: GameState, owner: number): VisibleGameState {
+    const vm = state.viewMaps[owner];
+    if (!vm) {
+      return {
+        turn: state.turn,
+        phase: "playing",
+        owner: owner as any,
+        viewMap: [],
+        cities: [],
+        units: [],
+        config: state.config,
+      };
+    }
+
+    // Filter cities by visibility
+    const cities: VisibleCity[] = state.cities
+      .filter(c => vm[c.loc]?.seen >= 0)
+      .map(c => ({
+        id: c.id,
+        loc: c.loc,
+        owner: c.owner,
+        production: c.owner === owner ? c.production : null,
+        work: c.owner === owner ? c.work : null,
+      }));
+
+    // Filter units — own units always visible, enemy only if currently seen
+    const units: UnitState[] = state.units.filter(u => {
+      if (u.owner === owner) return true;
+      return vm[u.loc]?.seen === state.turn;
+    });
+
+    return {
+      turn: state.turn,
+      phase: "playing",
+      owner: owner as any,
+      viewMap: vm,
+      cities,
+      units,
+      config: state.config,
+    };
+  }
+
+  // ─── Player Leave / Disconnect ─────────────────────────────────────────
+
+  handleLeaveWorld(ws: WebSocket, worldId: string): void {
+    const conn = this.playerConnections.get(ws);
+    if (!conn || conn.worldId !== worldId) return;
+    this.disconnectPlayer(ws);
+  }
+
+  handleDisconnect(ws: WebSocket): void {
+    const conn = this.playerConnections.get(ws);
+    if (!conn) return;
+    this.disconnectPlayer(ws);
+  }
+
+  private disconnectPlayer(ws: WebSocket): void {
+    const conn = this.playerConnections.get(ws);
+    if (!conn) return;
+
+    const activeWorld = this.worlds.get(conn.worldId);
+    if (activeWorld) {
+      // Mark as disconnected (AI takes over on next tick)
+      activeWorld.players.set(conn.owner, null);
+
+      // Set grace timer — after timeout, mark player as AI permanently
+      const timer = setTimeout(() => {
+        const player = activeWorld.world.gameState.players.find(p => p.id === conn.owner);
+        if (player && !activeWorld.players.get(conn.owner)) {
+          player.isAI = true;
+          console.log(`[World] Player ${conn.owner} in world ${conn.worldId} reverted to AI (disconnect timeout)`);
+        }
+        activeWorld.disconnectTimers.delete(conn.owner);
+      }, DISCONNECT_GRACE_MS);
+
+      activeWorld.disconnectTimers.set(conn.owner, timer);
+
+      console.log(`[World] Player ${conn.owner} disconnected from world ${conn.worldId}`);
+    }
+
+    this.playerConnections.delete(ws);
+  }
+
+  // ─── Season End ────────────────────────────────────────────────────────
+
+  private endSeason(activeWorld: ActiveWorld): void {
+    console.log(`[World] Season ended for world ${activeWorld.id} at turn ${activeWorld.world.gameState.turn}`);
+
+    // Stop tick timer
+    if (activeWorld.tickTimer) {
+      clearTimeout(activeWorld.tickTimer);
+      activeWorld.tickTimer = null;
+    }
+
+    // Notify all connected players
+    for (const [, ws] of activeWorld.players) {
+      if (!ws) continue;
+      this.send(ws, {
+        type: "game_over",
+        gameId: activeWorld.id,
+        winner: 0 as any, // no single winner in season end
+        winType: "elimination",
+      });
+    }
+
+    // Persist final state
+    this.persistWorld(activeWorld);
+
+    // Clean up
+    for (const timer of activeWorld.disconnectTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.worlds.delete(activeWorld.id);
+  }
+
+  // ─── Persistence ───────────────────────────────────────────────────────
+
+  private persistWorld(activeWorld: ActiveWorld): void {
+    if (!this.db) return;
+    try {
+      // Serialize world state (gameState + worldConfig + metadata)
+      const serializable = {
+        worldConfig: activeWorld.world.worldConfig,
+        kingdoms: activeWorld.world.kingdoms,
+        gridSize: activeWorld.world.gridSize,
+        worldWidth: activeWorld.world.worldWidth,
+        worldHeight: activeWorld.world.worldHeight,
+        createdAt: activeWorld.world.createdAt,
+        seasonEndsAt: activeWorld.world.seasonEndsAt,
+      };
+      // Save game state under world ID with a "world:" prefix
+      this.db.saveGame(
+        `world:${activeWorld.id}`,
+        "playing",
+        {
+          ...activeWorld.world.gameState,
+          _worldMeta: serializable,
+        } as any,
+      );
+    } catch (err) {
+      console.error(`[World] Failed to persist world ${activeWorld.id}:`, err);
+    }
+  }
+
+  // ─── World List ────────────────────────────────────────────────────────
+
+  getWorldList(): WorldSummary[] {
+    const summaries: WorldSummary[] = [];
+    const now = Date.now();
+    for (const [id, aw] of this.worlds) {
+      const humanPlayers = [...aw.players.entries()].filter(([pid, ws]) => {
+        if (!ws) return false;
+        const p = aw.world.gameState.players.find(pl => pl.id === pid);
+        return p && !p.isAI;
+      }).length;
+
+      summaries.push({
+        id,
+        humanPlayers,
+        totalKingdoms: aw.world.kingdoms.length,
+        turn: aw.world.gameState.turn,
+        tickIntervalMs: aw.world.worldConfig.tickIntervalMs,
+        seasonRemainingS: Math.max(0, Math.floor((aw.world.seasonEndsAt - now) / 1000)),
+      });
+    }
+    return summaries;
+  }
+
+  // ─── Utilities ─────────────────────────────────────────────────────────
+
+  private send(ws: WebSocket, msg: ServerMessage): void {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(msg));
+    }
+  }
+
+  private isRateLimited(ws: WebSocket): boolean {
+    const now = Date.now();
+    let limit = this.rateLimits.get(ws);
+    if (!limit || now >= limit.resetAt) {
+      limit = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+      this.rateLimits.set(ws, limit);
+    }
+    limit.count++;
+    return limit.count > RATE_LIMIT_MAX_MSGS;
+  }
+
+  /** Graceful shutdown — stop all ticks, persist all worlds. */
+  shutdown(): void {
+    for (const aw of this.worlds.values()) {
+      if (aw.tickTimer) {
+        clearTimeout(aw.tickTimer);
+        aw.tickTimer = null;
+      }
+      for (const timer of aw.disconnectTimers.values()) {
+        clearTimeout(timer);
+      }
+      this.persistWorld(aw);
+    }
+    console.log(`[World] Shutdown — ${this.worlds.size} worlds persisted`);
+  }
+
+  /** Check if this WebSocket has a world connection. */
+  hasConnection(ws: WebSocket): boolean {
+    return this.playerConnections.has(ws);
+  }
+}

@@ -6,6 +6,7 @@ import { createServer } from "node:http";
 import { WebSocketServer } from "ws";
 import { GAME_VERSION } from "@empire/shared";
 import { GameManager } from "./GameManager.js";
+import { WorldServer } from "./WorldServer.js";
 import { GameDatabase } from "./database.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,12 +36,37 @@ app.use((req, res, next) => {
 const server = createServer(app);
 const db = new GameDatabase();
 const gameManager = new GameManager(db);
+const worldServer = new WorldServer(db);
 
 // WebSocket server — 256KB max message size
 const wss = new WebSocketServer({ server, path: "/ws", maxPayload: 256 * 1024 });
 
+/** World message types that should be routed to WorldServer. */
+const WORLD_MSG_TYPES = new Set([
+  "create_world", "join_world", "world_action", "cancel_actions", "leave_world",
+]);
+
 wss.on("connection", (ws) => {
-  gameManager.handleConnection(ws);
+  // Send welcome to all new connections
+  ws.send(JSON.stringify({ type: "welcome", version: GAME_VERSION }));
+
+  ws.on("message", (data) => {
+    try {
+      const msg = JSON.parse(data.toString());
+      if (WORLD_MSG_TYPES.has(msg.type)) {
+        worldServer.handleMessage(ws, msg);
+      } else {
+        gameManager.handleMessage(ws, msg);
+      }
+    } catch {
+      ws.send(JSON.stringify({ type: "error", message: "Invalid message format" }));
+    }
+  });
+
+  ws.on("close", () => {
+    gameManager.handleDisconnect(ws);
+    worldServer.handleDisconnect(ws);
+  });
 });
 
 // ─── REST Endpoints ─────────────────────────────────────────────────────────
@@ -64,6 +90,10 @@ app.post("/api/games/:id/resume", (req, res) => {
     return;
   }
   res.json({ gameId: id, message: "Game resumed — connect via WebSocket to rejoin" });
+});
+
+app.get("/api/worlds", (_req, res) => {
+  res.json({ worlds: worldServer.getWorldList() });
 });
 
 app.delete("/api/games/:id", (req, res) => {
@@ -116,6 +146,7 @@ server.listen(PORT, () => {
 function shutdown(signal: string): void {
   console.log(`\n${signal} received — shutting down gracefully…`);
   gameManager.shutdown();
+  worldServer.shutdown();
 
   // Close all WebSocket connections
   for (const ws of wss.clients) {

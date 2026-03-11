@@ -91,11 +91,13 @@ export class GameManager {
     this.db = db ?? null;
   }
 
+  /**
+   * @deprecated Use handleMessage/handleDisconnect directly. Kept for backward compatibility.
+   */
   handleConnection(ws: WebSocket): void {
     this.send(ws, { type: "welcome", version: "0.1.0" });
 
     ws.on("message", (data) => {
-      // Rate limiting
       if (this.isRateLimited(ws)) {
         this.send(ws, { type: "error", message: "Rate limited — slow down" });
         return;
@@ -128,7 +130,7 @@ export class GameManager {
 
   // ─── Message Router ─────────────────────────────────────────────────────
 
-  private handleMessage(ws: WebSocket, msg: ClientMessage): void {
+  handleMessage(ws: WebSocket, msg: ClientMessage): void {
     switch (msg.type) {
       case "create_game":
         this.handleCreateGame(ws, msg.config);
@@ -588,7 +590,7 @@ export class GameManager {
 
   // ─── Disconnect Handling ────────────────────────────────────────────────
 
-  private handleDisconnect(ws: WebSocket): void {
+  handleDisconnect(ws: WebSocket): void {
     const conn = this.playerConnections.get(ws);
     if (!conn) return;
 
