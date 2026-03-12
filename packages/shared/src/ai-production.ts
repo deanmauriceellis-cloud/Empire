@@ -377,6 +377,15 @@ export function decideProduction(
   const ratioName = aiCityCount <= 3 ? "EARLY" : aiCityCount <= 10 ? "R1" : aiCityCount <= 20 ? "R2" : aiCityCount <= 30 ? "R3" : "R4";
 
   if (overproduced(prodCounts, ratio, city.production)) {
+    // Don't switch away from construction if we still need economy — prevents
+    // ratio rebalance from killing construction before it finishes (ratio=0 always triggers overproduced).
+    // Construction is managed by Priority 2a, not by ratio tables.
+    if (city.production === UnitType.Construction) {
+      if (needsConstruction(state, aiOwner)) {
+        aiLog(`City #${city.id}: construction overproduced by ratio but economy needs it, keeping`);
+        return null;
+      }
+    }
     // Don't switch away from fighter if we still need early fighters — prevents
     // oscillation where Priority 1b assigns fighter, then ratio rebalance undoes it every turn
     if (city.production === UnitType.Fighter) {

@@ -6,7 +6,7 @@ import type { Loc, ViewMapCell, GameState, UnitState } from "./types.js";
 import { isOnBoard, getAdjacentLocs, dist } from "./utils.js";
 import { createPathMap, findObjective, markPath, findDirection, landMoveInfo, waterMoveInfo, airMoveInfo, type MoveInfo } from "./pathfinding.js";
 import { isLake } from "./continent.js";
-import { VM_WATER } from "./viewmap-chars.js";
+import { VM_WATER, VM_UNOWNED_CITY, VM_ENEMY_CITY } from "./viewmap-chars.js";
 
 export type { MoveInfo } from "./pathfinding.js";
 
@@ -157,8 +157,8 @@ export function shipFightMoveInfo(): MoveInfo {
 export function attackListToViewChars(attackList: string): string {
   let result = "";
   for (const ch of attackList) {
-    if (ch === "O") result += "*"; // unowned city
-    else if (ch === "*") result += "X"; // enemy city
+    if (ch === "O") result += VM_UNOWNED_CITY; // unowned city
+    else if (ch === "*") result += VM_ENEMY_CITY; // enemy city
     else result += ch.toLowerCase(); // enemy units are lowercase on view map
   }
   return result;

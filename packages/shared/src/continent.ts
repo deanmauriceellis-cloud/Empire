@@ -11,7 +11,7 @@ import {
 } from "./constants.js";
 import type { Loc, ViewMapCell, ScanCounts } from "./types.js";
 import { isOnBoard, locCol } from "./utils.js";
-import { VM_UNEXPLORED, VM_UNOWNED_CITY, VM_OWN_CITY, VM_ENEMY_CITY } from "./viewmap-chars.js";
+import { VM_UNEXPLORED, VM_LAND, VM_UNOWNED_CITY, VM_OWN_CITY, VM_ENEMY_CITY } from "./viewmap-chars.js";
 
 // ─── Continent Mapping ──────────────────────────────────────────────────────────
 
@@ -148,7 +148,7 @@ function createUnitCounts(): Record<UnitType, number> {
  * A lake has no unowned cities, no enemy cities, and no unexplored cells.
  */
 export function isLake(viewMap: ViewMapCell[], loc: Loc): boolean {
-  const waterBody = mapContinent(viewMap, loc, "+"); // stop at land
+  const waterBody = mapContinent(viewMap, loc, VM_LAND); // stop at land
   const counts = scanContinent(viewMap, waterBody);
 
   return counts.unownedCities === 0 &&

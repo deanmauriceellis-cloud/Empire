@@ -30,6 +30,7 @@ import { getAdjacentLocs, dist, isOnBoard } from "./utils.js";
 import { findUnit, chebyshevDist } from "./game.js";
 import { aiLog, aiVLog, findMoveToward } from "./ai-helpers.js";
 import { landMoveInfo } from "./pathfinding.js";
+import { VM_LAND, VM_UNEXPLORED } from "./viewmap-chars.js";
 
 // ─── AI Construction Unit Movement ──────────────────────────────────────────
 
@@ -165,7 +166,7 @@ function findConstructionTarget(
     if (deposit.buildingId !== null) continue;
     if (claimedDepositLocs.has(deposit.loc)) continue;
     // Only target visible deposits (fog of war)
-    if (viewMap[deposit.loc].contents === " ") continue; // unexplored
+    if (viewMap[deposit.loc].contents === VM_UNEXPLORED) continue; // unexplored
     const d = dist(unit.loc, deposit.loc);
     // Priority: closer deposits are better, slight preference by resource scarcity
     const scarcityBonus = getResourceScarcity(state, aiOwner, deposit.type);
@@ -190,10 +191,10 @@ function findConstructionTarget(
   aiLog(`  Construction #${unit.id}: heading to ${best.label} at ${best.loc} (dist=${dist(unit.loc, best.loc)})`);
 
   // Use BFS pathfinding to find the first step toward target
-  const moveInfo = landMoveInfo("+*", new Map([["+", 1], ["*", 1]]));
-  // Create a temp viewMap marking the target as an objective
+  // Mark the target location as VM_LAND objective so BFS can find it
+  const moveInfo = landMoveInfo(VM_LAND, new Map([[VM_LAND, 1]]));
   const tempMap = viewMap.map(c => ({ ...c }));
-  tempMap[best.loc] = { ...tempMap[best.loc], contents: "+" };
+  tempMap[best.loc] = { ...tempMap[best.loc], contents: VM_LAND };
   const step = findMoveToward(tempMap, unit.loc, moveInfo);
   if (step !== null) return step;
 
@@ -625,7 +626,7 @@ export function needsConstruction(state: GameState, aiOwner: Owner): boolean {
     if (deposit.buildingComplete) continue;
     if (deposit.buildingId !== null) continue;
     // Only count visible deposits
-    if (viewMap && viewMap[deposit.loc].contents !== " ") {
+    if (viewMap && viewMap[deposit.loc].contents !== VM_UNEXPLORED) {
       unclaimedDeposits++;
     }
   }

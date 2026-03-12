@@ -11,6 +11,7 @@ import {
   WATER_ANIM_SPEED, WATER_ANIM_SPEED2, WATER_ANIM_SPEED3,
   WATER_ALPHA_RANGE, WATER_BOB_AMOUNT,
   FOAM_PULSE_SPEED, FOAM_SCALE_AMOUNT,
+  COLORS,
 } from "../constants.js";
 import type { AssetBundle, RenderableState, RenderableTile } from "../types.js";
 import type { Camera } from "../core/camera.js";
@@ -234,6 +235,8 @@ export class TilemapRenderer {
         } else {
           sprite.texture = this.getTerrainTexture(tile.terrain, tile.cityOwner);
           sprite.alpha = 1;
+          // Tint deposit tiles with a warm brown background
+          sprite.tint = tile.depositType !== null ? COLORS.DEPOSIT_TILE_TINT : 0xffffff;
         }
 
         // Deposit overlay (only on seen land tiles with deposits)

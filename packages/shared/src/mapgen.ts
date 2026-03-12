@@ -1092,7 +1092,7 @@ function generateRiverMap(config: GameConfig): MapGenerationResult {
   const cityContinentSize = new Map<number, number>();
   for (const cont of continents) {
     for (const cIdx of cont.cities) {
-      cityContinentSize.set(cIdx, cont.cells.length);
+      cityContinentSize.set(cIdx, cont.cells.size);
     }
   }
 

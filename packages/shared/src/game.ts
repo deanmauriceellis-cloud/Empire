@@ -63,7 +63,7 @@ import {
   airMoveInfo,
 } from "./pathfinding.js";
 import { mapContinent } from "./continent.js";
-import { VM_UNEXPLORED, VM_ENEMY_CITY, VM_OWN_CITY, VM_UNOWNED_CITY, isEnemyUnit } from "./viewmap-chars.js";
+import { VM_UNEXPLORED, VM_WATER, VM_ENEMY_CITY, VM_OWN_CITY, VM_UNOWNED_CITY, isEnemyUnit } from "./viewmap-chars.js";
 import {
   getPlayerTechLevels,
   getEffectiveStrength,
@@ -2236,7 +2236,7 @@ function exploreUnit(state: GameState, unit: UnitState, owner: Owner): TurnEvent
         if (unit.type === UnitType.Army) {
           // Check if this army is on an enemy continent (has enemy/unowned cities, no own cities).
           // If so, stay Aggressive — don't request transport pickup from enemy territory.
-          const continent = mapContinent(viewMap, unit.loc, ".");
+          const continent = mapContinent(viewMap, unit.loc, VM_WATER);
           const owner = state.map[unit.loc].terrain === TerrainType.City
             ? state.cities.find(c => c.loc === unit.loc)?.owner : undefined;
           let hasOwnCity = false;

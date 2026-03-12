@@ -58,6 +58,9 @@ export const COLORS = {
   DEPOSIT_TEXTILE: 0x60b050,   // lush green
   DEPOSIT_TEXTILE_STROKE: 0x408030,
 
+  // Deposit tile background tint
+  DEPOSIT_TILE_TINT: 0xc8a870,  // warm sandy brown
+
   // Background
   BG: 0x0a0a1e,
 } as const;
