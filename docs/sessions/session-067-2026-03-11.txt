@@ -1,0 +1,85 @@
+Session 067 — 2026-03-11
+========================
+
+Phase 18: Incremental AI & Auto-Turn
+
+COMPLETED
+---------
+
+18A: AIPlanner Interface (ai-planner.ts, ~230 lines)
+- AIPlanner interface: step(), getActions(), progress(), isDone()
+- createAIPlanner(state, aiOwner) — scan + production run in constructor (fast <2ms)
+- Movement phase is incremental — one unit per step() call
+- Finalize phase (idle behaviors + surrender) runs on last step
+- All logic moved from ai.ts — same unit ordering, same claim sets, deterministic output
+- hasNearbyTransport(), assignIdleBehaviors(), moveAIUnit() moved to ai-planner.ts
+
+18B: Backward-Compatible Refactor (ai.ts)
+- computeAITurn() now wraps createAIPlanner() — drains all steps synchronously
+- ai.ts slimmed from ~316 lines to ~43 lines (thin wrapper + re-exports)
+- Zero behavior change — all 729 existing tests pass without modification
+- createAIPlanner and AIPlanner type re-exported from ai.ts for public API
+
+18C: WorldServer Async Planning (WorldServer.ts)
+- ActiveWorld gains aiPlanners Map and aiInterval handle
+- After each tick, startAIPlanners() creates planners for all AI/disconnected players
+- setInterval (AI_STEP_INTERVAL_MS=50ms, AI_UNITS_PER_STEP=20) spreads work across tick window
+- At tick boundary: pre-computed planners consumed; fallback drains remaining steps if not done
+- Connected humans with pending actions skip AI computation (unchanged)
+- Cleanup: aiInterval cleared on season end and graceful shutdown
+
+18D/18E: Auto-Turn Timer (client)
+- DebugFlags gains autoTurn (boolean) and autoTurnInterval (10/30/60 seconds)
+- Debug panel: "Auto-Turn (Ns)" button cycles 10->30->60->off on repeated clicks
+- Game loop: autoTurnCountdown decrements each frame, fires handleEndTurn() at 0
+- Timer pauses while city panel or economy review is open
+- Manual Enter still works — resets countdown
+- UIState.autoTurnCountdown field for HUD display
+- HUD shows "timer N s" countdown when auto-turn is active
+
+TESTS
+-----
+- 8 new tests in ai-planner.test.ts:
+  - "produces identical actions to computeAITurn" (determinism vs sync wrapper)
+  - "returns isDone() = true when complete"
+  - "progress monotonically advances"
+  - "handles empty state (no viewMap)"
+  - "handles AI with no units (only cities)"
+  - "handles resign when AI has no cities or armies"
+  - "step() returns false and getActions() is stable after completion"
+  - "determinism: two planners on cloned state produce identical actions"
+- 835 total tests passing (737 shared + 98 server)
+- Client builds clean (tsc + Vite)
+
+FILES CHANGED
+-------------
+New:
+- packages/shared/src/ai-planner.ts (~325 lines)
+- packages/shared/src/__tests__/ai-planner.test.ts (~245 lines)
+
+Modified:
+- packages/shared/src/ai.ts (316 -> 43 lines — thin wrapper)
+- packages/server/src/WorldServer.ts (+90 lines — async planner scheduling)
+- packages/client/src/main.ts (+27 lines — auto-turn timer)
+- packages/client/src/ui/debugPanel.ts (+29 lines — autoTurn flag + UI)
+- packages/client/src/ui/hud.ts (+8 lines — countdown display)
+- packages/client/src/types.ts (+2 lines — autoTurnCountdown field)
+
+ARCHITECTURE NOTES
+------------------
+The AIPlanner is the core architectural change. It separates AI computation into
+discrete steps that can be spread across time:
+
+  Current:  [====SPIKE====]  idle idle idle  [====SPIKE====]
+  New:      [==spread==across==tick==window==] [==spread==...==]
+
+The planner processes units one at a time in MOVE_ORDER priority. Transport claim
+sets (claimedUnitIds, claimedPickupLocs) are maintained incrementally across steps,
+preserving the same sequential processing semantics as the original.
+
+Key invariant: createAIPlanner + drain all steps === computeAITurn (same output,
+same ordering, verified by determinism test).
+
+WorldServer integration: planners start immediately after executeTick completes,
+run in 50ms intervals processing 20 units per burst. By next tick, all planners
+are typically done — actions are collected with near-zero cost at tick boundary.

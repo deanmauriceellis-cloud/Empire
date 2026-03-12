@@ -1,5 +1,15 @@
 # Empire Reborn — Changelog
 
+## v0.56.0 — Session 067 (2026-03-11)
+
+### Phase 18: Incremental AI & Auto-Turn
+- **AIPlanner interface** — `createAIPlanner()` processes AI turn one unit at a time via `step()` calls; scan + production run immediately, movement is incremental, finalize on last step
+- **Backward-compatible refactor** — `computeAITurn()` now wraps planner internally; `ai.ts` slimmed from 316 to 43 lines; zero behavior change across all existing tests
+- **WorldServer async scheduling** — pre-computed AI planners run between ticks via `setInterval` (50ms bursts, 20 units each); eliminates synchronous AI spike at tick boundary
+- **Auto-turn timer** — configurable interval (10s/30s/60s) in debug panel; pauses while city panel or economy review is open; HUD countdown display
+- **8 new planner tests** — determinism vs `computeAITurn`, progress monotonicity, edge cases (no viewMap, no units, resign)
+- **835 tests passing** (737 shared + 98 server), client builds clean
+
 ## v0.55.0 — Session 066 (2026-03-11)
 
 ### Phase 17 + Phase 18 Planning

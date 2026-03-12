@@ -1,18 +1,18 @@
 # Empire Reborn — Project State
 
 ## Current Phase
-**PLAN-KINGDOM Phase 17 in progress** — Balance, Tuning & Launch
-**Phase 18 planned** — Incremental AI & Auto-Turn
+**PLAN-KINGDOM Phase 18 complete** — Incremental AI & Auto-Turn
+**Phase 17 in progress** — Balance, Tuning & Launch (17E launch checklist remaining)
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phases 1-16 complete, Phase 17 in progress, Phase 18 designed
-- 827 tests passing (729 shared + 98 server)
+- Phases 1-16 complete, Phase 17 in progress, Phase 18 complete
+- 835 tests passing (737 shared + 98 server)
 - 18 E2E tests (17 passing, 1 skipped)
 - **PLAN-KINGDOM.md** is the definitive plan (18 phases: gameplay → kingdom MMO → monetization → scaling)
 
 ## Latest commit
-session 066: 'c' key opens city panel, Phase 18 (Incremental AI & Auto-Turn) added to plan
+session 067: Phase 18 — incremental AI planner, WorldServer async scheduling, auto-turn timer
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
@@ -21,6 +21,13 @@ session 066: 'c' key opens city panel, Phase 18 (Incremental AI & Auto-Turn) add
 - Crown city relocate action not yet implemented (UI button deferred)
 - World mode: monthly reset/season rewards not yet implemented
 - Spawn protection enforcement not yet in executeTurn (needs world context in game engine)
+
+## Completed (session 067) — Phase 18: Incremental AI & Auto-Turn
+- [x] 18A: AIPlanner interface — createAIPlanner(), step-by-step unit processing (~230 lines)
+- [x] 18B: computeAITurn() wraps planner, ai.ts slimmed 316→43 lines, zero behavior change
+- [x] 18C: WorldServer async planning — setInterval(50ms, 20 units/burst) between ticks
+- [x] 18D/18E: Auto-turn timer — 10s/30s/60s cycle, debug panel, HUD countdown, pause on UI open
+- [x] 8 new planner tests, 835 total (737 shared + 98 server), client builds clean
 
 ## Completed (session 066) — Phase 17 + Phase 18 Planning
 - [x] 'C' key shortcut: opens city production panel when unit on city tile or city selected
