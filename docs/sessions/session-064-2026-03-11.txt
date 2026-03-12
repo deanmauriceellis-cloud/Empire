@@ -1,0 +1,40 @@
+Session 064 — 2026-03-11
+Phase 17: Balance, Tuning & Launch (continued)
+
+CHANGES:
+1. River War starting cities — moved continent detection before city selection;
+   starting cities now require continent >= 20 tiles (MIN_START_CONTINENT).
+   Previously P2 could spawn on a 6-tile island, triggering "island escape" from turn 4.
+
+2. Transport unload map city proximity boost — after continent-level scoring,
+   BFS 3 tiles from each visible target city and boost adjacent water tiles:
+   unowned cities = value 9 (highest), enemy cities = value 8.
+   Guides transports to disembark near capturable cities, not random coastline.
+
+3. Transport production anti-flip-flop — two fixes:
+   a) With 1-2 cities: require at least 3 armies before switching to transport.
+      Prevents premature transport builds that get cancelled and restarted endlessly.
+   b) "No transport exists" guard now only locks the sole transport producer.
+      Over-cap transport cities can still switch away (respects cap logic).
+
+4. Domination victory retuned — changed from 3:1 to 5:1 ratio in both cities
+   and armies, with minimum 150 turns before triggering. Previously triggered
+   at turn 74 when players hadn't even crossed the river.
+
+5. Enemy units visible on discovered tiles — changed bridge.ts filter from
+   `view.seen === state.turn` to `view.seen >= 0`. Enemy units now show on
+   any previously explored tile (last-known-position), dimmed by fog overlay.
+
+6. Deposits render above fog — deposit container zIndex moved from 3 to 11
+   (above fog at 10). Deposit icons on explored tiles no longer obscured by
+   45% dark fog overlay.
+
+BUGS FOUND (via playtesting):
+- River War map placed P2 on 6-tile island (fixed: continent size filter)
+- P2 production flip-flopping army↔transport with 1 city (fixed: army count gate)
+- Game ended at turn 74 via 3:1 domination before players met (fixed: 5:1 + turn 150)
+- Enemy units invisible on explored tiles (fixed: last-known-position visibility)
+- Deposits hidden under fog overlay (fixed: zIndex above fog)
+
+TESTS: 827 passing (729 shared + 98 server)
+FILES MODIFIED: mapgen.ts, ai-transport.ts, ai-production.ts, game.ts, bridge.ts, tilemap.ts, game.test.ts

@@ -1,5 +1,16 @@
 # Empire Reborn — Changelog
 
+## v0.53.0 — Session 064 (2026-03-11)
+
+### Phase 17: River Map Balance, Transport AI & Visibility
+- **River War starting cities** — starting cities now require continent >= 20 tiles; prevents spawning on tiny islands that cripple the AI from turn 1
+- **Transport unload city proximity** — BFS 3 tiles from visible target cities boosts adjacent water tiles (unowned=9, enemy=8); transports navigate to coast near capturable cities instead of random shoreline
+- **Transport production anti-flip-flop** — require 3 armies before first transport with 1-2 cities; lock sole transport producer from switching; over-cap producers can still switch
+- **Domination victory retuned** — 3:1 ratio → 5:1, minimum 150 turns; prevents premature victories before players cross the river
+- **Enemy unit visibility** — units on discovered tiles now visible (last-known-position); previously only shown on currently-visible tiles
+- **Deposits above fog** — deposit container zIndex raised above fog overlay; deposit icons always clearly visible on explored tiles
+- **827 tests passing** (729 shared + 98 server), client builds clean
+
 ## v0.52.0 — Session 063 (2026-03-11)
 
 ### Phase 17: Ship Combat, Transport AI, Construction & Feature Parity

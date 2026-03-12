@@ -11,7 +11,7 @@
 - **PLAN-KINGDOM.md** is the definitive plan (17 phases: gameplay → kingdom MMO → monetization)
 
 ## Latest commit
-session 063: ship combat, transport AI, construction & multiplayer feature parity
+session 064: river map balance, transport AI, visibility & victory tuning
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
@@ -20,6 +20,16 @@ session 063: ship combat, transport AI, construction & multiplayer feature parit
 - Crown city relocate action not yet implemented (UI button deferred)
 - World mode: monthly reset/season rewards not yet implemented
 - Spawn protection enforcement not yet in executeTurn (needs world context in game engine)
+
+## Completed (session 064) — Phase 17: River Map Balance, Transport AI & Visibility
+- [x] River War starting cities: continent >= 20 tiles required (no island spawns)
+- [x] Transport unload map: city proximity boost (unowned=9, enemy=8, BFS 3 tiles)
+- [x] Transport production: require 3 armies before first transport (1-2 city players)
+- [x] Fix transport flip-flop: lock sole producer, allow over-cap switching
+- [x] Domination victory: 3:1→5:1 ratio, minimum 150 turns before triggering
+- [x] Enemy units visible on discovered tiles (last-known-position fog of war)
+- [x] Deposits render above fog overlay (zIndex 11, above fog at 10)
+- [x] 827 tests passing (729 shared + 98 server), client builds clean
 
 ## Completed (session 063) — Phase 17: Ship Combat, Transport AI & Feature Parity
 - [x] Ship bombardment ranges: Destroyer(4), Submarine(2), Battleship(5)
