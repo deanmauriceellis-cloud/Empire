@@ -748,6 +748,7 @@ async function init() {
       resources: state.resources[playerOwner],
       resourceIncome: income,
       techResearch: state.techResearch[playerOwner],
+      autoTurnCountdown: ui.debug.flags.autoTurn ? Math.max(0, autoTurnCountdown) : undefined,
     };
   }
 
@@ -1155,6 +1156,7 @@ async function init() {
 
   function handleEndTurn(): void {
     if (ui.economyReview.isOpen) ui.economyReview.forceClose();
+    resetAutoTurnTimer(); // restart countdown after manual or auto end turn
     if (mode === "singleplayer") {
       audio.playTurnEnd();
       handleSinglePlayerEndTurn();
@@ -1562,12 +1564,37 @@ async function init() {
     return null;
   }
 
+  // ─── Auto-Turn Timer (Phase 18E) ────────────────────────────────────────
+
+  let autoTurnCountdown = 0; // seconds remaining until auto-turn fires
+
+  function resetAutoTurnTimer(): void {
+    if (ui.debug.flags.autoTurn) {
+      autoTurnCountdown = ui.debug.flags.autoTurnInterval;
+    } else {
+      autoTurnCountdown = 0;
+    }
+  }
+
   // ─── Game Loop ──────────────────────────────────────────────────────────
 
   app.ticker.add(() => {
     const dt = app.ticker.deltaMS / 1000;
     const vw = app.screen.width;
     const vh = app.screen.height;
+
+    // ─── Auto-Turn Timer ──────────────────────────────────────────────
+    if (mode === "singleplayer" && ui.debug.flags.autoTurn && !game.isGameOver) {
+      // Pause timer while city panel or economy review is open
+      const paused = ui.cityPanel.isOpen || ui.economyReview.isOpen;
+      if (!paused) {
+        autoTurnCountdown -= dt;
+        if (autoTurnCountdown <= 0) {
+          handleEndTurn();
+          resetAutoTurnTimer();
+        }
+      }
+    }
 
     // ─── Menu handling ──────────────────────────────────────────────────
     const menuAction = ui.menus.consumeAction();

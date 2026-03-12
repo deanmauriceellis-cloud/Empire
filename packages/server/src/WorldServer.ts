@@ -13,9 +13,11 @@ import {
   type UnitState,
   type ViewMapCell,
   type ShieldState,
+  type AIPlanner,
   configureMapDimensions,
   executeTurn,
   computeAITurn,
+  createAIPlanner,
   scan,
   SHIELD_MAX_MS,
   SHIELD_INITIAL_MS,
@@ -78,6 +80,10 @@ interface ActiveWorld {
   viewMapSnapshots: Map<number, ViewMapCell[]>;
   /** Recent TurnDeltas for reconnecting clients (ring buffer). */
   recentDeltas: TurnDelta[];
+  /** Pre-computed AI planners running between ticks. */
+  aiPlanners: Map<number, AIPlanner>;
+  /** Interval handle for incremental AI computation. */
+  aiInterval: ReturnType<typeof setInterval> | null;
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -87,6 +93,8 @@ const MAX_ACTIONS_PER_TICK = 500;
 const RATE_LIMIT_WINDOW_MS = 1000;
 const RATE_LIMIT_MAX_MSGS = 30;
 const HEARTBEAT_INTERVAL_MS = 30_000; // 30s ping/pong
+const AI_STEP_INTERVAL_MS = 50;   // how often the AI scheduler runs between ticks
+const AI_UNITS_PER_STEP = 20;     // units processed per scheduler run
 const HEARTBEAT_TIMEOUT_MS = 10_000;  // 10s to respond before disconnect
 const MAX_RECENT_DELTAS = 10;         // ring buffer size for reconnection
 
@@ -196,6 +204,8 @@ export class WorldServer {
       playerConnectedAt: new Map(),
       viewMapSnapshots: new Map(),
       recentDeltas: [],
+      aiPlanners: new Map(),
+      aiInterval: null,
     };
 
     // Register all AI players (no WebSocket connection)
@@ -451,6 +461,12 @@ export class WorldServer {
     // Build action map for all players
     const allActions = new Map<number, PlayerAction[]>();
 
+    // Stop any running AI interval (planners are about to be consumed)
+    if (activeWorld.aiInterval) {
+      clearInterval(activeWorld.aiInterval);
+      activeWorld.aiInterval = null;
+    }
+
     for (const player of state.players) {
       if (player.status !== "active") continue;
 
@@ -461,11 +477,20 @@ export class WorldServer {
         // Human player with queued actions
         allActions.set(player.id, pendingActions);
       } else {
-        // AI player OR disconnected human OR human with no actions → AI computes
-        const aiActions = computeAITurn(state, player.id);
-        allActions.set(player.id, aiActions);
+        // AI player OR disconnected human OR human with no actions → use pre-computed planner or fallback
+        const planner = activeWorld.aiPlanners.get(player.id);
+        if (planner) {
+          // Drain any remaining steps (fallback if planner wasn't fully done)
+          while (planner.step()) { /* drain */ }
+          allActions.set(player.id, planner.getActions());
+        } else {
+          // No pre-computed planner (first tick or new player) → compute synchronously
+          const aiActions = computeAITurn(state, player.id);
+          allActions.set(player.id, aiActions);
+        }
       }
     }
+    activeWorld.aiPlanners.clear();
 
     // Populate VIP player list from DB entitlements
     if (this.db) {
@@ -548,7 +573,56 @@ export class WorldServer {
     // Check season expiry
     if (Date.now() >= activeWorld.world.seasonEndsAt) {
       this.endSeason(activeWorld);
+      return; // world ended, no need to pre-compute AI
     }
+
+    // Start incremental AI planners for next tick (Phase 18C)
+    this.startAIPlanners(activeWorld);
+  }
+
+  /**
+   * Start incremental AI planners for all AI/disconnected players.
+   * Planners run in setInterval bursts between ticks, spreading CPU load evenly.
+   */
+  private startAIPlanners(activeWorld: ActiveWorld): void {
+    const state = activeWorld.world.gameState;
+
+    // Ensure map dimensions are configured for this world
+    configureMapDimensions(state.config.mapWidth, state.config.mapHeight);
+
+    // Create planners for all players that will need AI next tick
+    for (const player of state.players) {
+      if (player.status !== "active") continue;
+      const ws = activeWorld.players.get(player.id);
+      // Connected humans submit their own actions — don't pre-compute AI for them
+      if (ws && !player.isAI) continue;
+      // AI player or disconnected human → pre-compute
+      activeWorld.aiPlanners.set(player.id, createAIPlanner(state, player.id));
+    }
+
+    if (activeWorld.aiPlanners.size === 0) return;
+
+    // Spread work across tick window via setInterval
+    activeWorld.aiInterval = setInterval(() => {
+      let budget = AI_UNITS_PER_STEP;
+      for (const [, planner] of activeWorld.aiPlanners) {
+        if (planner.isDone()) continue;
+        while (budget > 0 && planner.step()) {
+          budget--;
+        }
+        if (budget <= 0) break;
+      }
+
+      // All planners done → stop interval
+      let allDone = true;
+      for (const [, planner] of activeWorld.aiPlanners) {
+        if (!planner.isDone()) { allDone = false; break; }
+      }
+      if (allDone && activeWorld.aiInterval) {
+        clearInterval(activeWorld.aiInterval);
+        activeWorld.aiInterval = null;
+      }
+    }, AI_STEP_INTERVAL_MS);
   }
 
   private getTickInfo(activeWorld: ActiveWorld, playerId?: number): TickInfo {
@@ -733,10 +807,14 @@ export class WorldServer {
   private endSeason(activeWorld: ActiveWorld): void {
     console.log(`[World] Season ended for world ${activeWorld.id} at turn ${activeWorld.world.gameState.turn}`);
 
-    // Stop tick timer
+    // Stop tick timer and AI interval
     if (activeWorld.tickTimer) {
       clearTimeout(activeWorld.tickTimer);
       activeWorld.tickTimer = null;
+    }
+    if (activeWorld.aiInterval) {
+      clearInterval(activeWorld.aiInterval);
+      activeWorld.aiInterval = null;
     }
 
     // Notify all connected players
@@ -850,6 +928,10 @@ export class WorldServer {
       if (aw.tickTimer) {
         clearTimeout(aw.tickTimer);
         aw.tickTimer = null;
+      }
+      if (aw.aiInterval) {
+        clearInterval(aw.aiInterval);
+        aw.aiInterval = null;
       }
       for (const timer of aw.disconnectTimers.values()) {
         clearTimeout(timer);

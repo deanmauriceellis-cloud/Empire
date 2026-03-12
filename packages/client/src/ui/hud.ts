@@ -72,6 +72,13 @@ export function createHUD(): HUD {
           `</span>`
         : "";
 
+      // Auto-turn countdown (singleplayer)
+      let autoTurnHtml = "";
+      if (state.autoTurnCountdown !== undefined) {
+        const secs = Math.ceil(state.autoTurnCountdown);
+        autoTurnHtml = `<span class="tick-timer" title="Auto-turn countdown">⏱ ${secs}s</span>`;
+      }
+
       // World mode indicators
       let worldHtml = "";
       if (state.isWorldMode) {
@@ -106,6 +113,7 @@ export function createHUD(): HUD {
         `<span><span class="stat-label">Units</span>${unitSummary}</span>`,
         resHtml,
         techHtml,
+        autoTurnHtml,
         worldHtml,
         `<span style="margin-left:auto;color:#555">Empire Reborn v${GAME_VERSION}</span>`,
       ].join("");

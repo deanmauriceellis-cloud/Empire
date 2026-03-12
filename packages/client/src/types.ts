@@ -72,6 +72,8 @@ export interface UIState {
   seasonRemainingS?: number; // seconds left in season
   shieldRemainingMs?: number; // ms of shield remaining
   worldActionsQueued?: number; // actions queued for next tick
+  // Auto-turn timer (singleplayer)
+  autoTurnCountdown?: number; // seconds remaining until auto-turn (undefined = off)
 }
 
 // ─── Tile Highlights ────────────────────────────────────────────────────
