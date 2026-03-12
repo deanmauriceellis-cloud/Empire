@@ -691,17 +691,16 @@ describe("End Game", () => {
     expect(result!.winType).toBe("elimination");
   });
 
-  it("checkEndGame detects 3:1 resignation", () => {
+  it("checkEndGame detects 5:1 domination resignation", () => {
+    state.turn = 200; // must be past minimum turn threshold (150)
     // Player1 has 10 cities and 10 armies
     for (let i = 0; i < 10; i++) {
       addCity(state, rowColLoc(10 + i, 10), Owner.Player1);
       createUnit(state, UnitType.Army, Owner.Player1, rowColLoc(10 + i, 11));
     }
-    // Player2 has 2 cities and 2 armies
-    for (let i = 0; i < 2; i++) {
-      addCity(state, rowColLoc(30 + i, 30), Owner.Player2);
-      createUnit(state, UnitType.Army, Owner.Player2, rowColLoc(30 + i, 31));
-    }
+    // Player2 has 1 city and 1 army (< 10/5 = 2)
+    addCity(state, rowColLoc(30, 30), Owner.Player2);
+    createUnit(state, UnitType.Army, Owner.Player2, rowColLoc(30, 31));
 
     const result = checkEndGame(state);
     expect(result).not.toBeNull();
@@ -1113,17 +1112,16 @@ describe("Extended End Game", () => {
     expect(result).toBeNull();
   });
 
-  it("checkEndGame detects 3:1 resignation for Player 2", () => {
+  it("checkEndGame detects 5:1 domination resignation for Player 2", () => {
+    state.turn = 200; // must be past minimum turn threshold (150)
     // Player2 has 10 cities and 10 armies
     for (let i = 0; i < 10; i++) {
       addCity(state, rowColLoc(10 + i, 10), Owner.Player2);
       createUnit(state, UnitType.Army, Owner.Player2, rowColLoc(10 + i, 11));
     }
-    // Player1 has 2 cities and 2 armies
-    for (let i = 0; i < 2; i++) {
-      addCity(state, rowColLoc(30 + i, 30), Owner.Player1);
-      createUnit(state, UnitType.Army, Owner.Player1, rowColLoc(30 + i, 31));
-    }
+    // Player1 has 1 city and 1 army
+    addCity(state, rowColLoc(30, 30), Owner.Player1);
+    createUnit(state, UnitType.Army, Owner.Player1, rowColLoc(30, 31));
 
     const result = checkEndGame(state);
     expect(result).not.toBeNull();

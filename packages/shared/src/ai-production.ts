@@ -131,20 +131,22 @@ export function decideProduction(
     }
   }
 
-  // Guard: never switch away from Transport if no transport exists yet.
-  // Once a transport exists, allow switching back to armies (especially with few cities).
-  if (city.production === UnitType.Transport && prodCounts[UnitType.Transport] <= 1) {
+  // Guard: never switch away from Transport if no transport exists yet (keep at least 1 building).
+  // With few cities, commit fully — flip-flopping wastes 30-turn build time.
+  if (city.production === UnitType.Transport) {
     const existingTransports = state.units.filter(
       u => u.owner === aiOwner && u.type === UnitType.Transport,
     ).length;
-    if (existingTransports === 0) {
-      // No transport exists — must keep building
+    const ownCityCount = state.cities.filter(c => c.owner === aiOwner).length;
+    if (existingTransports === 0 && prodCounts[UnitType.Transport] <= 1) {
+      // No transport exists and this is the only city building one — must keep building
       aiLog(`City #${city.id}: keeping Transport (no transport exists yet)`);
       return null;
     }
-    // Transport exists — allow switching (especially critical for 1-city islands
-    // where the city needs to produce armies to feed the transport)
-    aiLog(`City #${city.id}: allowing switch from Transport (${existingTransports} transports exist)`);
+    if (ownCityCount <= 2 && existingTransports > 0 && prodCounts[UnitType.Transport] <= 1) {
+      // Few cities with a transport: allow switching to build armies for it
+      aiLog(`City #${city.id}: allowing switch from Transport (${existingTransports} transports exist)`);
+    }
   }
 
   // Guard: don't switch away from Transport via ratio rebalance if there's still army surplus.
@@ -303,15 +305,28 @@ export function decideProduction(
   // Only coastal non-lake cities can build transports/ships
   if (canBuildShips && prodCounts[UnitType.Transport] === 0) {
     if (!(armiesNeeded > 0 && prodCounts[UnitType.Army] <= 1)) {
-      // If no transports exist yet, switch unconditionally (critical need)
       const existingTransportCount = state.units.filter(
         u => u.owner === aiOwner && u.type === UnitType.Transport,
       ).length;
-      if (existingTransportCount === 0 || progress < 0.4) {
+      // With very few cities (1-2), don't switch to transport until we have enough armies.
+      // Otherwise the only city flip-flops between army and transport and nothing finishes.
+      if (aiCityCount <= 2 && existingTransportCount === 0) {
+        const aiArmyCount = state.units.filter(
+          u => u.owner === aiOwner && u.type === UnitType.Army,
+        ).length;
+        if (aiArmyCount < 3) {
+          aiLog(`City #${city.id}: want Transport but only ${aiArmyCount} armies, building more first`);
+          // fall through — don't switch
+        } else if (progress < 0.4) {
+          aiLog(`City #${city.id}: switch to Transport (none being built, ${aiArmyCount} armies)`);
+          return UnitType.Transport;
+        }
+      } else if (existingTransportCount === 0 || progress < 0.4) {
         aiLog(`City #${city.id}: switch to Transport (none being built)`);
         return UnitType.Transport;
+      } else {
+        aiLog(`City #${city.id}: want Transport but ${Math.round(progress * 100)}% done with ${currentAttrs.name}, finishing`);
       }
-      aiLog(`City #${city.id}: want Transport but ${Math.round(progress * 100)}% done with ${currentAttrs.name}, finishing`);
     }
   }
 

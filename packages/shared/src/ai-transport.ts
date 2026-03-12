@@ -670,6 +670,39 @@ export function createUnloadViewMap(
     }
   }
 
+  // Boost water tiles near visible target cities (not just on the shoreline).
+  // Cities 1-3 tiles inland should attract transports to the nearest coast section.
+  // Unowned cities get highest value (9) — free capture; enemy cities get (8).
+  for (let loc = 0; loc < MAP_SIZE; loc++) {
+    if (!isOnBoard(loc)) continue;
+    const c = viewMap[loc].contents;
+    if (c !== VM_UNOWNED_CITY && c !== VM_ENEMY_CITY) continue;
+    const boostValue = c === VM_UNOWNED_CITY ? "9" : "8";
+    // BFS outward on land from city, up to 3 tiles
+    const bfsQueue: { loc: Loc; depth: number }[] = [{ loc, depth: 0 }];
+    const bfsVisited = new Set<Loc>([loc]);
+    while (bfsQueue.length > 0) {
+      const { loc: cur, depth } = bfsQueue.shift()!;
+      // Mark adjacent water tiles with boosted value
+      for (const adj of getAdjacentLocs(cur)) {
+        if (viewMap[adj].contents === VM_WATER || viewMap[adj].contents === VM_UNEXPLORED) {
+          const currentMark = tempMap[adj].contents;
+          if (currentMark < "0" || currentMark > "9" || boostValue > currentMark) {
+            tempMap[adj] = { ...tempMap[adj], contents: boostValue };
+          }
+        }
+      }
+      if (depth < 3) {
+        for (const adj of getAdjacentLocs(cur)) {
+          if (!bfsVisited.has(adj) && isTraversableLand(viewMap[adj].contents)) {
+            bfsVisited.add(adj);
+            bfsQueue.push({ loc: adj, depth: depth + 1 });
+          }
+        }
+      }
+    }
+  }
+
   // Also mark water tiles adjacent to unexplored tiles as low-priority targets (value "0").
   // This gives transports a destination when they can't see any foreign continents yet —
   // they'll navigate toward unexplored coastline to discover new land.

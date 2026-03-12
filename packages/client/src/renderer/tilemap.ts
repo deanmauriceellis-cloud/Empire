@@ -86,7 +86,7 @@ export class TilemapRenderer {
     worldContainer.addChild(this.foamContainer);
 
     this.depositContainer = new Container();
-    this.depositContainer.zIndex = 3;
+    this.depositContainer.zIndex = 11; // above fog (10) so deposits are always visible on explored tiles
     worldContainer.addChild(this.depositContainer);
 
     this.fogContainer = new Container();

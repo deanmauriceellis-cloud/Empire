@@ -1084,15 +1084,29 @@ function generateRiverMap(config: GameConfig): MapGenerationResult {
     }
   }
 
-  // ─── Step 7: Select starting cities ────────────────────────────────────
-  // Pick one city from each side, preferring inland cities near the center
+  // ─── Step 7: Detect continents (before starting city selection) ────────
+  const continents = findContinents(map, cities, mapWidth, mapHeight);
+
+  // Build city→continent size lookup for filtering out islands
+  const MIN_START_CONTINENT = 20; // minimum land tiles for a valid starting continent
+  const cityContinentSize = new Map<number, number>();
+  for (const cont of continents) {
+    for (const cIdx of cont.cities) {
+      cityContinentSize.set(cIdx, cont.cells.length);
+    }
+  }
+
+  // ─── Step 8: Select starting cities ────────────────────────────────────
+  // Pick one city from each side, on the main landmass (not islands), preferring inland near center
   const westStartCandidates = westCities.filter(i => {
     const col = cities[i].loc % mapWidth;
-    return col > 3 && col < riverLeft - 3; // not too close to edge or river
+    if (col <= 3 || col >= riverLeft - 3) return false; // not too close to edge or river
+    return (cityContinentSize.get(i) ?? 0) >= MIN_START_CONTINENT; // must be on main landmass
   });
   const eastStartCandidates = eastCities.filter(i => {
     const col = cities[i].loc % mapWidth;
-    return col > riverRight + 3 && col < mapWidth - 4;
+    if (col <= riverRight + 3 || col >= mapWidth - 4) return false;
+    return (cityContinentSize.get(i) ?? 0) >= MIN_START_CONTINENT; // must be on main landmass
   });
 
   // Pick the city closest to the vertical center on each side
@@ -1117,9 +1131,6 @@ function generateRiverMap(config: GameConfig): MapGenerationResult {
   if (startEast === -1) startEast = eastCities.length > 0 ? eastCities[0] : Math.min(1, cities.length - 1);
 
   const startingCities: number[] = [startWest, startEast];
-
-  // ─── Step 8: Detect continents ─────────────────────────────────────────
-  const continents = findContinents(map, cities, mapWidth, mapHeight);
 
   // ─── Step 9: Place deposits ───────────────────────────────────────────
   const deposits = placeDeposits(map, cities, startingCities, mapWidth, mapHeight, rng);

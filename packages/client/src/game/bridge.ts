@@ -39,12 +39,12 @@ export function buildRenderableState(game: SinglePlayerGame, playerOwner: Owner 
     };
   }
 
-  // Visible units: only those the player can currently see and not embarked
+  // Visible units: own units always, enemy units if tile has ever been seen
+  // (last-known-position — common in strategy games; stale fog dims them)
   const visibleUnits = state.units.filter((u) => {
     if (u.shipId !== null) return false;
     const view = viewMap[u.loc];
-    // Show own units always, enemy units only if currently visible
-    return u.owner === owner || view.seen === state.turn;
+    return u.owner === owner || view.seen >= 0;
   });
 
   // Visible cities

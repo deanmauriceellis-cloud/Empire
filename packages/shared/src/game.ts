@@ -1617,19 +1617,20 @@ export function checkEndGame(
   }
   if (remaining.length === 0) return null;
 
-  // 3:1 resignation: strongest player dominates all others combined
-  // (Only in 2-player for now; N-player uses individual surrender via AI)
-  if (remaining.length === 2) {
+  // Domination victory: strongest player overwhelmingly dominates the weaker
+  // Requires minimum 150 turns (players must have time to expand and engage)
+  // and 5:1 ratio in both cities and armies to prevent premature endings
+  if (remaining.length === 2 && state.turn >= 150) {
     const [a, b] = remaining;
     const aCities = cityCounts.get(a.id) ?? 0;
     const bCities = cityCounts.get(b.id) ?? 0;
     const aArmies = armyCounts.get(a.id) ?? 0;
     const bArmies = armyCounts.get(b.id) ?? 0;
 
-    if (bCities > 0 && aCities > bCities * 3 && aArmies > bArmies * 3) {
+    if (bCities > 0 && aCities > bCities * 5 && aArmies > bArmies * 5) {
       return { winner: a.id, winType: "resignation" };
     }
-    if (aCities > 0 && bCities > aCities * 3 && bArmies > aArmies * 3) {
+    if (aCities > 0 && bCities > aCities * 5 && bArmies > aArmies * 5) {
       return { winner: b.id, winType: "resignation" };
     }
   }
