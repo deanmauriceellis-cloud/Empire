@@ -60,7 +60,10 @@ MONETIZATION & POLISH
 ├── Phase 16: Movement Trails & Spectacle ✅ DONE (session 060)
 ├── Phase 17: Balance, Tuning & Launch    🔄 IN PROGRESS (session 061)
 
-TOTAL: 13-22 sessions from current state
+SCALING & REAL-TIME
+├── Phase 18: Incremental AI & Auto-Turn  ⬜ PLANNED
+
+TOTAL: 14-23 sessions from current state
 ```
 
 ---
@@ -798,6 +801,184 @@ Join World → Generate Island → Spawn Protection (100 ticks)
 
 ---
 
+## Phase 18: Incremental AI & Auto-Turn (1-2 sessions)
+
+**Goal**: Eliminate the synchronous AI computation spike at turn boundaries. Spread AI work across the entire tick window so the server event loop stays responsive (world mode) and the client never freezes (singleplayer). Enable auto-advancing turns with visible AI activity.
+
+### The Problem
+
+Currently, `computeAITurn()` runs synchronously for every AI player at the turn boundary:
+- **Singleplayer**: all AI computed in one burst inside `submitTurn()`, blocking the renderer
+- **WorldServer**: all AI players computed sequentially in `executeTick()`, blocking the Node event loop
+- At 100 kingdoms with hundreds of units each, this is a 300ms+ spike every tick
+- The spike grows linearly with player count and unit count
+
+### The Solution: Incremental AI Planner
+
+Split `computeAITurn` into an **incremental planner** that processes one unit per `step()` call. The planner reads from a frozen state snapshot, accumulates actions, and yields control between units. AI work spreads evenly across the tick window instead of spiking at the boundary.
+
+```
+Current:  [====SPIKE====]  idle idle idle idle idle  [====SPIKE====]
+Proposed: [==spread==across==entire==tick==window==] [==spread==...==]
+```
+
+### 18A: AIPlanner Interface (`shared/src/ai-planner.ts`)
+
+```typescript
+interface AIPlanner {
+  /** Process next unit's AI. Returns true if more work remains. */
+  step(): boolean;
+  /** Get accumulated actions when complete. */
+  getActions(): PlayerAction[];
+  /** Progress for UI/logging. */
+  progress(): { done: number; total: number };
+  /** True when all phases complete. */
+  isDone(): boolean;
+}
+
+function createAIPlanner(state: GameState, aiOwner: PlayerId): AIPlanner;
+```
+
+Internal phases (same order as current `computeAITurn`):
+1. **Scan** — refresh vision for all AI units/cities (run in constructor, fast ~1ms)
+2. **Production** — `aiProduction()` decisions (run in constructor, fast ~0.5ms)
+3. **Movement** — one unit per `step()` call, ordered by `MOVE_ORDER` (this is 90%+ of CPU)
+4. **Finalize** — `assignIdleBehaviors()` + surrender check (run on last step, fast)
+
+Each `step()` processes exactly one unit's movement decision (BFS pathfinding). Transport claim sets (`claimedUnitIds`, `claimedPickupLocs`) are maintained incrementally across steps — same as current sequential processing.
+
+**Determinism preserved**: same unit ordering, same state snapshot, same claim sets → identical `PlayerAction[]` output whether computed all-at-once or one-step-at-a-time.
+
+### 18B: Backward-Compatible Refactor
+
+Refactor `computeAITurn()` to use the planner internally:
+```typescript
+export function computeAITurn(state: GameState, aiOwner: PlayerId): PlayerAction[] {
+  const planner = createAIPlanner(state, aiOwner);
+  while (planner.step()) { /* drain all steps */ }
+  return planner.getActions();
+}
+```
+
+- Zero behavior change — all 827+ tests pass without modification
+- `computeAITurn` remains the simple synchronous API for tests and simple use cases
+- `createAIPlanner` is the new incremental API for server and client
+
+### 18C: WorldServer Async Planning
+
+After each tick executes, immediately begin planning the next tick's AI:
+
+```typescript
+// After executeTick completes:
+for (const player of aiPlayers) {
+  activeWorld.aiPlanners.set(player.id, createAIPlanner(state, player.id));
+}
+
+// Spread work across tick window via setInterval:
+activeWorld.aiInterval = setInterval(() => {
+  let budget = UNITS_PER_STEP; // e.g. 10-20 units per interval
+  for (const [pid, planner] of activeWorld.aiPlanners) {
+    while (budget > 0 && planner.step()) {
+      budget--;
+    }
+  }
+  if (allPlannersDone(activeWorld)) {
+    clearInterval(activeWorld.aiInterval);
+  }
+}, AI_STEP_INTERVAL_MS); // e.g. 50ms
+```
+
+At next tick boundary:
+- Planners already complete → collect actions, execute turn (near-zero AI cost at tick time)
+- If a planner isn't done yet (shouldn't happen with proper budgeting) → drain remaining steps synchronously as fallback
+
+**Event loop impact**: instead of one 300ms block, the server does ~6 bursts of ~50ms spread across 30 seconds. WebSocket messages, heartbeats, and HTTP requests process between bursts.
+
+Configuration:
+- `AI_STEP_INTERVAL_MS = 50` — how often the scheduler runs (20 times/second)
+- `UNITS_PER_STEP = 20` — units processed per scheduler run
+- Both tunable per world based on tick interval and player count
+- Auto-scaling: `UNITS_PER_STEP = ceil(totalAIUnits / (tickIntervalMs / AI_STEP_INTERVAL_MS))`
+
+### 18D: Singleplayer Per-Frame Stepping
+
+Replace the synchronous AI burst in `submitTurn()` with incremental computation spread across animation frames:
+
+```
+Turn flow (current):
+  Human clicks End Turn → compute ALL AI (blocking) → executeTurn → render
+
+Turn flow (new):
+  Auto-timer fires (or human clicks End Turn)
+  → executeTurn with pre-computed AI actions → render new state
+  → immediately start AI planners for next turn
+  → each frame: planner.step() for 1-3 units (< 2ms budget)
+  → by next turn deadline: all AI ready
+```
+
+- **PixiJS ticker integration**: process N units per frame within a time budget (e.g. 2ms)
+- AI computation is invisible to the player — no stutter, no freeze
+- If player ends turn before planners finish → drain remaining synchronously (fallback)
+
+### 18E: Auto-Turn Timer
+
+Add configurable auto-advance for singleplayer:
+
+- **Auto-turn toggle** in debug/settings panel (default: off for classic feel)
+- **Configurable interval**: 10s (fast), 30s (standard), 60s (slow)
+- **Countdown display**: "Next turn in: 0:23" in HUD (reuses world mode tick timer)
+- **Pause on interaction**: timer pauses while city panel or economy review is open
+- **Manual override**: Enter still advances immediately (cancels timer, starts next cycle)
+- When enabled, the game feels like world mode but running locally — continuous, alive
+
+### 18F: AI Progress Indicator (Optional Polish)
+
+- Subtle progress bar or unit count in HUD: "AI planning: 34/128 units"
+- Shows the AI is "thinking" between turns — makes the game feel active
+- Useful for debugging and player confidence that AI is working
+
+### Key Properties
+
+| Property | Preserved? | Notes |
+|----------|-----------|-------|
+| Determinism | ✅ Yes | Same unit order, same state snapshot, same output |
+| Test compatibility | ✅ Yes | `computeAITurn()` wrapper unchanged |
+| Network protocol | ✅ Yes | Actions still submitted as `PlayerAction[]` at tick time |
+| Delta sync | ✅ Yes | Delta computed after executeTurn, same as before |
+| Classic mode | ✅ Yes | Manual turns still work, planner drains synchronously |
+
+### Performance Targets
+
+| Metric | Current | After Phase 18 |
+|--------|---------|----------------|
+| Peak AI spike (2-player SP) | 5-50ms | <2ms per frame |
+| Peak AI spike (100-kingdom world) | 300ms+ | <50ms per interval |
+| Event loop blocking (world server) | Full tick duration | 50ms bursts |
+| Client frame drops during AI | Occasional | None |
+| Auto-turn supported | No | Yes (configurable interval) |
+
+### New/Modified Files
+
+```
+packages/shared/src/
+├── ai-planner.ts        # NEW: AIPlanner interface, createAIPlanner (~200 lines)
+├── ai.ts                # MODIFIED: computeAITurn wraps planner (~10 lines changed)
+├── singleplayer.ts      # MODIFIED: use planner instead of direct computeAITurn
+
+packages/server/src/
+├── WorldServer.ts       # MODIFIED: async planner scheduling between ticks (~60 lines)
+
+packages/client/src/
+├── main.ts              # MODIFIED: per-frame AI stepping, auto-turn timer (~40 lines)
+├── ui/hud.ts            # MODIFIED: auto-turn countdown, AI progress indicator (~20 lines)
+```
+
+**Tests**: Planner produces identical actions to `computeAITurn()` (determinism), planner handles mid-game state (units dying, cities captured), planner progress monotonically advances, auto-turn timer fires at correct intervals, fallback synchronous drain works.
+
+**Why this matters**: This is the architectural foundation for scaling to 100 kingdoms. Without it, every tick is a synchronous CPU wall that blocks the server. With it, AI computation is invisible overhead spread across idle time. It also enables the auto-turn experience that makes singleplayer feel alive instead of waiting for the player to click End Turn.
+
+---
+
 ## Phase Summary
 
 | Phase | Sessions | What You Get |
@@ -817,7 +998,9 @@ Join World → Generate Island → Spawn Protection (100 ticks)
 | 15: Monetization System | 2-3 | Stripe, cosmetics, VIP, season pass |
 | 16: Movement Trails & Spectacle | 1 | Visual polish, combat effects, kingdom atmosphere |
 | 17: Balance, Tuning & Launch | 1-2 | Performance, AI, multi-player balance |
-| **TOTAL** | **13-22** | **Persistent kingdom MMO with monetization** |
+| **SCALING & REAL-TIME** | | |
+| 18: Incremental AI & Auto-Turn | 1-2 | Spread AI across tick window, auto-advancing turns |
+| **TOTAL** | **14-23** | **Persistent kingdom MMO with monetization** |
 
 ---
 
@@ -830,6 +1013,7 @@ packages/shared/src/
 ├── world.ts             # Tick engine, world config, kingdom grid management (~500 lines)
 ├── player.ts            # PlayerId system, player info, status tracking (~200 lines) ✅ EXISTS
 ├── kingdom-mapgen.ts    # Kingdom tile generation (100x100 regions) (~300 lines)
+├── ai-planner.ts        # Incremental AI computation, step-by-step unit processing (~200 lines)
 
 packages/server/src/
 ├── WorldServer.ts       # Tick-based persistent world server (~600 lines)

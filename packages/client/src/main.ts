@@ -1359,6 +1359,31 @@ async function init() {
         }
         break;
 
+      case "c": {
+        const allCities = mode === "singleplayer"
+          ? game.state.cities
+          : mode === "world"
+          ? (wc.visibleState?.cities ?? [])
+          : (mp.visibleState?.cities ?? []);
+        let cityAtTile = null;
+        if (selection.selectedUnitId !== null) {
+          const units = mode === "singleplayer" ? game.state.units : mode === "world" ? (wc.visibleState?.units ?? []) : (mp.visibleState?.units ?? []);
+          const unit = units.find((u) => u.id === selection.selectedUnitId);
+          if (unit) {
+            cityAtTile = allCities.find((c: any) => c.loc === unit.loc && c.owner === keyOwner);
+          }
+        } else if (selection.selectedCityId !== null) {
+          cityAtTile = allCities.find((c: any) => c.id === selection.selectedCityId && c.owner === keyOwner);
+        }
+        if (cityAtTile) {
+          selection.selectedCityId = cityAtTile.id;
+          selection.selectedUnitId = null;
+          currentHighlights = [];
+          ui.cityPanel.open(cityAtTile as any, mode === "singleplayer" ? game.state.buildings : [], getLockedUnitTypes());
+        }
+        break;
+      }
+
       case "t":
         if (selection.selectedUnitId !== null) {
           const units = mode === "singleplayer" ? game.state.units : (mp.visibleState?.units ?? []);
