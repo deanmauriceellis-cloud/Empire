@@ -2,16 +2,17 @@
 
 ## Current Phase
 **PLAN-KINGDOM Phase 17 in progress** — Balance, Tuning & Launch
+**Phase 18 planned** — Incremental AI & Auto-Turn
 
 ## Status
 - All 12 original phases complete + gameplay polish + debug tools + AI overhaul + refactoring
-- Phases 1-16 complete, Phase 17 in progress
+- Phases 1-16 complete, Phase 17 in progress, Phase 18 designed
 - 827 tests passing (729 shared + 98 server)
 - 18 E2E tests (17 passing, 1 skipped)
-- **PLAN-KINGDOM.md** is the definitive plan (17 phases: gameplay → kingdom MMO → monetization)
+- **PLAN-KINGDOM.md** is the definitive plan (18 phases: gameplay → kingdom MMO → monetization → scaling)
 
 ## Latest commit
-session 065: fix AI economy — construction production, VM_XXXX cleanup, deposit tile tint
+session 066: 'c' key opens city panel, Phase 18 (Incremental AI & Auto-Turn) added to plan
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
@@ -20,6 +21,11 @@ session 065: fix AI economy — construction production, VM_XXXX cleanup, deposi
 - Crown city relocate action not yet implemented (UI button deferred)
 - World mode: monthly reset/season rewards not yet implemented
 - Spawn protection enforcement not yet in executeTurn (needs world context in game engine)
+
+## Completed (session 066) — Phase 17 + Phase 18 Planning
+- [x] 'C' key shortcut: opens city production panel when unit on city tile or city selected
+- [x] Phase 18 design: Incremental AI & Auto-Turn added to PLAN-KINGDOM.md (6 sub-phases)
+- [x] 729 shared + 98 server tests passing, client builds clean
 
 ## Completed (session 065) — Phase 17: AI Economy Fix, VM Cleanup & Deposit Tint
 - [x] Fix construction production flip-flop: ratio rebalance no longer kills Construction builds

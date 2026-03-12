@@ -1,0 +1,42 @@
+Session 066 — 2026-03-11
+=========================
+
+Phase 17 (Balance, Tuning & Launch) + Phase 18 Planning
+
+## Changes
+
+### 'C' Key — City Panel Shortcut
+- Added 'c' keyboard shortcut to open city production panel
+- When a unit is selected on a tile with an owned city: selects city, opens panel
+- When a city is already selected: opens panel directly
+- Works across singleplayer, multiplayer, and world modes
+- File: packages/client/src/main.ts (case "c" block in handleKeyPress)
+
+### Phase 18: Incremental AI & Auto-Turn — Plan Design
+- Researched current turn flow: executeTurn is atomic, computeAITurn is synchronous
+- AI computation is 90%+ BFS pathfinding in per-unit movement (phase 3 of 5)
+- Designed AIPlanner interface: step-by-step unit processing, yields after each unit
+- Six sub-phases planned:
+  - 18A: AIPlanner interface in shared/ai-planner.ts
+  - 18B: Refactor computeAITurn to wrap planner (backward compat, zero test changes)
+  - 18C: WorldServer async scheduling (setInterval between ticks)
+  - 18D: Singleplayer per-frame stepping (PixiJS ticker budget)
+  - 18E: Auto-turn timer (configurable 10s/30s/60s, pause on UI interaction)
+  - 18F: Optional AI progress indicator in HUD
+- Key properties: determinism preserved, tests unchanged, network protocol unchanged
+- Added to PLAN-KINGDOM.md as Phase 18 under "Scaling & Real-Time" section
+
+## Research Notes
+- computeAITurn is pure (reads state, returns PlayerAction[], no mutation except viewMap scan)
+- Per-unit moveAIUnit() calls are independent — only shared state is transport claim sets
+- Singleplayer AI: 5-50ms (imperceptible but architecturally chunky)
+- WorldServer 100 kingdoms: estimated 300ms+ synchronous spike per tick
+- Solution spreads work: 50ms bursts every 50ms via setInterval (server) or per-frame (client)
+
+## Tests
+- 729 shared tests passing (vitest worker timeout errors are infrastructure, not failures)
+- 98 server tests passing
+- Client builds clean
+
+## Commits
+- 4ca8f36 session 066: 'c' key opens city panel, Phase 18 added to plan

@@ -1,5 +1,17 @@
 # Empire Reborn — Changelog
 
+## v0.55.0 — Session 066 (2026-03-11)
+
+### Phase 17 + Phase 18 Planning
+- **'C' key shortcut** — pressing 'c' with a unit selected on a city tile opens the city production panel; also works with a city already selected
+- **Phase 18: Incremental AI & Auto-Turn** — full phase design added to PLAN-KINGDOM.md
+  - AIPlanner interface: step-by-step unit processing spread across tick window
+  - WorldServer async scheduling: eliminates synchronous AI spikes at tick boundary
+  - Singleplayer per-frame stepping: AI computed in PixiJS ticker, no renderer freezes
+  - Auto-turn timer: configurable interval (10s/30s/60s) with pause-on-interaction
+  - Determinism, tests, and network protocol all preserved
+- **729 shared + 98 server tests passing**, client builds clean
+
 ## v0.54.0 — Session 065 (2026-03-11)
 
 ### Phase 17: AI Economy Fix, VM Cleanup & Deposit Tint
