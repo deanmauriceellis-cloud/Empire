@@ -11,16 +11,26 @@
 - **PLAN-KINGDOM.md** is the definitive plan (17 phases: gameplay → kingdom MMO → monetization)
 
 ## Latest commit
-session 062: UI improvements — economy button, auto-play defaults, camera fix
+session 063: ship combat, transport AI, construction & multiplayer feature parity
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
 - Structure sprites not yet rendered on tilemap (visual polish deferred)
 - Economy review tabs not yet updated for structures
 - Crown city relocate action not yet implemented (UI button deferred)
-- Multiplayer server doesn't yet send kingdom data to client
 - World mode: monthly reset/season rewards not yet implemented
 - Spawn protection enforcement not yet in executeTurn (needs world context in game engine)
+
+## Completed (session 063) — Phase 17: Ship Combat, Transport AI & Feature Parity
+- [x] Ship bombardment ranges: Destroyer(4), Submarine(2), Battleship(5)
+- [x] Ships cannot capture cities — only attack units inside (land/amphibious units capture)
+- [x] Transport AI: unowned cities highest priority for drops (free capture first)
+- [x] Ship bombard AI: Destroyer/Submarine/Battleship try melee first, then bombard
+- [x] AI construction gate lowered: 4→3 cities, cap formula cities/4→cities/3
+- [x] Server action validation: bombard, buildOnDeposit, buildCityUpgrade, buildStructure
+- [x] Multiplayer/World feature parity: deposits, buildings, resources, techResearch, kingdoms sent to clients
+- [x] VisibleGameState protocol extended; server filters by fog-of-war; client consumes real data
+- [x] 827 tests passing (729 shared + 98 server), client builds clean
 
 ## Completed (session 062) — Phase 17: Balance, Tuning & Launch (continued)
 - [x] Fix singleplayer numPlayers: 6 → 2 (1 human + 1 AI)

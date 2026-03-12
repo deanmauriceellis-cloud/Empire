@@ -1,5 +1,17 @@
 # Empire Reborn — Changelog
 
+## v0.52.0 — Session 063 (2026-03-11)
+
+### Phase 17: Ship Combat, Transport AI, Construction & Feature Parity
+- **Ship bombardment ranges** — Destroyer(4), Submarine(2), Battleship(5); Patrol/Transport/Carrier/EngineerBoat remain melee-only
+- **Ships cannot capture cities** — ships attacking a city now only kill enemy units inside; city capture restricted to land/amphibious units
+- **Transport AI priority swap** — unowned cities now highest priority for troop drops (free capture); enemy cities second
+- **Ship bombardment AI** — Destroyer, Submarine, Battleship now try melee first (adjacent targets), then bombard at range; dynamic log messages
+- **AI construction earlier** — city gate lowered from 4 to 3; constructor cap formula `cities/4` → `cities/3`
+- **Server action validation** — added `bombard`, `buildOnDeposit`, `buildCityUpgrade`, `buildStructure` to GameManager.validateAction()
+- **Multiplayer/World economy parity** — VisibleGameState extended with deposits, buildings, resources, techResearch, kingdoms; server filters by fog-of-war visibility; client multiplayer.ts and worldClient.ts now consume real server data instead of empty stubs
+- **827 tests passing** (729 shared + 98 server), client builds clean
+
 ## v0.51.0 — Session 062 (2026-03-11)
 
 ### Phase 17: Balance, Tuning & Launch (continued)

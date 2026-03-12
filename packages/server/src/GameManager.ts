@@ -417,6 +417,26 @@ export class GameManager {
         if (!validUnitTypes.includes(action.unitType)) return false;
         return true;
       }
+      case "bombard": {
+        const unit = state.units.find((u) => u.id === action.unitId);
+        if (!unit || unit.owner !== owner) return false;
+        if (typeof action.targetLoc !== "number" || action.targetLoc < 0 || action.targetLoc >= MAP_SIZE || !isOnBoard(action.targetLoc)) return false;
+        return true;
+      }
+      case "buildOnDeposit": {
+        const unit = state.units.find((u) => u.id === action.unitId);
+        return !!unit && unit.owner === owner;
+      }
+      case "buildCityUpgrade": {
+        const unit = state.units.find((u) => u.id === action.unitId);
+        if (!unit || unit.owner !== owner) return false;
+        return action.cityId != null && action.buildingType != null;
+      }
+      case "buildStructure": {
+        const unit = state.units.find((u) => u.id === action.unitId);
+        if (!unit || unit.owner !== owner) return false;
+        return action.buildingType != null;
+      }
       case "endTurn":
       case "resign":
         return true;
@@ -570,6 +590,21 @@ export class GameManager {
       return cell && cell.seen === state.turn;
     });
 
+    // Filter deposits by visibility
+    const visibleDeposits = state.deposits?.filter((d) => {
+      const cell = viewMap[d.loc];
+      return cell && cell.seen >= 0;
+    }) ?? [];
+
+    // Filter buildings by visibility
+    const visibleBuildings = state.buildings?.filter((b) => {
+      const cell = viewMap[b.loc];
+      return cell && cell.seen >= 0;
+    }) ?? [];
+
+    // Crown city locations for kingdom data
+    const kingdoms = state.kingdoms ?? {};
+
     return {
       turn: state.turn,
       phase: game.phase,
@@ -578,6 +613,11 @@ export class GameManager {
       cities: visibleCities,
       units: visibleUnits,
       config: state.config,
+      deposits: visibleDeposits,
+      buildings: visibleBuildings,
+      resources: state.resources?.[owner] ?? [0, 0, 0],
+      techResearch: state.techResearch?.[owner] ?? [0, 0, 0, 0],
+      kingdoms,
     };
   }
 

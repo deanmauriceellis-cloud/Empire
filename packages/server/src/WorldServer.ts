@@ -629,6 +629,14 @@ export class WorldServer {
       return vm[u.loc]?.seen === state.turn;
     });
 
+    // Filter deposits by visibility
+    const deposits = state.deposits?.filter(d => vm[d.loc]?.seen >= 0) ?? [];
+
+    // Filter buildings by visibility
+    const buildings = state.buildings?.filter(b => vm[b.loc]?.seen >= 0) ?? [];
+
+    const kingdoms = state.kingdoms ?? {};
+
     return {
       turn: state.turn,
       phase: "playing",
@@ -637,6 +645,11 @@ export class WorldServer {
       cities,
       units,
       config: state.config,
+      deposits,
+      buildings,
+      resources: state.resources?.[owner] ?? [0, 0, 0],
+      techResearch: state.techResearch?.[owner] ?? [0, 0, 0, 0],
+      kingdoms,
     };
   }
 

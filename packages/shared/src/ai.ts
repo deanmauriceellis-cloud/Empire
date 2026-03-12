@@ -295,18 +295,19 @@ function moveAIUnit(
       return aiConstructionMove(state, unit, aiOwner, viewMap);
     case UnitType.Artillery:
       return aiArtilleryMove(state, unit, aiOwner, viewMap);
+    case UnitType.Destroyer:
+    case UnitType.Submarine:
+    case UnitType.Battleship:
     case UnitType.MissileCruiser: {
-      // Try bombard first, then fall through to ship movement
-      const bombardActions = aiMissileCruiserMove(state, unit, aiOwner, viewMap);
-      if (bombardActions.length > 0) return bombardActions;
-      return aiShipMove(state, unit, aiOwner, viewMap);
+      // Try normal ship movement first (melee attacks adjacent targets),
+      // then fall back to bombard if no actions generated
+      const shipActions = aiShipMove(state, unit, aiOwner, viewMap);
+      if (shipActions.length > 0) return shipActions;
+      return aiMissileCruiserMove(state, unit, aiOwner, viewMap);
     }
     case UnitType.EngineerBoat:
       return aiEngineerBoatMove(state, unit, aiOwner, viewMap);
     case UnitType.Patrol:
-    case UnitType.Destroyer:
-    case UnitType.Submarine:
-    case UnitType.Battleship:
     case UnitType.Carrier:
       return aiShipMove(state, unit, aiOwner, viewMap);
     default:

@@ -177,13 +177,26 @@ export function createMultiplayerGame(
         // Determine terrain from view character
         const terrain = viewCharToTerrain(view.contents);
         const cityOwner = getCityOwner(i, cities);
+        // Deposit info from server
+        let depositType: import("@empire/shared").DepositType | null = null;
+        let depositOwner: import("@empire/shared").Owner | null = null;
+        let depositComplete = false;
+        if (visibleState.deposits) {
+          const deposit = visibleState.deposits.find(d => d.loc === i);
+          if (deposit) {
+            depositType = deposit.type;
+            depositOwner = deposit.owner;
+            depositComplete = deposit.buildingComplete;
+          }
+        }
+
         tiles[i] = {
           terrain,
           seen: view.seen,
           cityOwner,
-          depositType: null,   // TODO: server needs to send deposit data
-          depositOwner: null,
-          depositComplete: false,
+          depositType,
+          depositOwner,
+          depositComplete,
         };
       }
 
@@ -200,12 +213,12 @@ export function createMultiplayerGame(
           production: c.owner === owner ? c.production : null,
         })),
         units: visibleUnits,
-        deposits: [],           // TODO: server needs to send deposit data
-        resources: [0, 0, 0],   // TODO: server needs to send resource data
+        deposits: visibleState.deposits ?? [],
+        resources: visibleState.resources ?? [0, 0, 0],
         mapWidth: config.mapWidth,
         mapHeight: config.mapHeight,
         owner,
-        crownCityLocs: new Set<number>(), // TODO: server needs to send kingdom data
+        crownCityLocs: buildCrownCityLocs(visibleState),
       };
     },
 
@@ -300,6 +313,20 @@ function viewCharToTerrain(contents: string): TerrainType {
 function getCityOwner(loc: number, cities: VisibleCity[]): Owner | null {
   const city = cities.find((c) => c.loc === loc);
   return city ? city.owner : null;
+}
+
+/** Build crown city location set from visible state kingdoms. */
+function buildCrownCityLocs(state: VisibleGameState): Set<number> {
+  const locs = new Set<number>();
+  if (state.kingdoms) {
+    for (const k of Object.values(state.kingdoms)) {
+      if (k.crownCityId != null) {
+        const city = state.cities.find(c => c.id === k.crownCityId);
+        if (city) locs.add(city.loc);
+      }
+    }
+  }
+  return locs;
 }
 
 /** Fetch lobby game list from REST API. */

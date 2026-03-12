@@ -531,7 +531,7 @@ export function aiMissileCruiserMove(
   // 1. Try to bombard an enemy in range
   const bombardTarget = findBombardTarget(state, unit, aiOwner);
   if (bombardTarget !== null) {
-    aiLog(`  MissileCruiser #${unit.id}: bombarding target at ${bombardTarget}`);
+    aiLog(`  ${UNIT_ATTRIBUTES[unit.type].name} #${unit.id}: bombarding target at ${bombardTarget}`);
     actions.push({ type: "bombard", unitId: unit.id, targetLoc: bombardTarget });
     return actions;
   }
@@ -613,9 +613,9 @@ export function needsConstruction(state: GameState, aiOwner: Owner): boolean {
   ).length;
   const totalConstructors = existingConstructors + producingConstructors;
 
-  // Limit: 1 per 4 cities (minimum 1 if needed, max 3)
+  // Limit: 1 per 3 cities (minimum 1 if needed, max 3)
   const cityCount = state.cities.filter(c => c.owner === aiOwner).length;
-  const maxConstructors = Math.min(3, Math.max(1, Math.floor(cityCount / 4)));
+  const maxConstructors = Math.min(3, Math.max(1, Math.floor(cityCount / 3)));
   if (totalConstructors >= maxConstructors) return false;
 
   // Check for unclaimed visible deposits

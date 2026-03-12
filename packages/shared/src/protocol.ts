@@ -2,7 +2,7 @@
 // Shared between client and server.
 
 import type { Owner, UnitType, UnitBehavior } from "./constants.js";
-import type { Loc, ViewMapCell, UnitState, TurnEvent, GameConfig } from "./types.js";
+import type { Loc, ViewMapCell, UnitState, TurnEvent, GameConfig, DepositState, BuildingState, KingdomState } from "./types.js";
 import type { WorldConfig, KingdomTilePos } from "./world-map.js";
 import type { FilteredDelta } from "./delta.js";
 import type { StoreItem, PlayerEntitlements, CosmeticCategory } from "./store.js";
@@ -89,6 +89,11 @@ export interface VisibleGameState {
   cities: VisibleCity[];           // cities visible to this player
   units: UnitState[];              // units visible to this player
   config: GameConfig;
+  deposits?: DepositState[];       // visible deposits
+  buildings?: BuildingState[];     // visible buildings
+  resources?: number[];            // own [ore, oil, textile]
+  techResearch?: number[];         // own [sci, health, elec, war]
+  kingdoms?: Record<number, KingdomState>; // kingdom state
 }
 
 export interface VisibleCity {

@@ -1676,6 +1676,17 @@ export function processAction(
         if (city.owner !== owner) {
           // Shield check: shielded player's city cannot be attacked
           if (isShielded(state, city.owner as number)) break;
+          // Ships cannot capture cities — only attack units inside
+          if (UNIT_ATTRIBUTES[unit.type].terrain === ".") {
+            const defender = state.units.find(
+              u => u.loc === action.targetLoc && u.owner !== owner && u.shipId === null,
+            );
+            if (defender) {
+              if (isShielded(state, defender.owner as number)) break;
+              events.push(...attackUnit(state, unit, defender));
+            }
+            break;
+          }
           events.push(...attackCity(state, unit, cell.cityId));
           break;
         }

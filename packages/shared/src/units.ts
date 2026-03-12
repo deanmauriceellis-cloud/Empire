@@ -49,13 +49,13 @@ export const UNIT_ATTRIBUTES: readonly UnitAttributes[] = [
     type: UnitType.Destroyer, char: "D", name: "destroyer", nickname: "destroyer",
     article: "a destroyer", plural: "destroyers", terrain: ".",
     buildTime: 20, strength: 1, maxHits: 3, speed: 2, capacity: 0, range: INFINITY,
-    attackRange: 0, visionRadius: 0, invisible: false,
+    attackRange: 4, visionRadius: 0, invisible: false,
   },
   {
     type: UnitType.Submarine, char: "S", name: "submarine", nickname: "submarine",
     article: "a submarine", plural: "submarines", terrain: ".",
     buildTime: 20, strength: 3, maxHits: 2, speed: 2, capacity: 0, range: INFINITY,
-    attackRange: 0, visionRadius: 0, invisible: false,
+    attackRange: 2, visionRadius: 0, invisible: false,
   },
   {
     type: UnitType.Transport, char: "T", name: "troop transport", nickname: "transport",
@@ -73,7 +73,7 @@ export const UNIT_ATTRIBUTES: readonly UnitAttributes[] = [
     type: UnitType.Battleship, char: "B", name: "battleship", nickname: "battleship",
     article: "a battleship", plural: "battleships", terrain: ".",
     buildTime: 40, strength: 2, maxHits: 10, speed: 2, capacity: 0, range: INFINITY,
-    attackRange: 0, visionRadius: 0, invisible: false,
+    attackRange: 5, visionRadius: 0, invisible: false,
   },
   {
     type: UnitType.Satellite, char: "Z", name: "satellite", nickname: "satellite",

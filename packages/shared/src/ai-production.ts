@@ -318,14 +318,14 @@ export function decideProduction(
   // Priority 2a: Build Construction units when economy needs it
   // Only after we have at least 4 cities and a transport established.
   // Construction units are fragile (0 str, 1 hp) so only build when safe.
-  if (aiCityCount >= 4 && city.production !== UnitType.Construction) {
+  if (aiCityCount >= 3 && city.production !== UnitType.Construction) {
     if (needsConstruction(state, aiOwner) && canAffordProduction(state, aiOwner, UnitType.Construction)) {
       if (prodCounts[UnitType.Construction] === 0) {
         // No construction in production — consider starting one
         const existingConstructors = state.units.filter(
           u => u.owner === aiOwner && u.type === UnitType.Construction,
         ).length;
-        const maxConstructors = Math.min(3, Math.max(1, Math.floor(aiCityCount / 4)));
+        const maxConstructors = Math.min(3, Math.max(1, Math.floor(aiCityCount / 3)));
         if (existingConstructors < maxConstructors && progress < 0.25) {
           aiLog(`City #${city.id}: switch to Construction (need economy: ${existingConstructors}/${maxConstructors} constructors)`);
           return UnitType.Construction;

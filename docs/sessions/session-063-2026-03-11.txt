@@ -1,0 +1,99 @@
+Session 063 — 2026-03-11
+========================
+
+Theme: Ship Combat, Transport AI, Construction & Feature Parity
+
+Context:
+  Playtesting revealed several issues: ships couldn't bombard (all melee except
+  MissileCruiser), ships could capture cities (unrealistic), transport AI
+  prioritized attacking enemy cities over capturing empty ones, AI never built
+  construction units in singleplayer (4-city gate too high), and multiplayer/
+  world modes were missing economy features (deposits, resources, tech,
+  buildings, kingdoms all sent as empty/zero).
+
+Changes by Phase:
+
+Phase 1: Ship Bombardment Ranges
+  File: packages/shared/src/units.ts
+  - Destroyer attackRange: 0 → 4
+  - Submarine attackRange: 0 → 2
+  - Battleship attackRange: 0 → 5
+  - Patrol, Transport, Carrier, EngineerBoat: unchanged (0)
+  - MissileCruiser: unchanged (3)
+
+Phase 2: Ships Cannot Capture Cities
+  File: packages/shared/src/game.ts (processAction "attack" handler)
+  - Added ship detection: terrain === "." means ship unit
+  - Ships attacking a city now only target enemy units inside the city
+  - Ships never trigger attackCity() — cannot capture
+  - Land/amphibious units unchanged
+
+Phase 3: Transport AI Priority Swap
+  File: packages/shared/src/ai-transport.ts (tryUnloadArmies)
+  - Unowned city priority: 2 → 3 (highest — free capture)
+  - Enemy city priority: 3 → 2 (still high, but capture empty first)
+  - Updated priNames array to match new ordering
+
+Phase 4: Ship Bombardment AI
+  File: packages/shared/src/ai.ts (computeAIMove dispatch)
+  - Destroyer, Submarine, Battleship now try aiShipMove first (melee),
+    then fall back to aiMissileCruiserMove (bombard) if no actions
+  - This ensures adjacent enemies are melee-attacked, not bombarded
+  File: packages/shared/src/ai-economy.ts (aiMissileCruiserMove)
+  - Log message changed from hardcoded "MissileCruiser" to dynamic
+    UNIT_ATTRIBUTES[unit.type].name
+
+Phase 5: AI Construction Earlier
+  File: packages/shared/src/ai-production.ts
+  - City gate: aiCityCount >= 4 → >= 3
+  - Constructor cap: floor(cities/4) → floor(cities/3)
+  File: packages/shared/src/ai-economy.ts (needsConstruction)
+  - Max constructor formula: floor(cities/4) → floor(cities/3)
+  Note: Originally planned >= 2, but test showed 2-city AI with enemy
+  nearby would switch from Army to Construction — too aggressive. Gate
+  at 3 is a good middle ground.
+
+Phase 6: Server Action Validation
+  File: packages/server/src/GameManager.ts (validateAction)
+  - Added "bombard": validates unitId ownership + targetLoc bounds
+  - Added "buildOnDeposit": validates unitId ownership
+  - Added "buildCityUpgrade": validates unitId + cityId + buildingType
+  - Added "buildStructure": validates unitId + buildingType
+
+Phase 7: Server State Transmission & Client Feature Parity
+  7a: Protocol (packages/shared/src/protocol.ts)
+    - Extended VisibleGameState with optional fields: deposits, buildings,
+      resources, techResearch, kingdoms
+
+  7b: GameManager (packages/server/src/GameManager.ts)
+    - getVisibleState() now populates deposits/buildings (filtered by
+      viewMap visibility), resources, techResearch, kingdoms
+
+  7c: WorldServer (packages/server/src/WorldServer.ts)
+    - getVisibleState() same additions as GameManager
+
+  7d: Client consumption
+    - multiplayer.ts: Replaced TODO stubs with server data
+      - Deposits: find deposit at each tile location, populate type/owner/complete
+      - Resources: use visibleState.resources
+      - Crown cities: new buildCrownCityLocs() helper reads kingdoms data
+    - worldClient.ts: Same changes as multiplayer.ts
+
+Test Results:
+  - 827 unit tests passing (729 shared + 98 server)
+  - 3 E2E test files fail (pre-existing — need running browser/server)
+  - Client builds clean
+  - Server type-checks clean (pre-existing test mock warnings only)
+
+Files Modified (11):
+  packages/shared/src/units.ts          — ship attack ranges
+  packages/shared/src/game.ts           — ship city attack restriction
+  packages/shared/src/ai-transport.ts   — transport priority swap
+  packages/shared/src/ai.ts             — ship bombard AI dispatch
+  packages/shared/src/ai-economy.ts     — bombard log + construction formula
+  packages/shared/src/ai-production.ts  — construction gate + cap
+  packages/shared/src/protocol.ts       — VisibleGameState extensions
+  packages/server/src/GameManager.ts    — validation + visible state
+  packages/server/src/WorldServer.ts    — visible state economy data
+  packages/client/src/net/multiplayer.ts — consume server economy data
+  packages/client/src/net/worldClient.ts — consume server economy data

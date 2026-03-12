@@ -407,11 +407,11 @@ export function tryUnloadArmies(
 
     const contents = viewMap[adj].contents;
     if (contents === VM_ENEMY_CITY) {
-      // Enemy city — highest priority
-      landTargets.push({ loc: adj, priority: 3 });
-    } else if (contents === VM_UNOWNED_CITY) {
-      // Unowned city — high priority
+      // Enemy city — high priority (but lower than unowned — capture empty first)
       landTargets.push({ loc: adj, priority: 2 });
+    } else if (contents === VM_UNOWNED_CITY) {
+      // Unowned city — highest priority (free capture)
+      landTargets.push({ loc: adj, priority: 3 });
     } else if (contents === VM_LAND || contents === VM_UNEXPLORED) {
       // Land or unexplored — check distance to nearest own city.
       // Only skip unloading if an own city is very close (within 3 BFS steps).
@@ -452,7 +452,7 @@ export function tryUnloadArmies(
   // Sort by priority (highest first)
   landTargets.sort((a, b) => b.priority - a.priority);
   const bestLand = landTargets[0].loc;
-  const priNames = ["", "land", "unowned city", "enemy city"];
+  const priNames = ["", "land", "enemy city", "unowned city"];
 
   aiVLog(`    Transport #${unit.id}: unloading ${unit.cargoIds.length} armies at ${bestLand} (${priNames[landTargets[0].priority]})`);
 
