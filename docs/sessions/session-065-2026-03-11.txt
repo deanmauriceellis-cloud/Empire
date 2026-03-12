@@ -1,0 +1,42 @@
+Session 065 — 2026-03-11
+Phase 17: Balance, Tuning & Launch (continued)
+
+Summary:
+Fixed critical AI economy bug — construction units were never being produced
+because ratio rebalance kept switching cities away from Construction production
+before the unit could finish building (10 ticks needed, switched away at 3).
+Also cleaned up remaining raw viewmap character literals and added deposit tile
+background tinting.
+
+Changes:
+
+1. AI Construction Production Fix (ai-production.ts)
+   - Root cause: Construction has ratio=0 in all ratio tables. overproduced()
+     returns true for ratio=0 ("never want this type"). Commitment guard only
+     protects until work=3 of 10. So every construction attempt was killed at
+     30% progress by ratio rebalance switching to army.
+   - Fix: Added guard in overproduced block — if city is building Construction
+     and needsConstruction() returns true, don't let ratio rebalance switch away.
+     Same pattern as the existing Fighter guard.
+   - Evidence: 265 turns, 30+ cities per player, zero construction units ever
+     produced, zero deposits claimed, zero buildings, zero tech research.
+
+2. Mapgen Bug Fix (mapgen.ts)
+   - Fixed Set.length → Set.size for continent cell count in River War starting
+     city selection. Set doesn't have .length (returns undefined), so the
+     MIN_START_CONTINENT=20 check was never filtering out small islands.
+   - This was a session 064 regression.
+
+3. VM_XXXX Constant Cleanup
+   - ai-economy.ts: " " → VM_UNEXPLORED, "+" → VM_LAND (2 locations)
+   - ai-helpers.ts: "*" → VM_UNOWNED_CITY, "X" → VM_ENEMY_CITY
+   - game.ts: "." → VM_WATER (continent mapping)
+   - continent.ts: "+" → VM_LAND (lake detection)
+
+4. Deposit Tile Background Tint (client)
+   - Added COLORS.DEPOSIT_TILE_TINT (0xc8a870, warm sandy brown) to constants.ts
+   - Applied via sprite.tint in tilemap.ts for land tiles with deposits
+   - Makes resource locations visually distinct from regular terrain
+
+Tests: 729 shared passing, 24 test files pass. Client builds clean.
+Vitest worker timeout (pre-existing infrastructure issue, not test failure).

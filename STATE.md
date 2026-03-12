@@ -11,7 +11,7 @@
 - **PLAN-KINGDOM.md** is the definitive plan (17 phases: gameplay → kingdom MMO → monetization)
 
 ## Latest commit
-session 064: river map balance, transport AI, visibility & victory tuning
+session 065: fix AI economy — construction production, VM_XXXX cleanup, deposit tile tint
 
 ## Known Issues
 - Fighter stacking at base cities (pre-existing)
@@ -20,6 +20,13 @@ session 064: river map balance, transport AI, visibility & victory tuning
 - Crown city relocate action not yet implemented (UI button deferred)
 - World mode: monthly reset/season rewards not yet implemented
 - Spawn protection enforcement not yet in executeTurn (needs world context in game engine)
+
+## Completed (session 065) — Phase 17: AI Economy Fix, VM Cleanup & Deposit Tint
+- [x] Fix construction production flip-flop: ratio rebalance no longer kills Construction builds
+- [x] Fix mapgen Set.length → Set.size bug (River War continent size check)
+- [x] VM_XXXX cleanup: replace raw viewmap chars in ai-economy, ai-helpers, game, continent
+- [x] Deposit tile background tint: warm sandy brown (0xc8a870) for resource tiles
+- [x] 729 shared tests passing, client builds clean
 
 ## Completed (session 064) — Phase 17: River Map Balance, Transport AI & Visibility
 - [x] River War starting cities: continent >= 20 tiles required (no island spawns)

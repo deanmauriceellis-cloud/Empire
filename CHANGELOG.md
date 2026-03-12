@@ -1,5 +1,14 @@
 # Empire Reborn — Changelog
 
+## v0.54.0 — Session 065 (2026-03-11)
+
+### Phase 17: AI Economy Fix, VM Cleanup & Deposit Tint
+- **Construction production fix** — ratio rebalance no longer switches cities away from Construction before the unit finishes; construction units were never produced in 265+ turn games because ratio=0 triggered overproduced() every time, killing builds at work=3/10
+- **Mapgen bug fix** — Set.length → Set.size for River War continent size filtering (session 064 regression)
+- **VM_XXXX constant cleanup** — replaced raw viewmap character literals (".", "+", "*", "X", " ") with named constants (VM_WATER, VM_LAND, VM_UNOWNED_CITY, VM_ENEMY_CITY, VM_UNEXPLORED) across ai-economy.ts, ai-helpers.ts, game.ts, continent.ts
+- **Deposit tile tint** — land tiles with deposits now render with warm sandy brown background (0xc8a870) for visual distinction
+- **729 shared tests passing**, client builds clean
+
 ## v0.53.0 — Session 064 (2026-03-11)
 
 ### Phase 17: River Map Balance, Transport AI & Visibility
